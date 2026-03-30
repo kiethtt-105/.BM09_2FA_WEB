@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>HUIT Admin System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body class="bg-gray-100 flex min-h-screen">
+
+    <div class="w-64 bg-indigo-900 text-white p-6 shadow-xl flex-shrink-0">
+        <h2 class="text-2xl font-bold mb-8"><i class="fas fa-shield-halved mr-2"></i>HUIT Admin</h2>
+        <nav class="space-y-4">
+            <a href="#" class="block p-3 bg-indigo-700 rounded-lg"><i class="fas fa-home mr-2"></i> Tổng quan</a>
+            <a href="/admin/auth/user/" class="block p-3 hover:bg-indigo-800 rounded-lg"><i class="fas fa-users mr-2"></i> Người dùng</a>
+            <a href="#" class="block p-3 hover:bg-indigo-800 rounded-lg"><i class="fas fa-key mr-2"></i> Lịch sử OTP</a>
+            
+            <div class="pt-10 border-t border-indigo-800 mt-10">
+                <a href="/admin/" class="block p-3 hover:bg-orange-600 rounded-lg text-orange-300 font-bold transition">
+                    <i class="fas fa-cog mr-2"></i> Hệ thống Django
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <div class="flex-1 p-10 overflow-y-auto">
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Bảng điều khiển hệ thống</h1>
+            <div class="flex items-center space-x-4">
+                <span class="text-sm font-medium text-gray-500">Xin chào, {{ user.username }}</span>
+                <img src="https://ui-avatars.com/api/?name={{ user.username }}&background=4F46E5&color=fff" class="w-10 h-10 rounded-full border-2 border-indigo-500">
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-indigo-500 hover:shadow-md transition">
+                <p class="text-gray-500 text-sm font-semibold uppercase">Tổng người dùng</p>
+                <h3 class="text-3xl font-bold mt-1">{{ total_users }}</h3>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500 hover:shadow-md transition">
+                <p class="text-gray-500 text-sm font-semibold uppercase">OTP đang hoạt động</p>
+                <h3 class="text-3xl font-bold text-green-600 mt-1">{{ active_otps }}</h3>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500 hover:shadow-md transition">
+                <p class="text-gray-500 text-sm font-semibold uppercase">Cảnh báo bảo mật</p>
+                <h3 class="text-3xl font-bold text-red-600 mt-1">0</h3>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-sm mb-8">
+            <h3 class="text-lg font-bold mb-4 text-gray-700">Tốc độ tăng trưởng người dùng (7 ngày qua)</h3>
+            <div id="chart"></div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-700">Người dùng mới đăng ký</h3>
+                <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Mới nhất</span>
+            </div>
+            <table class="w-full text-left">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="p-4 text-sm font-semibold text-gray-600">Username</th>
+                        <th class="p-4 text-sm font-semibold text-gray-600">Email</th>
+                        <th class="p-4 text-sm font-semibold text-gray-600 text-right">Ngày tham gia</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for u in recent_users %}
+                    <tr class="hover:bg-indigo-50 transition">
+                        <td class="p-4 font-medium text-gray-800">{{ u.username }}</td>
+                        <td class="p-4 text-gray-600">{{ u.email }}</td>
+                        <td class="p-4 text-gray-500 text-right text-sm">{{ u.date_joined|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="p-4 text-center text-gray-400">Chưa có dữ liệu</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var options = {
+                chart: { 
+                    type: 'area', 
+                    height: 350, 
+                    toolbar: { show: false },
+                    zoom: { enabled: false }
+                },
+                series: [{ 
+                    name: 'Người dùng mới', 
+                    data: [{% for d in chart_data %}{{ d.count }},{% if not forloop.last %},{% endif %}{% endfor %}] 
+                }],
+                xaxis: { 
+                    categories: [{% for d in chart_data %}"{{ d.day }}",{% if not forloop.last %},{% endif %}{% endfor %}] 
+                },
+                stroke: { curve: 'smooth', width: 3 },
+                colors: ['#4F46E5'],
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.7,
+                        opacityTo: 0.3,
+                    }
+                },
+                dataLabels: { enabled: false },
+                markers: { size: 4, colors: ['#4F46E5'] }
+            };
+            var chart = new ApexCharts(document.querySelector("#chart"), options);
+            chart.render();
+        });
+    </script>
+</body>
+</html>

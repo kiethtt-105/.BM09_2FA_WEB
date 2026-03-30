@@ -42,6 +42,7 @@ SESSION_COOKIE_SECURE = False
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin', # Thêm jazzmin vào INSTALLED_APPS
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -50,7 +51,32 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "accounts", #  Ứng dụng quản lý người dùng
 ]
-
+# Giao diện tùy chỉnh cho Jazzmin 
+JAZZMIN_UI_CONFIG = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-indigo",
+    "accent": "accent-primary",
+    "navbar": "navbar-dark",
+    "no_navbar_border": False,
+    "sidebar": "sidebar-dark-indigo",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": False,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "default",
+    "dark_mode_theme": None,
+    "topmenu_links": [
+        {"name": "Trang chủ", "url": "admin:index"},
+        {"name": "Dashboard Tự Chế", "url": "/admin-dashboard/"},
+        # NÚT QUAY LẠI HUYỀN THOẠI ĐÂY:
+        {"name": "Giao diện Trắng Xanh", "url": "/admin-origin/"}, 
+    ],
+}
 MIDDLEWARE = [
 
     'django.middleware.security.SecurityMiddleware',
@@ -137,9 +163,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+# Thêm dòng này để gom file tĩnh khi deploy lên Azure/Render
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-LOGIN_REDIRECT_URL = 'home'
+# Cấu hình Media (Nếu bạn muốn User upload ảnh đại diện)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Cấu hình Login/Logout
+LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'home'
+LOGIN_URL = 'login'
 
 # settings.py
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

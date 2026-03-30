@@ -3,7 +3,9 @@ from django.contrib.auth.models import User
 import datetime
 from django.utils import timezone
 import pyotp  
-
+from django.utils.timezone import now
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 class UserProfile(models.Model):
     """Mở rộng User mặc định: thêm chữ đệm, SĐT, và cấu hình 2FA."""
@@ -67,3 +69,54 @@ class EmailOTP(models.Model):
 
     def is_valid(self):
         return not self.is_used and timezone.now() < self.created_at + datetime.timedelta(minutes=5)
+
+
+
+#Tạo model log đăng nhập
+from django.db import models
+from django.contrib.auth.models import User
+
+class ActivityLog(models.Model):
+    ACTION_CHOICES = [
+        ('login', 'Đăng nhập'),
+        ('logout', 'Đăng xuất'),
+        ('otp_fail', 'Xác thực OTP thất bại'),
+        ('otp_success', 'Xác thực OTP thành công'),
+        ('2fa_enable', 'Bật bảo mật 2FA'),
+        ('2fa_disable', 'Tắt bảo mật 2FA'),
+        ('register', 'Đăng ký tài khoản'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activities')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    ip_address = models.CharField(max_length=50, blank=True, null=True)
+    user_agent = models.TextField(blank=True, null=True) # Lưu trình duyệt/thiết bị
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Nhật ký hoạt động"
+        verbose_name_plural = "Nhật ký hoạt động"
+        ordering = ['-timestamp'] # Mới nhất hiện lên đầu
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_action_display()} - {self.timestamp.strftime('%d/%m/%Y %H:%i')}"
+
+
+
+class OTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_expired(self):
+        # Thiết lập thời gian hết hạn là 2 phút
+        return timezone.now() > self.created_at + datetime.timedelta(minutes=2)
+    
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.get_or_create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    instance.profile.save()

@@ -3,11 +3,6 @@ import secrets
 from django.core.mail import send_mail
 from .models import EmailOTP
 
-
-
-
-
-
 def generate_qr_base64(username, secret):
     # Tạo URI chuẩn cho Google Auth/iCloud
     uri = f"otpauth://totp/HUIT_2FA:{username}?secret={secret}&issuer=HUIT_2FA"
@@ -47,3 +42,11 @@ def generate_and_send_email_otp(user):
     send_mail(subject, message, 'HUIT_Auth <your-email@gmail.com>', [user.email])
     
     return otp_code
+# Utility để lấy IP người dùng từ request (dùng cho logging)
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip

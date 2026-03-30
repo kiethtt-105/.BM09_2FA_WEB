@@ -11,10 +11,74 @@ from django.utils import timezone
 from datetime import timedelta
 import random
 import pyotp
-
+from django.shortcuts import redirect
 from .models import UserProfile, PendingRegistration
 from .utils import get_totp_token, generate_qr_base64
+from openpyxl import Workbook
+from django.http import HttpResponse
+from django.db.models import Count
+from django.utils.timezone import now, timedelta
+from .models import OTP
+#from django.shortcuts import from django.shortcuts import render
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.models import User
+from .models import OTP, UserProfile # Giả sử bạn có UserProfile
+from django.db.models import Count
+from django.utils.timezone import now, timedelta
+import random
+import random
+import pyotp
+import io
+import base64
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth.models import User
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.mail import send_mail
+from django.utils import timezone
+from django.utils.timezone import now
+from django.contrib.auth import login, authenticate
+from django.contrib.auth.forms import AuthenticationForm
+from .models import UserProfile, ActivityLog
+from .utils import get_client_ip 
+from openpyxl import Workbook
+# Thêm import cho gửi mail
+from django.core.mail import send_mail
+from .models import UserProfile, PendingRegistration, OTP, ActivityLog
+from .utils import get_totp_token, generate_qr_base64
+from django.contrib.auth import login, authenticate
+from django.contrib.auth.forms import AuthenticationForm
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.contrib.auth.models import User
+from .models import UserProfile, ActivityLog
+from .utils import get_client_ip
+from django.db.models import Q, Count 
 
+
+@user_passes_test(lambda u: u.is_superuser)
+def admin_dashboard(request):
+    # Lấy dữ liệu người dùng
+    users = User.objects.all().order_by('-date_joined')
+    
+    # Lấy dữ liệu biểu đồ 7 ngày qua
+    last_7_days = now() - timedelta(days=7)
+    stats = User.objects.filter(date_joined__gte=last_7_days) \
+        .extra(select={'day': "date(date_joined)"}) \
+        .values('day') \
+        .annotate(count=Count('id')) \
+        .order_by('day')
+
+    context = {
+        'users': users,
+        'total_users': User.objects.count(),
+        'otp_count': OTP.objects.count(), # Bây giờ mới gọi count nè, không lo lỗi table
+        'stats': list(stats),
+    }
+    return render(request, 'admin/dashboard.html', context)
 
 # ══════════════════════════════════════════════════════════
 #  FORM  (đặt ở đây để dùng được ở cả GET lẫn POST)
@@ -215,6 +279,7 @@ def logout_view(request):
 # ══════════════════════════════════════════════════════════
 #  5. ĐĂNG NHẬP
 # ══════════════════════════════════════════════════════════
+
 def login_view(request):
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
@@ -222,17 +287,70 @@ def login_view(request):
             user = form.get_user()
             profile, _ = UserProfile.objects.get_or_create(user=user)
 
+            # Lấy thông tin thiết bị và IP
+            ip = get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
+
+            # Kiểm tra xem User có đang bị khóa (is_active = False) không
+            if not user.is_active:
+                messages.error(request, "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.")
+                return render(request, 'accounts/login.html', {'form': form})
+
+            # KIỂM TRA 2FA
             if profile.is_2fa_enabled:
+                # Ghi log: Bước 1 thành công, chờ xác thực bước 2
+                ActivityLog.objects.create(
+                    user=user, 
+                    action='otp_fail', # Tạm gọi là chưa xong OTP
+                    ip_address=ip,
+                    user_agent=user_agent
+                )
                 request.session['pre_2fa_user_id'] = user.id
+                messages.info(request, "Vui lòng nhập mã xác thực 2FA để hoàn tất.")
                 return redirect('verify_2fa')
 
+            # ĐĂNG NHẬP THÔNG THƯỜNG (Nếu không bật 2FA)
             login(request, user)
-            return redirect('dashboard')
+            
+            # Ghi log: Đăng nhập thành công trực tiếp
+            ActivityLog.objects.create(
+                user=user, 
+                action='login', 
+                ip_address=ip,
+                user_agent=user_agent
+            )
+            
+            messages.success(request, f"Chào mừng trở lại, {user.username}!")
+            
+            # -------------------------------------------------------
+            # PHẦN THÊM MỚI ĐỂ PHÂN QUYỀN (GIỮ NGUYÊN CODE CŨ TRÊN)
+            # -------------------------------------------------------
+            if user.is_superuser:
+                return redirect('admin_dashboard') # Chuyển đến trang Admin tùy chỉnh
+            else:
+                return redirect('dashboard')       # Chuyển đến Dashboard user thường
+            # -------------------------------------------------------
+        
+        else:
+            # GHI LOG KHI SAI MẬT KHẨU / USERNAME
+            username_attempt = request.POST.get('username')
+            ip = get_client_ip(request)
+            messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
+            
+            # Tìm user để ghi log cảnh báo tấn công
+            attempted_user = User.objects.filter(username=username_attempt).first()
+            if attempted_user:
+                 ActivityLog.objects.create(
+                    user=attempted_user, 
+                    action='otp_fail', 
+                    ip_address=ip,
+                    user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown')
+                )
+                
     else:
         form = AuthenticationForm()
+    
     return render(request, 'accounts/login.html', {'form': form})
-
-
 # ══════════════════════════════════════════════════════════
 #  6. DASHBOARD
 # ══════════════════════════════════════════════════════════
@@ -496,6 +614,7 @@ def setup_2fa(request):
 # ══════════════════════════════════════════════════════════
 #  8. VERIFY 2FA
 # ══════════════════════════════════════════════════════════
+# Đảm bảo tên hàm phải là verify_2fa (có dấu gạch dưới)
 def verify_2fa(request):
     uid = request.session.get('pre_2fa_user_id')
     if not uid:
@@ -533,6 +652,7 @@ def verify_2fa(request):
             return redirect(f'/verify-2fa/?method=email')
 
         valid = False
+        # Chỗ này nếu báo lỗi get_totp_token thì ông check lại file utils.py nhé
         if method == 'app'   and code == get_totp_token(profile.otp_secret):
             valid = True
         elif method == 'email' and code == profile.email_otp and profile.otp_expiry > timezone.now():
@@ -542,10 +662,214 @@ def verify_2fa(request):
             login(request, user)
             profile.email_otp = None
             profile.save()
-            del request.session['pre_2fa_user_id']
+            if 'pre_2fa_user_id' in request.session:
+                del request.session['pre_2fa_user_id']
             messages.success(request, 'Đăng nhập thành công!')
-            return redirect('dashboard') 
+
+            # PHÂN QUYỀN ĐIỀU HƯỚNG
+            if user.is_superuser:
+                return redirect('admin_dashboard')
+            else:
+                return redirect('dashboard')
 
         messages.error(request, 'Mã OTP không đúng hoặc đã hết hạn.') 
 
     return render(request, 'accounts/verify_2fa.html', {'profile': profile, 'method': method})
+
+# ══════════════════════════════════════════════════════════
+#  9. BAN USER (Dành cho admin)
+def ban_user(request, user_id):
+    user = User.objects.get(id=user_id)
+    user.is_active = False
+    user.save()
+    return redirect('admin_dashboard')
+
+# ══════════════════════════════════════════════════════════
+#  10. EXPORT USERS TO EXCEL (Dành cho admin)
+from openpyxl import Workbook
+from django.http import HttpResponse
+from django.contrib.auth.models import User
+def export_users_excel(request):
+    users = User.objects.all()
+
+    keyword = request.GET.get('q')
+    if keyword:
+        users = users.filter(username__icontains=keyword)
+
+    wb = Workbook()
+    ws = wb.active
+
+    ws.append(['Username', 'Email'])
+
+    for user in users:
+        ws.append([user.username, user.email])
+
+    response = HttpResponse(content_type='application/ms-excel')
+    response['Content-Disposition'] = 'attachment; filename=filtered_users.xlsx'
+
+    wb.save(response)
+    return response
+
+
+#  11. ADMIN DASHBOARD
+# Admin có thể xem danh sách người dùng, tắt/bật tài khoản, và xuất danh sách người dùng ra file Excel.
+# Thêm thống kê số lượng người dùng đăng ký theo ngày trong 7 ngày qua, và số lượng OTP đã tạo trong 1 giờ qua.
+def admin_dashboard(request):
+    users = User.objects.all()
+
+    last_7_days = now() - timedelta(days=7)
+
+    stats = (
+        User.objects.filter(date_joined__gte=last_7_days)
+        .extra({'day': "date(date_joined)"})
+        .values('day')
+        .annotate(count=Count('id'))
+    )
+
+    return render(request, 'admin_dashboard/dashboard.html', {
+        'users': users,
+        'stats': list(stats)
+    })
+
+
+# 1. TRANG DASHBOARD ADMIN TÙY CHỈNH
+@user_passes_test(lambda u: u.is_superuser)
+def admin_dashboard(request):
+    # Thống kê tổng quan
+    total_users = User.objects.count()
+    
+    # SỬA LỖI FIELDERROR TẠI ĐÂY: Dùng Q để lọc has_app_otp hoặc has_email_otp
+    active_otps = UserProfile.objects.filter(
+        Q(has_app_otp=True) | Q(has_email_otp=True)
+    ).count()
+    
+    # Lấy danh sách user mới nhất
+    recent_users = User.objects.order_by('-date_joined')[:5]
+
+    # Xử lý dữ liệu biểu đồ (7 ngày qua)
+    last_7_days = timezone.now() - timedelta(days=6)
+    stats = User.objects.filter(date_joined__gte=last_7_days) \
+        .extra(select={'day': "date(date_joined)"}) \
+        .values('day') \
+        .annotate(count=Count('id')) \
+        .order_by('day')
+
+    chart_data = []
+    for i in range(7):
+        date = (last_7_days + timedelta(days=i)).date()
+        count = next((item['count'] for item in stats if str(item['day']) == str(date)), 0)
+        chart_data.append({'day': date.strftime('%d/%m'), 'count': count})
+
+    context = {
+        'total_users': total_users,
+        'active_otps': active_otps,
+        'recent_users': recent_users,
+        'chart_data': chart_data,
+    }
+    return render(request, 'admin_dashboard/dashboard.html', context)
+
+# 2. BẬT/TẮT TRẠNG THÁI USER
+@user_passes_test(lambda u: u.is_superuser)
+def toggle_user_status(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+    if not user.is_superuser: # Không cho tự khóa chính mình
+        user.is_active = not user.is_active
+        user.save()
+        messages.success(request, f"Đã cập nhật trạng thái cho {user.username}")
+    return redirect('admin_dashboard')
+
+# 3. HÀM LOGIN PHÂN QUYỀN + BỎ QUA 2FA CHO ADMIN
+def login_view(request):
+    if request.method == 'POST':
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+
+            ip = get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
+
+            if not user.is_active:
+                messages.error(request, "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.")
+                return render(request, 'accounts/login.html', {'form': form})
+
+            # --- ƯU TIÊN ADMIN: ĐĂNG NHẬP THẲNG, BỎ QUA 2FA ---
+            if user.is_superuser:
+                login(request, user)
+                ActivityLog.objects.create(
+                    user=user, action='login', ip_address=ip, user_agent=user_agent
+                )
+                messages.success(request, f"Chào Admin, {user.username}!")
+                return redirect('admin_dashboard')
+
+            # --- KIỂM TRA 2FA CHO USER THƯỜNG ---
+            # Sửa check 2fa dựa trên các trường có sẵn
+            if profile.has_app_otp or profile.has_email_otp:
+                ActivityLog.objects.create(
+                    user=user, action='otp_fail', ip_address=ip, user_agent=user_agent
+                )
+                request.session['pre_2fa_user_id'] = user.id
+                messages.info(request, "Vui lòng xác thực 2FA.")
+                return redirect('verify_2fa')
+
+            # ĐĂNG NHẬP THÔNG THƯỜNG (User không bật 2FA)
+            login(request, user)
+            ActivityLog.objects.create(
+                user=user, action='login', ip_address=ip, user_agent=user_agent
+            )
+            messages.success(request, f"Chào mừng trở lại, {user.username}!")
+            return redirect('dashboard')
+        
+        else:
+            username_attempt = request.POST.get('username')
+            ip = get_client_ip(request)
+            messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
+            attempted_user = User.objects.filter(username=username_attempt).first()
+            if attempted_user:
+                 ActivityLog.objects.create(
+                    user=attempted_user, action='login_failed', 
+                    ip_address=ip, user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown')
+                )
+                
+    else:
+        form = AuthenticationForm()
+    
+    return render(request, 'accounts/login.html', {'form': form})
+# Thêm trang thống kê người dùng
+
+@user_passes_test(lambda u: u.is_superuser)
+def toggle_user_status(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+    if not user.is_superuser:
+        user.is_active = not user.is_active
+        user.save()
+        messages.success(request, f"Đã thay đổi trạng thái user {user.username}")
+    return redirect('admin_dashboard')
+
+@user_passes_test(lambda u: u.is_superuser)
+def export_users_excel(request):
+    users = User.objects.all()
+    keyword = request.GET.get('q')
+    if keyword:
+        users = users.filter(username__icontains=keyword)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Users List"
+    ws.append(['ID', 'Username', 'Email', 'Họ Tên', 'Ngày tham gia', 'Trạng thái'])
+
+    for u in users:
+        status = "Active" if u.is_active else "Banned"
+        ws.append([u.id, u.username, u.email, f"{u.first_name} {u.last_name}", 
+                   u.date_joined.strftime("%d/%m/%Y"), status])
+
+    response = HttpResponse(content_type='application/ms-excel')
+    response['Content-Disposition'] = 'attachment; filename=Users_HUIT.xlsx'
+    wb.save(response)
+    return response
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def user_stats(request):
+    # Hàm này để dự phòng cho cái link /stats/ trong urls.py của ông
+    return render(request, 'admin/stats.html', {})
