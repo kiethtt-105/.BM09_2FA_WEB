@@ -190,6 +190,7 @@ EMAIL_HOST_PASSWORD = 'aqgu lwlm askj clnt' # pass email (cần tạo app passwo
 
 
 #mail icloud
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.mail.me.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
@@ -199,3 +200,5 @@ EMAIL_HOST_PASSWORD = 'aejx-dcfq-edjc-yibq' # pass email (cần tạo app passwo
 #
 #SỬA LỖI 550 5.7.0 "Relaying denied" 
 DEFAULT_FROM_EMAIL = 'kiethtt@icloud.com'
+
+
