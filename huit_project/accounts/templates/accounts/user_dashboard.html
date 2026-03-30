@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | {{ user.username }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc; 
+        }
+        .animate-fade-in { 
+            animation: fadeIn 0.3s ease-out; 
+        }
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        .card {
+            border-radius: 2.5rem;
+            box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.08);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-900 p-4 md:p-10">
+
+    <div id="toast" class="fixed top-5 right-5 translate-x-full transition-transform duration-300 z-50">
+        <div class="bg-indigo-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center border border-indigo-400">
+            <i class="fas fa-bell mr-3"></i>
+            <span id="toast-msg" class="font-bold text-sm"></span>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <div class="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 text-center space-y-6 h-fit card">
+            <div class="w-24 h-24 bg-indigo-600 rounded-3xl flex items-center justify-center text-white text-4xl font-black mx-auto shadow-lg">
+                {{ user.username|first|upper }}
+            </div>
+            <h2 class="text-2xl font-bold">{{ user.username }}</h2>
+            <p class="text-slate-400 text-sm italic">{{ user.email|default:"Chưa cập nhật email" }}</p>
+            
+            <div class="space-y-2 text-left pt-4 border-t border-slate-100">
+                <button onclick="switchTab('info')" id="btn-info" 
+                        class="w-full py-3 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center px-6 transition">
+                    <i class="fas fa-user-circle mr-4"></i> Hồ sơ
+                </button>
+                <button onclick="switchTab('security')" id="btn-security" 
+                        class="w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50">
+                    <i class="fas fa-shield-alt mr-4"></i> Bảo mật 2FA
+                </button>
+                <a href="{% url 'logout' %}" 
+                   class="w-full py-3 rounded-2xl text-red-400 font-bold flex items-center px-6 mt-4 hover:bg-red-50 transition">
+                    <i class="fas fa-sign-out-alt mr-4"></i> Đăng xuất
+                </a>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2 bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8 md:p-12 min-h-[550px] card">
+            
+            <div id="tab-info" class="space-y-10 animate-fade-in text-left">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-6">
+                    <h3 class="text-3xl font-black text-slate-800 tracking-tight">Hồ sơ cá nhân</h3>
+                    <button onclick="toggleEditForm()" 
+                            class="text-indigo-600 font-bold text-sm hover:underline">
+                        <i class="fas fa-edit mr-1"></i> Chỉnh sửa
+                    </button>
+                </div>
+
+                <div id="info-display" class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Username</label>
+                        <p class="text-lg font-bold text-slate-800">{{ user.username }}</p>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Họ và tên</label>
+                        <p class="text-lg font-bold text-slate-800">{{ user.first_name }} {{ profile.middle_name }} {{ user.last_name }}</p>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email liên kết</label>
+                        <p class="text-lg font-bold {% if not user.email %}text-red-400 italic{% endif %}">
+                            {{ user.email|default:"Vui lòng cập nhật email" }}
+                        </p>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Số điện thoại</label>
+                        <p class="text-lg font-bold text-slate-800">
+                            {{ profile.phone_number|default:"Chưa cập nhật" }}
+                        </p>
+                    </div>
+                </div>
+
+                <div id="info-edit" class="hidden animate-fade-in bg-slate-50 p-8 rounded-3xl border-2 border-dashed border-slate-200">
+                    {% if pending_update %}
+                        <div class="mb-6">
+                            <h4 class="text-xl font-bold text-slate-800 mb-4">Xác nhận cập nhật thông tin</h4>
+                            <p class="text-slate-600">Chúng tôi đã gửi mã OTP xác nhận.</p>
+                        </div>
+
+                        <form method="POST" class="space-y-6">
+                            {% csrf_token %}
+                            <input type="hidden" name="confirm_update" value="1">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-600 mb-2">Nhập mã OTP</label>
+                                <input type="text" name="otp_code" maxlength="6" required
+                                       class="w-full p-5 text-center text-3xl font-mono tracking-widest border-2 border-slate-300 rounded-2xl focus:border-indigo-500 outline-none"
+                                       placeholder="000000">
+                            </div>
+                            <div class="flex gap-3">
+                                <button type="submit" class="flex-1 bg-emerald-600 text-white py-3 rounded-2xl font-bold hover:bg-emerald-700 transition">
+                                    Xác nhận
+                                </button>
+                                <a href="{% url 'dashboard' %}" class="flex-1 bg-white border border-slate-300 text-slate-600 py-3 rounded-2xl font-bold text-center hover:bg-slate-50 transition">
+                                    Hủy bỏ
+                                </a>
+                            </div>
+                        </form>
+                    {% else %}
+                        <form method="POST" class="space-y-4">
+                            {% csrf_token %}
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-bold text-slate-500 ml-2">Họ</label>
+                                    <input type="text" name="first_name" value="{{ user.first_name }}" class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-slate-500 ml-2">Chữ đệm</label>
+                                    <input type="text" name="middle_name" value="{{ profile.middle_name }}" class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-slate-500 ml-2">Tên</label>
+                                    <input type="text" name="last_name" value="{{ user.last_name }}" class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-slate-500 ml-2">Số điện thoại</label>
+                                    <input type="text" name="phone_number" value="{{ profile.phone_number }}" class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="text-xs font-bold text-slate-500 ml-2">Email</label>
+                                    <input type="email" name="email" value="{{ user.email }}" required class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
+                                </div>
+                            </div>
+                            <div class="flex gap-3 pt-4">
+                                <button type="submit" name="update_profile" class="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg hover:bg-indigo-700 transition">
+                                    Lưu thay đổi
+                                </button>
+                                <button type="button" onclick="toggleEditForm()" class="bg-white px-8 py-3 rounded-2xl border font-bold text-slate-500">
+                                    Hủy
+                                </button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div id="tab-security" class="hidden space-y-8 animate-fade-in text-left">
+                <div class="border-b border-slate-100 pb-6">
+                    <h3 class="text-3xl font-black text-slate-800 tracking-tight">Xác thực 2 lớp</h3>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="p-6 rounded-3xl border-2 transition shadow-sm flex flex-col items-center text-center 
+                                {% if profile.has_email_otp %} border-emerald-500 bg-emerald-50 {% else %} border-slate-100 bg-white {% endif %}">
+                        <i class="fas fa-envelope-open-text {% if profile.has_email_otp %} text-emerald-500 {% else %} text-indigo-500 {% endif %} text-3xl mb-4"></i>
+                        <h4 class="text-sm font-black uppercase mb-2 text-slate-800">Email OTP</h4>
+
+                        {% if not profile.has_email_otp %}
+                            <a href="{% url 'setup_2fa' %}?method=email" 
+                               class="w-full py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-bold uppercase shadow-md hover:bg-indigo-700 transition text-center block mt-3">
+                                Thiết lập Email OTP
+                            </a>
+                        {% else %}
+                            <div class="py-1 px-3 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded-full mb-4 inline-block">ĐÃ KÍCH HOẠT</div>
+                            <form method="POST" class="w-full">
+                                {% csrf_token %}
+                                <button name="action" value="disable_email" 
+                                        class="text-red-400 text-[10px] font-bold uppercase underline block mx-auto hover:text-red-600">
+                                    Tắt Email OTP
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+
+                    <div class="p-6 rounded-3xl border-2 transition shadow-sm flex flex-col items-center text-center 
+                                {% if profile.has_app_otp %} border-indigo-500 bg-indigo-50 {% else %} border-slate-100 bg-white {% endif %}">
+                        <i class="fas fa-qrcode {% if profile.has_app_otp %} text-indigo-600 {% else %} text-indigo-400 {% endif %} text-3xl mb-4"></i>
+                        <h4 class="text-sm font-black uppercase mb-2 text-slate-800">Google Authenticator</h4>
+
+                        {% if not profile.has_app_otp %}
+                            <a href="{% url 'setup_2fa' %}?method=app" 
+                               class="w-full py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-bold uppercase shadow-md hover:bg-indigo-700 transition text-center block mt-3">
+                                Thiết lập QR Code
+                            </a>
+                        {% else %}
+                            <div class="py-1 px-3 bg-indigo-100 text-indigo-700 text-[9px] font-black rounded-full mb-4 inline-block">ĐÃ KÍCH HOẠT</div>
+                            <form method="POST" class="w-full">
+                                {% csrf_token %}
+                                <button name="action" value="disable_app" 
+                                        class="text-red-400 text-[10px] font-bold uppercase underline block mx-auto hover:text-red-600">
+                                    Tắt Google Auth
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            const tInfo = document.getElementById('tab-info');
+            const tSecurity = document.getElementById('tab-security');
+            const bInfo = document.getElementById('btn-info');
+            const bSecurity = document.getElementById('btn-security');
+
+            if(tab === 'info') {
+                tInfo.classList.remove('hidden'); 
+                tSecurity.classList.add('hidden');
+                bInfo.className = "w-full py-3 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center px-6 transition";
+                bSecurity.className = "w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50";
+            } else {
+                tInfo.classList.add('hidden'); 
+                tSecurity.classList.remove('hidden');
+                bSecurity.className = "w-full py-3 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center px-6 transition";
+                bInfo.className = "w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50";
+            }
+        }
+
+        function toggleEditForm() {
+            document.getElementById('info-display').classList.toggle('hidden');
+            document.getElementById('info-edit').classList.toggle('hidden');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            const m = document.getElementById('toast-msg');
+            if (m) m.innerText = msg;
+            t.classList.remove('translate-x-full');
+            setTimeout(() => t.classList.add('translate-x-full'), 4000);
+        }
+
+        {% if messages %}
+            {% for m in messages %}
+                showToast("{{ m }}");
+            {% endfor %}
+        {% endif %}
+
+        // Nếu đang trong quá trình xác nhận OTP, tự động mở form chỉnh sửa
+        {% if pending_update %}
+            toggleEditForm();
+        {% endif %}
+    </script>
+</body>
+</html>

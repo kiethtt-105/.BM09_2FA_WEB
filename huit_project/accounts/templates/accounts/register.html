@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Đăng ký · HUIT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root {
+  --bg:       #080c14;
+  --surface:  #0f1623;
+  --surface2: #161e2e;
+  --border:   rgba(255,255,255,0.07);
+  --accent:   #6366f1;
+  --accent2:  #22d3ee;
+  --green:    #10b981;
+  --text:     #e2e8f0;
+  --muted:    #64748b;
+  --font:     'Outfit', sans-serif;
+  --mono:     'DM Mono', monospace;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text); padding: 24px;
+}
+body::before {
+  content:''; position:fixed; border-radius:50%;
+  width:700px; height:700px;
+  background: radial-gradient(circle, rgba(99,102,241,0.09) 0%, transparent 70%);
+  top:-200px; left:-200px; pointer-events:none; z-index:0;
+}
+body::after {
+  content:''; position:fixed; border-radius:50%;
+  width:500px; height:500px;
+  background: radial-gradient(circle, rgba(16,185,129,0.07) 0%, transparent 70%);
+  bottom:-120px; right:-120px; pointer-events:none; z-index:0;
+}
+
+.card {
+  position:relative; z-index:1;
+  width:100%; max-width:500px;
+  background: var(--surface);
+  border:1px solid var(--border);
+  border-radius:24px;
+  padding:40px 36px;
+  box-shadow: 0 0 0 1px rgba(99,102,241,0.08), 0 40px 80px rgba(0,0,0,0.5);
+  animation: rise .5s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes rise {
+  from { opacity:0; transform:translateY(24px) scale(.97); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
+
+.brand {
+  display:flex; align-items:center; gap:10px; margin-bottom:28px;
+}
+.brand-icon {
+  width:38px; height:38px;
+  background: linear-gradient(135deg,var(--green),#059669);
+  border-radius:10px; display:flex; align-items:center;
+  justify-content:center; font-size:16px;
+}
+.brand-name {
+  font-family:var(--mono); font-size:16px; font-weight:500;
+  letter-spacing:1px; color:var(--text);
+}
+.brand-name span { color:var(--accent2); }
+
+h2 { font-size:22px; font-weight:700; margin-bottom:4px; }
+.subtitle { font-size:13px; color:var(--muted); margin-bottom:24px; }
+
+/* Section label */
+.section-label {
+  font-size:10px; font-weight:600; letter-spacing:1.5px;
+  text-transform:uppercase; color:var(--muted);
+  font-family:var(--mono);
+  display:flex; align-items:center; gap:8px;
+  margin:18px 0 10px;
+}
+.section-label::after {
+  content:''; flex:1; height:1px; background:var(--border);
+}
+
+/* Grid layouts */
+.row-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+
+/* Field */
+.field { margin-bottom:10px; }
+.field-label {
+  font-size:10px; font-weight:600; color:var(--muted);
+  letter-spacing:.8px; text-transform:uppercase;
+  font-family:var(--mono); margin-bottom:5px;
+}
+.input-wrap { position:relative; }
+.input-wrap i.ico {
+  position:absolute; left:11px; top:50%; transform:translateY(-50%);
+  color:var(--muted); font-size:12px; pointer-events:none;
+}
+.input-wrap input {
+  width:100%; padding:10px 10px 10px 32px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  color:var(--text); font-size:13px; font-family:var(--font);
+  outline:none;
+  transition: border .2s, box-shadow .2s;
+}
+.input-wrap input::placeholder { color:var(--muted); font-size:12px; }
+.input-wrap input:focus {
+  border-color: rgba(99,102,241,.5);
+  box-shadow:0 0 0 3px rgba(99,102,241,.1);
+}
+.eye-btn {
+  position:absolute; right:10px; top:50%; transform:translateY(-50%);
+  color:var(--muted); cursor:pointer; font-size:12px;
+  background:none; border:none; transition:color .15s;
+}
+.eye-btn:hover { color:var(--text); }
+
+/* Errors */
+.errorlist { list-style:none; color:#fca5a5; font-size:11px; margin:3px 0 0; }
+.non-field-errors {
+  background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.25);
+  border-radius:10px; padding:10px 14px;
+  color:#fca5a5; font-size:13px; margin-bottom:16px;
+}
+
+/* Messages */
+.msg {
+  padding:10px 14px; border-radius:10px; font-size:13px;
+  margin-bottom:10px; display:flex; align-items:center; gap:8px;
+}
+.msg-success { background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.25); color:#6ee7b7; }
+.msg-error   { background:rgba(239,68,68,.1);  border:1px solid rgba(239,68,68,.25);  color:#fca5a5; }
+
+/* Submit */
+.btn-submit {
+  width:100%; padding:13px; margin-top:20px;
+  background: linear-gradient(135deg,var(--green),#059669);
+  border:none; border-radius:12px;
+  color:#fff; font-size:14px; font-weight:700;
+  font-family:var(--font); cursor:pointer;
+  box-shadow:0 4px 20px rgba(16,185,129,.3);
+  transition: transform .15s, box-shadow .15s;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.btn-submit:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(16,185,129,.45); }
+.btn-submit:active { transform:translateY(0); }
+
+.footer {
+  margin-top:20px; text-align:center;
+  font-size:13px; color:var(--muted);
+}
+.footer a { color:var(--accent2); font-weight:600; text-decoration:none; }
+.footer a:hover { text-decoration:underline; }
+
+/* Step indicator */
+.steps {
+  display:flex; align-items:center; gap:0;
+  margin-bottom:24px;
+}
+.step {
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
+}
+.step-dot {
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700; font-family:var(--mono);
+  border:2px solid var(--border);
+  color:var(--muted); background:var(--surface2);
+  transition:all .3s;
+}
+.step.active .step-dot {
+  border-color:var(--green); color:var(--green);
+  box-shadow:0 0 12px rgba(16,185,129,.3);
+}
+.step-label { font-size:10px; color:var(--muted); font-family:var(--mono); }
+.step-line {
+  flex:1; height:1px; background:var(--border); margin:0 -1px;
+  margin-bottom:14px;
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <div class="brand-icon">📝</div>
+    <div class="brand-name">HUIT<span>.auth</span></div>
+  </div>
+
+  <!-- Step indicator -->
+  <div class="steps">
+    <div class="step active">
+      <div class="step-dot">1</div>
+      <div class="step-label">Thông tin</div>
+    </div>
+    <div class="step-line"></div>
+    <div class="step">
+      <div class="step-dot">2</div>
+      <div class="step-label">Xác nhận OTP</div>
+    </div>
+    <div class="step-line"></div>
+    <div class="step">
+      <div class="step-dot">3</div>
+      <div class="step-label">Hoàn tất</div>
+    </div>
+  </div>
+
+  <h2>Tạo tài khoản</h2>
+  <p class="subtitle">Điền đầy đủ thông tin — mã OTP sẽ được gửi qua email</p>
+
+  {% if messages %}
+    {% for message in messages %}
+    <div class="msg {% if 'success' in message.tags %}msg-success{% else %}msg-error{% endif %}">
+      <i class="fas {% if 'success' in message.tags %}fa-check-circle{% else %}fa-circle-xmark{% endif %}"></i>
+      {{ message }}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+    <div class="non-field-errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <!-- Tài khoản -->
+    <div class="section-label">Tài khoản</div>
+    <div class="field">
+      <div class="input-wrap">
+        <i class="fa fa-at ico"></i>
+        {{ form.username }}
+      </div>
+      {{ form.username.errors }}
+    </div>
+
+    <!-- Họ và tên -->
+    <div class="section-label">Họ và tên</div>
+    <div class="row-3">
+      <div class="field">
+        <div class="field-label">Họ</div>
+        <div class="input-wrap">
+          <i class="fa fa-user ico"></i>
+          {{ form.first_name }}
+        </div>
+        {{ form.first_name.errors }}
+      </div>
+      <div class="field">
+        <div class="field-label">Chữ đệm</div>
+        <div class="input-wrap">
+          <i class="fa fa-user ico"></i>
+          {{ form.middle_name }}
+        </div>
+        {{ form.middle_name.errors }}
+      </div>
+      <div class="field">
+        <div class="field-label">Tên</div>
+        <div class="input-wrap">
+          <i class="fa fa-user ico"></i>
+          {{ form.last_name }}
+        </div>
+        {{ form.last_name.errors }}
+      </div>
+    </div>
+
+    <!-- Liên hệ -->
+    <div class="section-label">Liên hệ</div>
+    <div class="row-2">
+      <div class="field">
+        <div class="field-label">Email</div>
+        <div class="input-wrap">
+          <i class="fa fa-envelope ico"></i>
+          {{ form.email }}
+        </div>
+        {{ form.email.errors }}
+      </div>
+      <div class="field">
+        <div class="field-label">Điện thoại</div>
+        <div class="input-wrap">
+          <i class="fa fa-phone ico"></i>
+          {{ form.phone_number }}
+        </div>
+        {{ form.phone_number.errors }}
+      </div>
+    </div>
+
+    <!-- Mật khẩu -->
+    <div class="section-label">Mật khẩu</div>
+    <div class="field">
+      <div class="input-wrap">
+        <i class="fa fa-lock ico"></i>
+        {{ form.password1 }}
+        <button type="button" class="eye-btn" onclick="togglePass('id_password1')">
+          <i class="fa fa-eye"></i>
+        </button>
+      </div>
+      {{ form.password1.errors }}
+    </div>
+    <div class="field">
+      <div class="input-wrap">
+        <i class="fa fa-lock ico"></i>
+        {{ form.password2 }}
+        <button type="button" class="eye-btn" onclick="togglePass('id_password2')">
+          <i class="fa fa-eye"></i>
+        </button>
+      </div>
+      {{ form.password2.errors }}
+    </div>
+
+    <button type="submit" class="btn-submit">
+      <i class="fa fa-paper-plane"></i> Gửi mã OTP & Đăng ký
+    </button>
+  </form>
+
+  <div class="footer">
+    Đã có tài khoản? <a href="/login/">Đăng nhập</a>
+  </div>
+</div>
+
+<script>
+function togglePass(id) {
+  const x = document.getElementById(id);
+  x.type = x.type === 'password' ? 'text' : 'password';
+}
+</script>
+</body>
+</html>
