@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    "huit",
+    "accounts", #  Ứng dụng quản lý người dùng
 ]
 
 MIDDLEWARE = [
@@ -61,13 +61,14 @@ MIDDLEWARE = [
 
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
-    'huit.middleware.RoleMiddleware',
-
+    #'huit.middleware.RoleMiddleware',
+    'accounts.middleware.RoleMiddleware',
+    
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'mysite.urls'
+ROOT_URLCONF = 'huit_project.urls'
 
 TEMPLATES = [
     {
@@ -81,11 +82,14 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
             ],
         },
+        'DIRS': [BASE_DIR / 'templates'],  # Đường dẫn đến thư mục templates
     },
 ]
 
-WSGI_APPLICATION = 'mysite.wsgi.application'
-
+WSGI_APPLICATION = 'huit_project.wsgi.application' 
+# giữ tên cũ để tương thích với get_wsgi_application() trong basehttp.py
+ASGI_APPLICATION = 'huit_project.asgi.application'
+# giữ tên cũ để tương thích với get_wsgi_application() trong basehttp.py, dù chúng ta không dùng ASGI ở đây.
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
