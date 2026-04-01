@@ -45,7 +45,6 @@ from django.contrib.auth.forms import AuthenticationForm
 from .models import UserProfile, ActivityLog
 from .utils import get_client_ip 
 from openpyxl import Workbook
-# Thêm import cho gửi mail
 from django.core.mail import send_mail
 from .models import UserProfile, PendingRegistration, OTP, ActivityLog
 from .utils import get_totp_token, generate_qr_base64
@@ -57,7 +56,7 @@ from django.contrib.auth.models import User
 from .models import UserProfile, ActivityLog
 from .utils import get_client_ip
 from django.db.models import Q, Count 
-
+from django.http import JsonResponse
 
 @user_passes_test(lambda u: u.is_superuser)
 def admin_dashboard(request):
@@ -873,3 +872,45 @@ def export_users_excel(request):
 def user_stats(request):
     # Hàm này để dự phòng cho cái link /stats/ trong urls.py của ông
     return render(request, 'admin/stats.html', {})
+
+# ====================== FIDO2 / PASSKEY  ======================
+
+@login_required
+def setup_fido2(request):
+    profile = UserProfile.objects.get(user=request.user)
+    
+    if request.method == 'POST' and 'setup_fido2' in request.POST:
+        profile.has_fido2 = True
+        profile.fido2_credential = {
+            'credential_id': f"demo_{request.user.username}_{int(timezone.now().timestamp())}",
+            'public_key': 'demo_public_key'
+        }
+        profile.save()
+        messages.success(request, '✅ Passkey FIDO2 đã được kích hoạt thành công!')
+        return redirect('dashboard')
+    
+    return render(request, 'accounts/setup_fido2.html', {'profile': profile})
+
+@login_required
+def verify_fido2(request):
+    uid = request.session.get('pre_2fa_user_id')
+    if not uid:
+        return redirect('login')
+    
+    user = User.objects.get(id=uid)
+    profile = UserProfile.objects.get(user=user)
+    
+    if request.method == 'POST':
+        credential_id = request.POST.get('credential_id')
+        
+        # Demo verify (chỉ so credential_id )
+        if profile.fido2_credential and credential_id == profile.fido2_credential.get('credential_id'):
+            login(request, user)
+            if 'pre_2fa_user_id' in request.session:
+                del request.session['pre_2fa_user_id']
+            messages.success(request, 'Đăng nhập bằng Passkey thành công!')
+            return redirect('dashboard' if not user.is_superuser else 'admin_dashboard')
+        else:
+            messages.error(request, 'Passkey không hợp lệ!')
+    
+    return render(request, 'accounts/verify_fido2.html', {'profile': profile})

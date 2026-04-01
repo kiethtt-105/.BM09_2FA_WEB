@@ -24,6 +24,12 @@ class UserProfile(models.Model):
     email_otp     = models.CharField(max_length=6, blank=True, null=True)
     otp_expiry    = models.DateTimeField(blank=True, null=True)
 
+    # ==================== FIDO2 / PASSKEY  ====================
+    has_fido2         = models.BooleanField(default=False, verbose_name="Đã bật FIDO2")
+    fido2_credential  = models.JSONField(null=True, blank=True)   # Lưu credentialId + publicKey (demo)
+
+    def __str__(self):
+        return f"Profile({self.user.username})"
     @property
     def is_2fa_enabled(self):
         return self.has_email_otp or self.has_app_otp
