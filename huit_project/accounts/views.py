@@ -56,7 +56,7 @@ from django.contrib.auth.models import User
 from .models import UserProfile, ActivityLog
 from .utils import get_client_ip
 from django.db.models import Q, Count 
-from django.http import JsonResponse
+from django.http import JsonResponse  
 
 @user_passes_test(lambda u: u.is_superuser)
 def admin_dashboard(request):
@@ -69,7 +69,7 @@ def admin_dashboard(request):
         .extra(select={'day': "date(date_joined)"}) \
         .values('day') \
         .annotate(count=Count('id')) \
-        .order_by('day')
+        .order_by('day') 
 
     context = {
         'users': users,
