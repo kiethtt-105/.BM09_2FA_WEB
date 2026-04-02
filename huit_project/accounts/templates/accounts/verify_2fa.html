@@ -210,8 +210,20 @@ body::after {
     {% endfor %}
   {% endif %}
 
-  <!-- Method selector (nếu bật cả 2) -->
-  {% if profile.has_app_otp and profile.has_email_otp %}
+ 
+  {% if methods|length > 1 %}
+<div class="method-grid">
+  {% for m in methods %}
+    <a href="?method={{ m.key }}"
+       class="method-card {% if method == m.key %}active-{{ m.key }}{% endif %}">
+       
+      <div class="method-icon">{{ m.icon }}</div>
+      <div class="method-label">{{ m.name }}</div>
+
+    </a>
+  {% endfor %}
+</div>
+{% endif %}
   <div class="method-grid">
     <a href="?method=app"
        class="method-card {% if method == 'app' %}active-app{% endif %}">
@@ -226,7 +238,7 @@ body::after {
       <div class="method-sub">Nhận qua mail</div>
     </a>
   </div>
-  {% endif %}
+  
 
   <div class="method-hint">
     {% if method == 'app' %}

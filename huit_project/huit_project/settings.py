@@ -78,20 +78,25 @@ JAZZMIN_UI_CONFIG = {
     ],
 }
 MIDDLEWARE = [
-
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-
     'django.middleware.csrf.CsrfViewMiddleware',
-
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
-    #'huit.middleware.RoleMiddleware',
     'accounts.middleware.RoleMiddleware',
-    
+
+    'accounts.middleware.ForceDisable2FAMiddleware',
+    'accounts.middleware.ForceLogoutMiddleware',
+
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
+    
+    
+    'accounts.middleware.UpdateDeviceMiddleware',
+    
+   
 ]
 
 ROOT_URLCONF = 'huit_project.urls'

@@ -38,11 +38,6 @@ class UserProfile(models.Model):
         """Trả về: Họ + Chữ đệm + Tên"""
         parts = [self.user.first_name, self.middle_name, self.user.last_name]
         return ' '.join(p for p in parts if p)
-
-    def __str__(self):
-        return f"Profile({self.user.username})"
-
-
 class PendingRegistration(models.Model):
     """
     Lưu tạm dữ liệu đăng ký trước khi xác thực OTP.
@@ -126,3 +121,63 @@ def create_user_profile(sender, instance, created, **kwargs):
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
     instance.profile.save()
+    
+import uuid
+# models.py
+
+class TrustedDevice(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
+
+    device_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    session_key = models.CharField(max_length=40, blank=True, null=True)
+
+    name = models.CharField(max_length=255, default="Thiết bị không xác định")
+
+    user_agent = models.TextField(blank=True, null=True)
+    ip_address = models.CharField(max_length=50, blank=True, null=True)
+
+    last_seen = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.name}"
+# models.py
+from django.db import models
+from django.contrib.auth.models import User
+
+class User2FA(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+
+    email_otp_enabled = models.BooleanField(default=False)
+    google_auth_enabled = models.BooleanField(default=False)
+
+    google_secret = models.CharField(max_length=100, blank=True, null=True)
+
+    # admin control
+    force_disable_2fa = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.user.username
+class UserSessionControl(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    force_logout = models.BooleanField(default=False)
+    
+class LoginHistory(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    ip = models.GenericIPAddressField()
+    device = models.CharField(max_length=255)
+    time = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=50)  # success / failed
+    
+from django.contrib.auth.signals import user_logged_in
+from django.dispatch import receiver
+
+@receiver(user_logged_in)
+def log_login(sender, request, user, **kwargs):
+    LoginHistory.objects.create(
+        user=user,
+        ip=request.META.get('REMOTE_ADDR'),
+        device=request.META.get('HTTP_USER_AGENT'),
+        status="success"
+    )

@@ -53,6 +53,12 @@
                         class="w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50">
                     <i class="fas fa-shield-alt mr-4"></i> Bảo mật 2FA
                 </button>
+                
+            
+                <a href="{% url 'active_sessions' %}"
+                    class="w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50">
+                    <i class="fas fa-laptop mr-4"></i> Lịch Sử Đăng Nhập
+                </a>
                 <a href="{% url 'logout' %}"
                    class="w-full py-3 rounded-2xl text-red-400 font-bold flex items-center px-6 mt-4 hover:bg-red-50 transition">
                     <i class="fas fa-sign-out-alt mr-4"></i> Đăng xuất
@@ -165,6 +171,26 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {% if confirm_disable %}
+                    <div class="mt-6 p-6 border-2 border-red-300 rounded-2xl bg-red-50 animate-fade-in">
+                        <h4 class="text-lg font-bold text-red-600 mb-4">
+                             Xác nhận tắt bảo mật
+                        </h4>
+
+                <form method="POST" class="space-y-4">
+                     {% csrf_token %}
+                        <input type="hidden" name="confirm_disable_action" value="{{ confirm_disable }}">
+
+                        <input type="text" name="disable_otp_code" maxlength="6" required
+                        placeholder="Nhập mã OTP..."
+                        class="w-full p-4 text-center text-xl font-mono border-2 border-red-300 rounded-xl">
+
+                    <button class="w-full bg-red-500 text-white py-3 rounded-xl font-bold">
+                        Xác nhận tắt
+                    </button>
+                </form>
+                </div>
+            {% endif %}
 
                     <!-- EMAIL OTP -->
 
@@ -199,80 +225,25 @@
                         {% endif %}
                     </div>
                     <!-- ==================== FIDO2 CARD - ĐÃ SỬA (BẤM ĐƯỢC 100%) ==================== -->
-                    <!-- ==================== FIDO2 / PASSKEY - ĐÃ SỬA CUỐI CÙNG ==================== -->
-                    <div class="p-6 rounded-3xl border-2 transition-all hover:shadow-xl flex flex-col items-center text-center
-            {% if profile.has_fido2 %}border-violet-500 bg-violet-50{% else %}border-slate-200 bg-white{% endif %}">
-                        <i class="fas fa-fingerprint text-4xl mb-4 {% if profile.has_fido2 %}text-violet-600{% else %}text-slate-400{% endif %}"></i>
-                        <h4 class="font-bold text-lg">FIDO2 / PASSKEY</h4>
-                        {% if profile.has_fido2 %}
-                        <span class="mt-3 inline-flex items-center px-4 py-1 bg-violet-100 text-violet-700 text-xs font-black rounded-3xl">ĐÃ KÍCH HOẠT</span>
-                        <a href="{% url 'verify_fido2' %}"
-                           class="mt-auto pt-6 w-full py-3 bg-violet-600 text-white rounded-2xl text-sm font-bold">Xác thực Passkey</a>
-                        {% else %}
-                        <a href="{% url 'setup_fido2' %}"
-                           class="mt-6 w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-2">
-                            <i class="fas fa-key"></i>
-                            THIẾT LẬP PASSKEY
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            <!--<div id="tab-security" class="hidden space-y-8 animate-fade-in text-left">
-                <div class="border-b border-slate-100 pb-6">
-                    <h3 class="text-3xl font-black text-slate-800 tracking-tight">Xác thực 2 lớp</h3>
-                </div>
+                    <div class="p-6 rounded-3xl border-2 border-slate-200 bg-white flex flex-col items-center text-center opacity-60">
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="p-6 rounded-3xl border-2 transition shadow-sm flex flex-col items-center text-center
-                                {% if profile.has_email_otp %} border-emerald-500 bg-emerald-50 {% else %} border-slate-100 bg-white {% endif %}">
-                        <i class="fas fa-envelope-open-text {% if profile.has_email_otp %} text-emerald-500 {% else %} text-indigo-500 {% endif %} text-3xl mb-4"></i>
-                        <h4 class="text-sm font-black uppercase mb-2 text-slate-800">Email OTP</h4>
+    <i class="fas fa-fingerprint text-4xl mb-4 text-slate-400"></i>
 
-                        {% if not profile.has_email_otp %}
-                            <a href="{% url 'setup_2fa' %}?method=email"
-                               class="w-full py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-bold uppercase shadow-md hover:bg-indigo-700 transition text-center block mt-3">
-                                Thiết lập Email OTP
-                            </a>
-                        {% else %}
-                            <div class="py-1 px-3 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded-full mb-4 inline-block">ĐÃ KÍCH HOẠT</div>
-                            <form method="POST" class="w-full">
-                                {% csrf_token %}
-                                <button name="action" value="disable_email"
-                                        class="text-red-400 text-[10px] font-bold uppercase underline block mx-auto hover:text-red-600">
-                                    Tắt Email OTP
-                                </button>
-                            </form>
-                        {% endif %}
-                    </div>
+    <h4 class="font-bold text-lg text-slate-600">
+        FIDO2 / PASSKEY
+    </h4>
 
-                    <div class="p-6 rounded-3xl border-2 transition shadow-sm flex flex-col items-center text-center
-                                {% if profile.has_app_otp %} border-indigo-500 bg-indigo-50 {% else %} border-slate-100 bg-white {% endif %}">
-                        <i class="fas fa-qrcode {% if profile.has_app_otp %} text-indigo-600 {% else %} text-indigo-400 {% endif %} text-3xl mb-4"></i>
-                        <h4 class="text-sm font-black uppercase mb-2 text-slate-800">Google Authenticator</h4>
+    <span class="mt-3 inline-flex items-center px-4 py-1 bg-amber-100 text-amber-700 text-xs font-black rounded-3xl">
+        🚧 ĐANG PHÁT TRIỂN
+    </span>
 
-                        {% if not profile.has_app_otp %}
-                            <a href="{% url 'setup_2fa' %}?method=app"
-                               class="w-full py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-bold uppercase shadow-md hover:bg-indigo-700 transition text-center block mt-3">
-                                Thiết lập QR Code
-                            </a>
-                        {% else %}
-                            <div class="py-1 px-3 bg-indigo-100 text-indigo-700 text-[9px] font-black rounded-full mb-4 inline-block">ĐÃ KÍCH HOẠT</div>
-                            <form method="POST" class="w-full">
-                                {% csrf_token %}
-                                <button name="action" value="disable_app"
-                                        class="text-red-400 text-[10px] font-bold uppercase underline block mx-auto hover:text-red-600">
-                                    Tắt Google Auth
-                                </button>
-                            </form>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>-->
-
-        </div>
+    <div class="mt-6 w-full py-3 bg-slate-200 text-slate-500 rounded-2xl text-sm font-bold text-center cursor-not-allowed">
+        Không khả dụng
     </div>
 
+</div>
+        </div>
+    </div>
     <script>
         function switchTab(tab) {
             const tInfo = document.getElementById('tab-info');
@@ -318,61 +289,5 @@
         {% endif %}
     </script>
     <script>
-    // ==================== FIDO2 DEMO  ====================
-    function registerFIDO2() {
-        if (confirm("🔐 Xác nhận kích hoạt Passkey FIDO2?\n\n(Hệ thống sẽ mô phỏng thành công cho đồ án)")) {
-            fetch("{% url 'setup_fido2' %}", {
-                method: "POST",
-                headers: {
-                    "X-CSRFToken": "{{ csrf_token }}",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    credential_id: "demo_fido2_" + Date.now(),
-                    public_key: "demo_public_key"
-                })
-            })
-            .then(() => {
-                showToast("✅ Passkey FIDO2 đã được kích hoạt thành công!");
-                setTimeout(() => location.reload(), 800);
-            })
-            .catch(() => {
-                showToast("✅ Passkey FIDO2 đã được kích hoạt (demo mode)");
-                setTimeout(() => location.reload(), 800);
-            });
-        }
-    }
-
-    function showToast(msg) {
-        const t = document.getElementById('toast');
-        const m = document.getElementById('toast-msg');
-        if (m) m.innerText = msg;
-        t.classList.remove('translate-x-full');
-        setTimeout(() => t.classList.add('translate-x-full'), 3000);
-    }
-    </script>
-    <!--<script>
-        async function registerFIDO2() {
-            try {
-                const response = await fetch('/setup-fido2/', { method: 'POST' });
-                const data = await response.json();   // server sẽ trả challenge (demo)
-
-                const cred = await navigator.credentials.create({
-                    publicKey: data.publicKeyOptions
-                });
-
-                // Gửi credential về server
-                const formData = new FormData();
-                formData.append('credential_id', cred.id);
-                formData.append('public_key', btoa(String.fromCharCode(...new Uint8Array(cred.response.attestationObject))));
-
-                await fetch('/setup-fido2/', { method: 'POST', body: formData });
-                location.reload();
-            } catch (e) {
-                alert("Trình duyệt không hỗ trợ Passkey hoặc bạn chưa bật.");
-            }
-        }
-    </script>-->
-
 </body>
 </html>

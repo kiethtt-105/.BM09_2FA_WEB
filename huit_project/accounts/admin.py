@@ -3,6 +3,7 @@ from .models import ActivityLog
 from django.contrib.admin import AdminSite
 from django.contrib.auth.models import User, Group
 from .models import ActivityLog, UserProfile 
+from .models import User2FA
 
 
 @admin.register(ActivityLog)
@@ -29,3 +30,35 @@ default_admin_site = DefaultAdminSite(name='default_admin')
 default_admin_site.register(User)
 default_admin_site.register(Group)
 default_admin_site.register(ActivityLog)
+
+# admin.py
+from django.contrib import admin
+from .models import User2FA
+@admin.register(User2FA)
+class User2FAAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "email_otp_enabled",
+        "google_auth_enabled",
+        "force_disable_2fa"
+    )
+
+    actions = ["disable_2fa", "force_logout_user"]
+
+    @admin.action(description="❌ Tắt 2FA user")
+    def disable_2fa(self, request, queryset):
+        for obj in queryset:
+            obj.email_otp_enabled = False
+            obj.google_auth_enabled = False
+            obj.google_secret = None
+            obj.force_disable_2fa = True
+            obj.save()
+
+    @admin.action(description="🚪 Force logout user")
+    def force_logout_user(self, request, queryset):
+        from .models import UserSessionControl
+
+        for obj in queryset:
+            control, _ = UserSessionControl.objects.get_or_create(user=obj.user)
+            control.force_logout = True
+            control.save()

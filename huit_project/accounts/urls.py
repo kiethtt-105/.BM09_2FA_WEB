@@ -15,7 +15,10 @@ urlpatterns = [
     path('export-users/', views.export_users_excel, name='export_users'),
     path('admin-dashboard/toggle-user/<int:user_id>/', views.toggle_user_status, name='toggle_user'),
     path('admin-dashboard/stats/', views.user_stats, name='user_stats'),
-    # FIDO2
-    path('setup-fido2/', views.setup_fido2, name='setup_fido2'),
-    path('verify-fido2/', views.verify_fido2, name='verify_fido2'),
+    path('devices/', views.device_list, name='device_list'),
+    path('login-history/', views.login_history, name='login_history'),
+    path('devices/', views.devices, name='devices'),
+    path('active-sessions/', views.active_sessions, name='active_sessions'),
+    path('logout-device/<int:device_id>/', views.logout_device, name='logout_device'),  
+
 ]
