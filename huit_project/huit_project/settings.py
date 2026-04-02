@@ -178,7 +178,7 @@ LOGIN_URL = 'login'
 # settings.py
 
 
-  
+
 # Cấu hình Gmail 
 '''EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
