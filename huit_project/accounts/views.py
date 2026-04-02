@@ -250,10 +250,13 @@ def verify_register_otp(request):
             last_name  = data['last_name'],
             is_active  = True,
         )
-        UserProfile.objects.create(
-            user         = user,
-            middle_name  = data.get('middle_name', ''),
-            phone_number = data.get('phone_number', ''),
+        
+        UserProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                'middle_name': data.get('middle_name', ''),
+                'phone_number': data.get('phone_number', ''),
+            }
         )
 
         pending.is_used = True
