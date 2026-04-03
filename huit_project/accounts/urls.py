@@ -21,5 +21,8 @@ urlpatterns = [
     path('active-sessions/', views.active_sessions, name='active_sessions'),
     path('logout-device/<int:device_id>/', views.logout_device, name='logout_device'),  
     path('logout-all-devices/', views.logout_all_devices, name='logout_all_devices'),
-
+    path('confirm-device/', views.confirm_device, name='confirm_device'),
+    path('api/get-auth-request/', views.get_pending_auth_request),
+    path('api/respond-auth/<int:req_id>/', views.respond_auth_request),
+    path('api/check-auth-status/', views.check_auth_status),
 ]

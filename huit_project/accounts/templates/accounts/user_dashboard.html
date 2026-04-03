@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard | {{ user.username }}</title>
@@ -25,6 +26,47 @@
         }
     </style>
 </head>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    {% if show_device_alert %}
+    Swal.fire({
+        title: '<span style="color: #e2e8f0;">Thiết bị mới!</span>',
+        html: '<p style="color: #64748b;">Chúng tôi phát hiện bạn đăng nhập từ thiết bị lạ. Xác nhận đây là bạn?</p>',
+        background: '#0f1623',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#ef4444',
+        confirmButtonText: 'Đúng, là tôi',
+        cancelButtonText: 'Không phải tôi',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Gửi yêu cầu xác nhận thiết bị qua AJAX (Bước 2 dưới đây)
+            fetch('/confirm-device/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                }
+            }).then(response => {
+                if (response.ok) {
+                    Swal.fire({
+                        title: 'Thành công!',
+                        text: 'Thiết bị đã được thêm vào danh sách tin cậy.',
+                        icon: 'success',
+                        background: '#0f1623',
+                        confirmButtonColor: '#6366f1',
+                    }).then(() => {
+                        location.reload(); // Load lại trang để mất popup
+                    });
+                }
+            });
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            // Nếu không phải họ, sút ra ngoài ngay
+            window.location.href = "{% url 'logout' %}";
+        }
+    });
+    {% endif %}
+</script>
 
 <body class="min-h-screen text-slate-900 p-4 md:p-10">
 
@@ -241,8 +283,7 @@
         Không khả dụng
     </div>
 
-</div>
-        </div>
+
     </div>
     <script>
         function switchTab(tab) {
@@ -289,5 +330,104 @@
         {% endif %}
     </script>
     <script>
+    // 1. Hàm này để "Lắng nghe" xem có ai đang xin vào máy mình không
+    function checkApproval() {
+        fetch('/api/get-auth-request/') // Gọi lên Server hỏi
+        .then(res => res.json())
+        .then(data => {
+            if (data.has_request) {
+                // Nếu có, hiện Popup hỏi chủ sở hữu
+                Swal.fire({
+                    title: 'Xác nhận đăng nhập?',
+                    text: 'Thiết bị: ' + data.device_info + ' đang muốn vào.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Cho phép'
+                }).then(result => {
+                    // Gửi kết quả (Đồng ý/Từ chối) về Server
+                    let status = result.isConfirmed ? 'approved' : 'denied';
+                    fetch('/api/respond-auth/' + data.request_id + '/?status=' + status);
+                });
+            }
+        });
+    }
+
+    // 2. Thiết lập cho nó chạy ngầm mỗi 5 giây
+    setInterval(checkApproval, 5000);
+<script>
+        // --- LOGIC GIAO DIỆN CŨ CỦA BẠN ---
+        function switchTab(tab) {
+            const tInfo = document.getElementById('tab-info');
+            const tSecurity = document.getElementById('tab-security');
+            const bInfo = document.getElementById('btn-info');
+            const bSecurity = document.getElementById('btn-security');
+            if(tab === 'info') {
+                tInfo.classList.remove('hidden'); tSecurity.classList.add('hidden');
+                bInfo.className = "w-full py-3 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center px-6 transition";
+                bSecurity.className = "w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50";
+            } else {
+                tInfo.classList.add('hidden'); tSecurity.classList.remove('hidden');
+                bSecurity.className = "w-full py-3 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center px-6 transition";
+                bInfo.className = "w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50";
+            }
+        }
+
+        function toggleEditForm() {
+            document.getElementById('info-display').classList.toggle('hidden');
+            document.getElementById('info-edit').classList.toggle('hidden');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            const m = document.getElementById('toast-msg');
+            if (m) m.innerText = msg;
+            t.classList.remove('translate-x-full');
+            setTimeout(() => t.classList.add('translate-x-full'), 4000);
+        }
+
+        // --- LOGIC XÁC THỰC TỪ XA (REMOTE AUTH) ---
+        function checkApproval() {
+            fetch('/api/get-auth-request/')
+            .then(res => res.json())
+            .then(data => {
+                if (data.has_request) {
+                    Swal.fire({
+                        title: 'Xác nhận đăng nhập?',
+                        text: 'Thiết bị: ' + data.device_info + ' đang muốn vào.',
+                        icon: 'shield-alt',
+                        showCancelButton: true,
+                        confirmButtonText: 'Cho phép',
+                        cancelButtonText: 'Từ chối',
+                        confirmButtonColor: '#6366f1',
+                        cancelButtonColor: '#ef4444',
+                        allowOutsideClick: false
+                    }).then(result => {
+                        let status = result.isConfirmed ? 'approved' : 'denied';
+                        fetch('/api/respond-auth/' + data.request_id + '/?status=' + status);
+                    });
+                }
+            });
+        }
+        setInterval(checkApproval, 5000);
+
+        // --- CÁC THẺ LOGIC DJANGO ---
+        {% if messages %}{% for m in messages %}showToast("{{ m }}");{% endfor %}{% endif %}
+        {% if pending_update %}toggleEditForm();{% endif %}
+        
+        {% if show_device_alert %}
+        Swal.fire({
+            title: 'Thiết bị mới!',
+            text: 'Xác nhận đây là bạn?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Đúng',
+            cancelButtonText: 'Không'
+        }).then((res) => {
+            if (res.isConfirmed) {
+                fetch('/confirm-device/', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' } })
+                .then(r => { if(r.ok) location.reload(); });
+            }
+        });
+        {% endif %}
+    </script>
 </body>
 </html>

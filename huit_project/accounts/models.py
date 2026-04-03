@@ -184,3 +184,15 @@ def log_login(sender, request, user, **kwargs):
         device=request.META.get('HTTP_USER_AGENT'),
         status="success"
     )
+    
+
+class RemoteAuthRequest(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    session_key = models.CharField(max_length=40) # Session của máy mới
+    device_info = models.CharField(max_length=255)
+    status = models.CharField(
+        max_length=20, 
+        choices=[('pending', 'Chờ'), ('approved', 'Đồng ý'), ('denied', 'Từ chối')],
+        default='pending'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)

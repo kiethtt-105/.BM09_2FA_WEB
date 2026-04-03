@@ -1,6 +1,6 @@
 import profile
 from urllib import request
-from .models import LoginHistory, TrustedDevice
+from .models import LoginHistory, RemoteAuthRequest, TrustedDevice
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -447,14 +447,25 @@ HUIT System""",
 
         if not confirm_disable:
             return redirect('dashboard')
+    
+    urrent_session = request.session.session_key
+    current_session = request.session.session_key
+    device = TrustedDevice.objects.filter(
+        user=request.user, 
+        session_key=current_session
+    ).first()
 
+    show_alert = False
+    if device and not device.is_active:
+        show_alert = True
+
+    # Chỉ dùng 1 return render duy nhất cuối cùng để đóng gói tất cả biến
     return render(request, 'accounts/user_dashboard.html', {
         'profile':         profile,
         'confirm_disable': confirm_disable,
         'pending_update':  pending_update,
+        'show_device_alert': show_alert,
     })
-
-
 # ══════════════════════════════════════════════════════════
 #  7. SETUP 2FA
 # ══════════════════════════════════════════════════════════
@@ -528,9 +539,6 @@ def setup_2fa(request):
 
 # ══════════════════════════════════════════════════════════
 #  8. VERIFY 2FA
-# ══════════════════════════════════════════════════════════
-
-
 def verify_2fa(request):
     # 1. Lấy user tạm thời
     uid = request.session.get('pre_2fa_user_id')
@@ -543,6 +551,14 @@ def verify_2fa(request):
         profile = user.profile 
     except Exception:
         return redirect('login')
+    # Lấy danh sách thiết bị đã xác thực (để hiển thị ở template)
+    # Loại trừ chính session hiện tại đang chờ xác thực
+
+    other_devices = TrustedDevice.objects.filter(
+        user=user, 
+        is_active=True
+    ).exclude(session_key=request.session.session_key)
+
 
     # 2. Xây dựng danh sách phương thức để hiển thị ở template
     methods = []
@@ -551,9 +567,19 @@ def verify_2fa(request):
     if profile.has_email_otp:
         methods.append({'key': 'email', 'name': 'Email OTP', 'icon': '📧'})
 
+    if other_devices.exists():
+        methods.append({'key': 'push', 'name': 'Thiết bị khác', 'icon': '🔔'})
+
     if not methods:
         messages.error(request, 'Tài khoản chưa thiết lập 2FA!')
         return redirect('login')
+
+    # --- THÊM CHÚ THÍCH THAY CHO "YÊU CẦU XÁC THỰC 2 LỚP" ---
+    method_names = [m['name'] for m in methods]
+    if len(method_names) > 1:
+        dynamic_msg = "Xác thực bằng " + ", ".join(method_names[:-1]) + " hoặc " + method_names[-1]
+    else:
+        dynamic_msg = f"Xác thực bằng {method_names[0]}"
 
     # 3. Xác định phương thức hiện tại (mặc định chọn cái đầu tiên nếu URL trống)
     method = request.GET.get('method')
@@ -566,6 +592,23 @@ def verify_2fa(request):
     if request.method == 'POST':
         action = request.POST.get('action')
         code = request.POST.get('otp_code', '').strip()
+
+        
+        # --- MỚI: Hiện thực hóa tạo yêu cầu Push (Không còn là giả sử) ---
+        if action == 'send_push_request':
+            # Import model trực tiếp trong hàm để tránh lỗi vòng lặp import nếu có
+            from .models import RemoteAuthRequest 
+            
+            RemoteAuthRequest.objects.update_or_create(
+                user=user, 
+                session_key=request.session.session_key,
+                defaults={
+                    'status': 'pending', 
+                    'device_info': request.META.get('HTTP_USER_AGENT', 'Thiết bị lạ')
+                }
+            )
+            messages.info(request, 'Yêu cầu xác nhận đã được gửi đến các thiết bị khác.')
+            return redirect(f'{request.path}?method=push')
 
         # Gửi mã Email OTP
         if action == 'send_email_code' and profile.has_email_otp:
@@ -609,11 +652,11 @@ def verify_2fa(request):
         'method': method,
         'profile': profile,
         'has_app_otp': profile.has_app_otp,   # CỰC KỲ QUAN TRỌNG: Để HTML nhận diện
-        'has_email_otp': profile.has_email_otp # CỰC KỲ QUAN TRỌNG: Để HTML nhận diện
+        'has_email_otp': profile.has_email_otp, # CỰC KỲ QUAN TRỌNG: Để HTML nhận diện
+        'has_other_devices': other_devices.exists(), # Để hiển thị thông báo chờ xác nhận
+        'dynamic_msg': dynamic_msg # Dùng cái này thay cho text cứng ở template
     })
-    
 
-# ══════════════════════════════════════════════════════════
 #  9. BAN USER (Dành cho admin)
 def ban_user(request, user_id):
     user = User.objects.get(id=user_id)
@@ -701,15 +744,29 @@ def login_view(request):
                 profile.save()
 
             # FIX LỖI: Kiểm tra xem user có thực sự bật 2FA nào không
-            # Nếu có bất kỳ phương thức nào được bật, mới chuyển hướng sang verify_2fa
-            if profile.has_app_otp or profile.has_email_otp:
-                request.session['pre_2fa_user_id'] = user.id
-                
-                # Quyết định phương thức mặc định để gửi mã hoặc hiển thị
-                # Nếu chỉ bật Email OTP, hệ thống sẽ biết để gửi mail ngay tại view verify_2fa
-                messages.info(request, "Yêu cầu xác thực hai lớp.")
-                return redirect('verify_2fa')
+        if profile.has_app_otp or profile.has_email_otp:
+            request.session['pre_2fa_user_id'] = user.id
 
+            # --- TỰ ĐỘNG TẠO THÔNG BÁO DYNAMIC ---
+            methods_enabled = []
+            if profile.has_app_otp:
+                methods_enabled.append("Authenticator")
+            if profile.has_email_otp:
+                methods_enabled.append("Email OTP")
+            
+            # Kiểm tra xem có thiết bị nào khác đang online không để gợi ý xác thực thiết bị
+            other_devices = TrustedDevice.objects.filter(user=user, is_active=True).exclude(session_key=request.session.session_key)
+            if other_devices.exists():
+                methods_enabled.append("Thiết bị khác")
+
+            # Ghép chuỗi thông báo
+            if len(methods_enabled) > 1:
+                msg = "Xác thực bằng " + ", ".join(methods_enabled[:-1]) + " hoặc " + methods_enabled[-1]
+            else:
+                msg = f"Xác thực bằng {methods_enabled[0]}"
+
+            messages.info(request, msg) # Truyền biến msg đã ghép vào đây
+            return redirect('verify_2fa')
             # --- 3. ĐĂNG NHẬP THÔNG THƯỜNG ---
             login(request, user)
             ActivityLog.objects.create(user=user, action='login', ip_address=ip, user_agent=user_agent)
@@ -859,3 +916,55 @@ def login_history(request):
 def devices(request):
     devices = TrustedDevice.objects.filter(user=request.user, is_active=True)
     return render(request, 'accounts/devices.html', {'devices': devices})
+
+# accounts/views.py
+from django.http import JsonResponse
+
+def confirm_device(request):
+    if request.method == 'POST' and request.user.is_authenticated:
+        session_key = request.session.session_key
+        # Tìm và kích hoạt thiết bị hiện tại
+        TrustedDevice.objects.filter(
+            user=request.user, 
+            session_key=session_key
+        ).update(is_active=True)
+        return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'error'}, status=400)
+
+from django.http import JsonResponse
+
+# API để Máy đang online lấy yêu cầu xác thực mới nhất
+@login_required
+def get_pending_auth_request(request):
+    req = RemoteAuthRequest.objects.filter(user=request.user, status='pending').last()
+    if req:
+        return JsonResponse({
+            'has_request': True,
+            'request_id': req.id,
+            'device_info': req.device_info
+        })
+    return JsonResponse({'has_request': False})
+
+# API để Máy đang online bấm Đồng ý/Từ chối
+@login_required
+def respond_auth_request(request, req_id):
+    status = request.GET.get('status') # 'approved' hoặc 'denied'
+    if status in ['approved', 'denied']:
+        RemoteAuthRequest.objects.filter(id=req_id, user=request.user).update(status=status)
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'error'}, status=400)
+
+# API để Máy mới (đang chờ) kiểm tra trạng thái duyệt
+def check_auth_status(request):
+    session_key = request.session.session_key
+    req = RemoteAuthRequest.objects.filter(session_key=session_key).last()
+    if req and req.status == 'approved':
+        # Nếu đã duyệt, tiến hành đăng nhập chính thức cho session này
+        from django.contrib.auth import login
+        login(request, req.user)
+        req.delete() # Xóa yêu cầu sau khi xong
+        return JsonResponse({'status': 'approved'})
+    elif req and req.status == 'denied':
+        req.delete()
+        return JsonResponse({'status': 'denied'})
+    return JsonResponse({'status': 'pending'})

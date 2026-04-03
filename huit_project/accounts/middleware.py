@@ -141,3 +141,25 @@ class UpdateDeviceMiddleware:
             )
 
         return self.get_response(request)
+
+# accounts/middleware.py
+# Middleware để kiểm tra nếu thiết bị mới thì hiển thị popup cảnh báo
+class DeviceAlertMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            # Kiểm tra xem session hiện tại đã được đánh dấu là "đã biết" chưa
+            session_key = request.session.session_key
+            is_trusted = TrustedDevice.objects.filter(
+                user=request.user, 
+                session_key=session_key,
+                is_recognized=True # Bạn nên thêm trường này vào model TrustedDevice
+            ).exists()
+
+            # Nếu chưa trusted, gửi flag vào request để template hiển thị popup
+            request.is_new_device = not is_trusted
+            
+        response = self.get_response(request)
+        return response
