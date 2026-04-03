@@ -694,7 +694,7 @@ def login_view(request):
                     user=user, action='otp_fail', ip_address=ip, user_agent=user_agent
                 )
                 request.session['pre_2fa_user_id'] = user.id
-                messages.info(request, "Vui lòng xác thực 2FA.")
+                messages.info(request, "Vui lòng chọn phương thức xác thực để tiếp tục.")
                 return redirect('verify_2fa')
 
             # ĐĂNG NHẬP THÔNG THƯỜNG (User không bật 2FA)
