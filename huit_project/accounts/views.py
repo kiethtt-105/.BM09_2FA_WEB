@@ -529,77 +529,90 @@ def setup_2fa(request):
 # ══════════════════════════════════════════════════════════
 #  8. VERIFY 2FA
 # ══════════════════════════════════════════════════════════
-def verify_2fa(request):        # Lấy user tạm thời đã đăng nhập qua bước 1 (chưa qua 2FA)  \
-                                #Data Provider cho template biết user đang xác thực bằng phương thức nào, hiển thị form tương ứng
-    
+
+
+def verify_2fa(request):
+    # 1. Lấy user tạm thời
     uid = request.session.get('pre_2fa_user_id')
     if not uid:
         return redirect('login')
-    user    = User.objects.get(id=uid)
-    profile = UserProfile.objects.get(user=user)
-    methods = [] 
-    if profile.has_app_otp:
-        methods.append({
-            'key': 'app',
-            'name': 'Authenticator',
-            'icon': '📱'
-        })
-
-    if profile.has_email_otp:
-        methods.append({
-            'key': 'email',
-            'name': 'Email OTP',
-            'icon': '📧'
-        })
-
-    # methods.append({'key':'sms','name':'SMS','icon':'📩'})
-
-    if not methods:
-        messages.error(request, 'Không có phương thức xác thực!')
+    
+    try:
+        user = User.objects.get(id=uid)
+        # Sử dụng .profile vì Model của bạn đặt related_name='profile'
+        profile = user.profile 
+    except Exception:
         return redirect('login')
 
-   # Lấy method từ query param để biết đang xác thực bằng cách nào
-    method = request.GET.get('method')
+    # 2. Xây dựng danh sách phương thức để hiển thị ở template
+    methods = []
+    if profile.has_app_otp:
+        methods.append({'key': 'app', 'name': 'Authenticator', 'icon': '📱'})
+    if profile.has_email_otp:
+        methods.append({'key': 'email', 'name': 'Email OTP', 'icon': '📧'})
 
+    if not methods:
+        messages.error(request, 'Tài khoản chưa thiết lập 2FA!')
+        return redirect('login')
+
+    # 3. Xác định phương thức hiện tại (mặc định chọn cái đầu tiên nếu URL trống)
+    method = request.GET.get('method')
+    enabled_keys = [m['key'] for m in methods]
+    
+    if method not in enabled_keys:
+        return redirect(f"{request.path}?method={enabled_keys[0]}")
+
+    # 4. Xử lý POST (Gửi mã hoặc Xác nhận mã)
     if request.method == 'POST':
         action = request.POST.get('action')
-        code   = request.POST.get('otp_code', '').strip()
+        code = request.POST.get('otp_code', '').strip()
 
-        if action == 'send_email_code':
+        # Gửi mã Email OTP
+        if action == 'send_email_code' and profile.has_email_otp:
             otp = str(random.randint(100000, 999999))
-            profile.email_otp  = otp
+            profile.email_otp = otp
             profile.otp_expiry = timezone.now() + timedelta(minutes=5)
             profile.save()
-
+            
             send_mail(
-                subject='OTP Login',
-                message=f'OTP: {otp}',
-                from_email=None,
-                recipient_list=[user.email],
-                fail_silently=True,
+                'Mã xác thực đăng nhập',
+                f'Mã OTP của bạn là: {otp}',
+                None,
+                [user.email],
+                fail_silently=True
             )
-            return redirect(f'/verify-2fa/?method=email')
+            messages.success(request, 'Đã gửi mã OTP mới vào Email.')
+            return redirect(f'{request.path}?method=email')
 
+        # Kiểm tra mã OTP
         valid = False
-
-        if method == 'app' and code == get_totp_token(profile.otp_secret):
-            valid = True
-
-        elif method == 'email' and code == profile.email_otp and profile.otp_expiry > timezone.now():
-            valid = True
+        if method == 'app' and profile.has_app_otp:
+            if code == get_totp_token(profile.otp_secret): # Đảm bảo bạn có hàm get_totp_token
+                valid = True
+        elif method == 'email' and profile.has_email_otp:
+            if code == profile.email_otp and profile.otp_expiry > timezone.now():
+                valid = True
 
         if valid:
             login(request, user)
             request.session.pop('pre_2fa_user_id', None)
+            if method == 'email':
+                profile.email_otp = None # Dùng xong thì xóa
+                profile.save()
             return redirect('dashboard')
+        
+        messages.error(request, 'Mã xác thực không chính xác hoặc hết hạn.')
 
-        messages.error(request, 'OTP sai!')
-
+    # 5. Truyền đầy đủ dữ liệu xuống Template
     return render(request, 'accounts/verify_2fa.html', {
         'methods': methods,
         'method': method,
-        'profile': profile
+        'profile': profile,
+        'has_app_otp': profile.has_app_otp,   # CỰC KỲ QUAN TRỌNG: Để HTML nhận diện
+        'has_email_otp': profile.has_email_otp # CỰC KỲ QUAN TRỌNG: Để HTML nhận diện
     })
+    
+
 # ══════════════════════════════════════════════════════════
 #  9. BAN USER (Dành cho admin)
 def ban_user(request, user_id):
@@ -654,61 +667,59 @@ def toggle_user_status(request, user_id):
     return redirect('admin_dashboard')
 
 # 3. HÀM LOGIN PHÂN QUYỀN + BỎ QUA 2FA CHO ADMIN
+
+
+
 def login_view(request):
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
-            profile, _ = UserProfile.objects.get_or_create(user=user)
-
+            # Sử dụng select_related để tối ưu truy vấn database
+            profile = UserProfile.objects.select_related('user').get(user=user)
+            
             ip = get_client_ip(request)
             user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
             if not user.is_active:
-                messages.error(request, "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.")
+                messages.error(request, "Tài khoản của bạn đã bị khóa.")
                 return render(request, 'accounts/login.html', {'form': form})
 
-            # --- ƯU TIÊN ADMIN: ĐĂNG NHẬP THẲNG, BỎ QUA 2FA ---
+            # --- 1. ƯU TIÊN ADMIN ---
             if user.is_superuser:
                 login(request, user)
-                ActivityLog.objects.create(
-                    user=user, action='login', ip_address=ip, user_agent=user_agent
-                )
+                ActivityLog.objects.create(user=user, action='login', ip_address=ip, user_agent=user_agent)
                 messages.success(request, f"Chào Admin, {user.username}!")
                 return redirect('admin_dashboard')
 
-            # --- KIỂM TRA 2FA CHO USER THƯỜNG ---
-            # Sửa check 2fa dựa trên các trường có sẵn
-            # if profile.has_app_otp or profile.has_email_otp:
-            try:
-                user_2fa = user.user2fa
-                if user_2fa.force_disable_2fa:
-                    profile.has_app_otp = False
-                    profile.has_email_otp = False
-                    profile.save()
-            except:
-                pass
+            # --- 2. KIỂM TRA 2FA CHO USER THƯỜNG ---
+            # Đồng bộ trạng thái từ User2FA nếu có (giữ logic của bạn nhưng tối ưu hơn)
+            user_2fa = getattr(user, 'user2fa', None)
+            if user_2fa and user_2fa.force_disable_2fa:
+                profile.has_app_otp = False
+                profile.has_email_otp = False
+                profile.save()
 
+            # FIX LỖI: Kiểm tra xem user có thực sự bật 2FA nào không
+            # Nếu có bất kỳ phương thức nào được bật, mới chuyển hướng sang verify_2fa
             if profile.has_app_otp or profile.has_email_otp:
-                ActivityLog.objects.create(
-                    user=user, action='otp_fail', ip_address=ip, user_agent=user_agent
-                )
                 request.session['pre_2fa_user_id'] = user.id
-                messages.info(request, "Vui lòng chọn phương thức xác thực để tiếp tục.")
+                
+                # Quyết định phương thức mặc định để gửi mã hoặc hiển thị
+                # Nếu chỉ bật Email OTP, hệ thống sẽ biết để gửi mail ngay tại view verify_2fa
+                messages.info(request, "Yêu cầu xác thực hai lớp.")
                 return redirect('verify_2fa')
 
-            # ĐĂNG NHẬP THÔNG THƯỜNG (User không bật 2FA)
+            # --- 3. ĐĂNG NHẬP THÔNG THƯỜNG ---
             login(request, user)
-            ActivityLog.objects.create(
-                user=user, action='login', ip_address=ip, user_agent=user_agent
-            )
-            session_key = request.session.session_key
-            if not session_key:
+            ActivityLog.objects.create(user=user, action='login', ip_address=ip, user_agent=user_agent)
+            
+            # Quản lý TrustedDevice
+            if not request.session.session_key:
                 request.session.create()
-                session_key = request.session.session_key
-
+            
             TrustedDevice.objects.update_or_create(
-                session_key=session_key,
+                session_key=request.session.session_key,
                 defaults={
                     "user": user,
                     "user_agent": user_agent,
@@ -721,20 +732,13 @@ def login_view(request):
             return redirect('dashboard')
         
         else:
-            username_attempt = request.POST.get('username')
-            ip = get_client_ip(request)
+            # Xử lý khi sai mật khẩu/username
             messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
-            attempted_user = User.objects.filter(username=username_attempt).first()
-            if attempted_user:
-                 ActivityLog.objects.create(
-                    user=attempted_user, action='login_failed', 
-                    ip_address=ip, user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown')
-                )
-                
     else:
         form = AuthenticationForm()
     
     return render(request, 'accounts/login.html', {'form': form})
+
 
 @user_passes_test(lambda u: u.is_superuser)
 def export_users_excel(request):

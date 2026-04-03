@@ -210,21 +210,25 @@ body::after {
     {% endfor %}
   {% endif %}
 
-  <div class="method-grid">
-    <a href="?method=app"
-       class="method-card {% if method == 'app' %}active-app{% endif %}">
-      <div class="method-icon">📱</div>
-      <div class="method-label">Authenticator</div>
-      <div class="method-sub">Google Auth</div>
-    </a>
-    <a href="?method=email"
-       class="method-card {% if method == 'email' %}active-email{% endif %}">
-      <div class="method-icon">📧</div>
-      <div class="method-label">Email OTP</div>
-      <div class="method-sub">Nhận qua mail</div>
-    </a>
-  </div>
-  
+ <div class="method-grid">
+  {% if has_app_otp %}
+  <a href="?method=app"
+     class="method-card {% if method == 'app' %}active-app{% endif %}">
+    <div class="method-icon">📱</div>
+    <div class="method-label">Authenticator</div>
+    <div class="method-sub">Google Auth</div>
+  </a>
+  {% endif %}
+
+  {% if has_email_otp %}
+  <a href="?method=email"
+     class="method-card {% if method == 'email' %}active-email{% endif %}">
+    <div class="method-icon">📧</div>
+    <div class="method-label">Email OTP</div>
+    <div class="method-sub">Nhận qua mail</div>
+  </a>
+  {% endif %}
+</div>
 
   <div class="method-hint">
     {% if method == 'app' %}

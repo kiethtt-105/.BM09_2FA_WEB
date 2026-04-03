@@ -38,6 +38,9 @@ class UserProfile(models.Model):
         """Trả về: Họ + Chữ đệm + Tên"""
         parts = [self.user.first_name, self.middle_name, self.user.last_name]
         return ' '.join(p for p in parts if p)
+
+
+
 class PendingRegistration(models.Model):
     """
     Lưu tạm dữ liệu đăng ký trước khi xác thực OTP.
