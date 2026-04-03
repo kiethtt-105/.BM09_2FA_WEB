@@ -2,101 +2,138 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Thiết bị đang hoạt động</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý thiết bị hoạt động</title>
 
-    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Icon -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(229, 231, 235, 0.5);
+        }
+    </style>
 </head>
 
-<body class="bg-gray-100 p-10">
+<body class="bg-[#f8fafc] min-h-screen p-4 md:p-10">
 
-<div class="max-w-5xl mx-auto">
+<div class="max-w-6xl mx-auto">
+    
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
+                <span class="bg-blue-600 text-white p-2 rounded-lg shadow-blue-200 shadow-lg">
+                    <i class="fa-solid fa-shield-halved text-xl"></i>
+                </span>
+                Quản lý thiết bị
+            </h2>
+            <p class="text-gray-500 mt-1 ml-14">Giám sát và kiểm soát các phiên đăng nhập đang hoạt động</p>
+        </div>
 
-    <h2 class="text-3xl font-bold mb-6 flex items-center gap-2">
-        💻 Lịch Sử Đăng Nhập
-    </h2>
+        {% if devices|length > 1 %}
+        <a href="{% url 'logout_all_devices' %}" 
+           onclick="return confirm('Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị khác không?')"
+           class="inline-flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 px-6 py-3 rounded-xl font-semibold hover:bg-red-600 hover:text-white transition-all duration-300 shadow-sm active:scale-95">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            Đăng xuất tất cả thiết bị khác
+        </a>
+        {% endif %}
+    </div>
 
-    <div class="bg-white shadow-xl rounded-2xl overflow-hidden">
+    <div class="glass-card shadow-2xl rounded-[2rem] overflow-hidden border border-gray-100">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-widest border-b border-gray-100">
+                        <th class="p-6">Thiết bị & Nền tảng</th>
+                        <th class="p-6">Địa chỉ IP</th>
+                        <th class="p-6">Hoạt động cuối</th>
+                        <th class="p-6 text-center">Trạng thái / Thao tác</th>
+                    </tr>
+                </thead>
 
-        <table class="w-full text-left">
-            <thead class="bg-gray-100 text-gray-600 uppercase text-sm">
-                <tr>
-                    <th class="p-4">Thiết bị</th>
-                    <th class="p-4">IP</th>
-                    <th class="p-4">Thời gian</th>
-                    <th class="p-4 text-center">Hành động</th>
-                </tr>
-            </thead>
-
-            <tbody>
-
-                {% for d in devices %}
-                <tr class="border-t hover:bg-gray-50 transition">
-
-                    <!-- DEVICE -->
-                    <td class="p-4">
-                        <div class="flex items-center gap-3">
-
-                            <!-- ICON -->
-                            <i class="fa-solid fa-laptop text-blue-500 text-xl"></i>
-
-                            <div>
-                                <div class="font-semibold text-gray-800">
-                                    {{ d.name }}
+                <tbody class="divide-y divide-gray-50">
+                    {% for d in devices %}
+                    <tr class="group hover:bg-blue-50/40 transition-colors duration-200">
+                        
+                        <td class="p-6">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-2xl bg-white shadow-sm border border-gray-100 flex items-center justify-center text-2xl transition-transform group-hover:scale-110">
+                                    {% if 'Mobile' in d.user_agent or 'Android' in d.user_agent or 'iPhone' in d.user_agent %}
+                                        <i class="fa-solid fa-mobile-screen-button text-indigo-500"></i>
+                                    {% else %}
+                                        <i class="fa-solid fa-laptop text-blue-500"></i>
+                                    {% endif %}
                                 </div>
-
-                                <div class="text-xs text-gray-400">
-                                    {{ d.user_agent|truncatechars:60 }}
-                                </div>
-
-                                {% if d.session_key == request.session.session_key %}
-                                    <span class="text-green-500 text-xs font-bold">
-                                        ● Thiết bị hiện tại
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-gray-800 text-lg">{{ d.name }}</span>
+                                    <span class="text-xs text-gray-400 font-medium max-w-[250px] truncate" title="{{ d.user_agent }}">
+                                        {{ d.user_agent }}
                                     </span>
+                                </div>
+                            </div>
+                        </td>
+
+                        <td class="p-6">
+                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-md font-mono text-sm border border-gray-200">
+                                {{ d.ip_address }}
+                            </span>
+                        </td>
+
+                        <td class="p-6 text-gray-500 font-medium">
+                            <div class="flex flex-col">
+                                <span class="text-gray-700">{{ d.last_seen|date:"H:i" }}</span>
+                                <span class="text-xs text-gray-400">{{ d.last_seen|date:"d/m/Y" }}</span>
+                            </div>
+                        </td>
+
+                        <td class="p-6">
+                            <div class="flex justify-center">
+                                {% if d.session_key == request.session.session_key %}
+                                    <div class="flex items-center gap-2 bg-green-50 text-green-600 px-4 py-2 rounded-full border border-green-100">
+                                        <span class="relative flex h-2 w-2">
+                                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                        </span>
+                                        <span class="text-sm font-bold uppercase tracking-tight">Đang online</span>
+                                    </div>
+                                {% else %}
+                                    <a href="{% url 'logout_device' d.id %}"
+                                       class="inline-flex items-center gap-2 bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-xl text-sm font-semibold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 shadow-sm active:scale-95">
+                                        <i class="fa-solid fa-user-slash text-xs"></i>
+                                        Đăng xuất
+                                    </a>
                                 {% endif %}
                             </div>
+                        </td>
 
-                        </div>
-                    </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center p-20">
+                            <div class="flex flex-col items-center">
+                                <div class="bg-gray-50 p-6 rounded-full mb-4">
+                                    <i class="fa-solid fa-box-open text-5xl text-gray-200"></i>
+                                </div>
+                                <h3 class="text-gray-400 font-medium">Không tìm thấy dữ liệu thiết bị</h3>
+                                <p class="text-gray-300 text-sm">Các phiên đăng nhập của bạn sẽ xuất hiện tại đây.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
 
-                    <!-- IP -->
-                    <td class="p-4 text-gray-600">
-                        {{ d.ip_address }}
-                    </td>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-                    <!-- TIME -->
-                    <td class="p-4 text-gray-600">
-                        {{ d.last_seen|date:"d/m/Y H:i" }}
-                    </td>
-
-                    <!-- ACTION -->
-                    <td class="p-4 text-center">
-                        {% if d.session_key != request.session.session_key %}
-                            <a href="{% url 'logout_device' d.id %}"
-                               class="bg-red-500 text-white px-4 py-1 rounded-lg text-sm hover:bg-red-600">
-                                Đăng xuất
-                            </a>
-                        {% else %}
-                            <span class="text-gray-400 text-sm">Đang dùng</span>
-                        {% endif %}
-                    </td>
-
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" class="text-center p-6 text-gray-400">
-                        Không có thiết bị nào
-                    </td>
-                </tr>
-                {% endfor %}
-
-            </tbody>
-        </table>
-
+    <div class="mt-8 flex items-center gap-3 justify-center text-gray-400 text-sm">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>Nếu bạn thấy thiết bị lạ, hãy đăng xuất ngay lập tức và đổi mật khẩu.</span>
     </div>
 </div>
 

@@ -63,6 +63,7 @@ from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from .models import LoginHistory
+from django.contrib.sessions.models import Session
 
 
 class RegisterForm(UserCreationForm):
@@ -797,20 +798,50 @@ def login_history(request):
 
 @login_required
 def active_sessions(request):
-    devices = TrustedDevice.objects.filter(user=request.user).order_by('-last_seen')
-
+    # Lấy danh sách thiết bị còn hoạt động (is_active=True)
+    devices = TrustedDevice.objects.filter(user=request.user, is_active=True).order_by('-last_seen')
+    
     return render(request, 'accounts/active_sessions.html', {
         'devices': devices
     })
+    
+
+@login_required
+def logout_all_devices(request):
+    current_session_key = request.session.session_key
+    
+    # Lấy tất cả thiết bị đang hoạt động TRỪ thiết bị hiện tại
+    other_devices = TrustedDevice.objects.filter(
+        user=request.user, 
+        is_active=True
+    ).exclude(session_key=current_session_key)
+    
+    for device in other_devices:
+        # Xóa session vật lý
+        if device.session_key:
+            Session.objects.filter(session_key=device.session_key).delete()
+        # Cập nhật trạng thái
+        device.is_active = False
+        device.save()
+        
+    messages.success(request, "Đã đăng xuất tất cả các thiết bị khác thành công.")
+    return redirect('active_sessions')    
 
 @login_required
 def logout_device(request, device_id):
+    # Tìm thiết bị cụ thể của user
     device = get_object_or_404(TrustedDevice, id=device_id, user=request.user)
-
+    
+    # 1. Xóa Session vật lý trong database của Django để user bị văng ra ngay lập tức
+    if device.session_key:
+        Session.objects.filter(session_key=device.session_key).delete()
+    
+    # 2. Đánh dấu trong DB là đã offline
     device.is_active = False
     device.save()
-
-    return redirect('active_sessions')    
+    
+    messages.success(request, f"Đã đăng xuất thiết bị {device.name}")
+    return redirect('active_sessions')
 
 @login_required
 def login_history(request):

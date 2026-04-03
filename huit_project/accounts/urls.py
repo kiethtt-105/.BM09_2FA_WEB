@@ -20,5 +20,6 @@ urlpatterns = [
     path('devices/', views.devices, name='devices'),
     path('active-sessions/', views.active_sessions, name='active_sessions'),
     path('logout-device/<int:device_id>/', views.logout_device, name='logout_device'),  
+    path('logout-all-devices/', views.logout_all_devices, name='logout_all_devices'),
 
 ]
