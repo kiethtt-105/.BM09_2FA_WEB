@@ -210,7 +210,7 @@ body::after {
     {% endfor %}
   {% endif %}
 
- 
+{% comment %}  
   {% if methods|length > 1 %}
 <div class="method-grid">
   {% for m in methods %}
@@ -223,7 +223,7 @@ body::after {
     </a>
   {% endfor %}
 </div>
-{% endif %}
+{% endif %} {% endcomment %}
   <div class="method-grid">
     <a href="?method=app"
        class="method-card {% if method == 'app' %}active-app{% endif %}">
