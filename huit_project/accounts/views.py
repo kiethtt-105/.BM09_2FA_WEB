@@ -744,7 +744,7 @@ def login_view(request):
                 profile.save()
 
             # FIX LỖI: Kiểm tra xem user có thực sự bật 2FA nào không
-        if profile.has_app_otp or profile.has_email_otp:
+            if profile.has_app_otp or profile.has_email_otp:
             request.session['pre_2fa_user_id'] = user.id
 
             # --- TỰ ĐỘNG TẠO THÔNG BÁO DYNAMIC ---
@@ -767,6 +767,7 @@ def login_view(request):
 
             messages.info(request, msg) # Truyền biến msg đã ghép vào đây
             return redirect('verify_2fa')
+
             # --- 3. ĐĂNG NHẬP THÔNG THƯỜNG ---
             login(request, user)
             ActivityLog.objects.create(user=user, action='login', ip_address=ip, user_agent=user_agent)
@@ -868,7 +869,7 @@ def active_sessions(request):
     
 
 @login_required
-def logout_all_devices(request):
+def logout_all_devices(request):   
     current_session_key = request.session.session_key
     
     # Lấy tất cả thiết bị đang hoạt động TRỪ thiết bị hiện tại
