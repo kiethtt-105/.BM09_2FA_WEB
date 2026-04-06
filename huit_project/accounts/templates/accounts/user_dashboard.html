@@ -266,23 +266,37 @@
                         <a href="{% url 'setup_2fa' %}?method=app" class="mt-6 w-full py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold">Thiết lập QR</a>
                         {% endif %}
                     </div>
-                    <!-- ==================== FIDO2 CARD - ĐÃ SỬA (BẤM ĐƯỢC 100%) ==================== -->
-                    <div class="p-6 rounded-3xl border-2 border-slate-200 bg-white flex flex-col items-center text-center opacity-60">
+                   <div class="p-6 rounded-3xl border-2 {% if profile.has_fido2 %}border-cyan-200 bg-cyan-50/30{% else %}border-slate-200 bg-white{% endif %} flex flex-col items-center text-center transition-all hover:shadow-lg">
+    
+                    <i class="fas fa-fingerprint text-4xl mb-4 {% if profile.has_fido2 %}text-cyan-500{% else %}text-slate-400{% endif %}"></i>
 
-    <i class="fas fa-fingerprint text-4xl mb-4 text-slate-400"></i>
+                <h4 class="font-bold text-lg {% if profile.has_fido2 %}text-cyan-900{% else %}text-slate-600{% endif %}">
+                     FIDO2 / PASSKEY
+                </h4>
 
-    <h4 class="font-bold text-lg text-slate-600">
-        FIDO2 / PASSKEY
-    </h4>
+                {% if profile.has_fido2 %}
+                    <span class="mt-3 inline-flex items-center px-4 py-1 bg-cyan-100 text-cyan-700 text-xs font-black rounded-3xl uppercase tracking-wider">
+                        <i class="fas fa-check-circle mr-1"></i> Đã kích hoạt
+                    </span>
 
-    <span class="mt-3 inline-flex items-center px-4 py-1 bg-amber-100 text-amber-700 text-xs font-black rounded-3xl">
-        🚧 ĐANG PHÁT TRIỂN
-    </span>
+                    <form method="POST" class="w-full mt-6">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="disable_fido2">
+                        <button type="submit" class="w-full py-3 text-red-500 hover:bg-red-50 rounded-2xl text-sm font-bold transition-colors">
+                            Tắt Passkey
+                        </button>
+                    </form>
+                 {% else %}
+                    <span class="mt-3 inline-flex items-center px-4 py-1 bg-slate-100 text-slate-500 text-xs font-black rounded-3xl uppercase tracking-wider">
+                        Chưa thiết lập
+                    </span>
 
-    <div class="mt-6 w-full py-3 bg-slate-200 text-slate-500 rounded-2xl text-sm font-bold text-center cursor-not-allowed">
-        Không khả dụng
-    </div>
-
+                    <a href="{% url 'setup_2fa' %}?method=fido2" 
+                    class="mt-6 w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-bold text-center transition-all shadow-md shadow-indigo-200 active:scale-95">
+                        Thiết lập ngay
+                    </a>
+                {% endif %}
+            </div>
 
     </div>
     <script>

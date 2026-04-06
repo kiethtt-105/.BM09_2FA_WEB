@@ -25,4 +25,8 @@ urlpatterns = [
     path('api/get-auth-request/', views.get_pending_auth_request),
     path('api/respond-auth/<int:req_id>/', views.respond_auth_request),
     path('api/check-auth-status/', views.check_auth_status),
+    path('fido2/register/begin/', views.fido2_register_begin, name='fido2_register_begin'),
+    path('fido2/register/complete/', views.fido2_register_complete, name='fido2_register_complete'),
+    path('fido2/authenticate/begin/', views.fido2_authenticate_begin, name='fido2_authenticate_begin'),
+    path('fido2/authenticate/complete/', views.fido2_authenticate_complete, name='fido2_authenticate_complete'),
 ]

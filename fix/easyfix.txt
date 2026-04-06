@@ -1,9 +1,23 @@
-pip install django
+<!> cd Thư mục chứa manage.py {huit_project}
 
-python manage.py makemigrations
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
+
+Tạo môi trường ảo
+
+	python -m python -m venv venv
+
+Cài Đặt Các Gói {requirements.txt lưu tại thư mục chứ manage.py huit_project}
+	pip install -r requirements.txt
+
+Tạo Database + admin
+	python manage.py makemigrations
+
+	python manage.py migrate
+	# Superuser
+
+	python manage.py createsuperuser
+
+	# Runserver
+	python manage.py runserver
 
 
 ---------------------
