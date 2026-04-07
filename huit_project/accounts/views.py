@@ -721,91 +721,69 @@ def toggle_user_status(request, user_id):
 # 3. HÀM LOGIN PHÂN QUYỀN + BỎ QUA 2FA CHO ADMIN
 
 
+
 def login_view(request):
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
-
         if form.is_valid():
             user = form.get_user()
-
-            # Lấy profile (an toàn hơn)
-            profile, _ = UserProfile.objects.get_or_create(user=user)
-
+            # Sử dụng select_related để tối ưu truy vấn database
+            profile = UserProfile.objects.select_related('user').get(user=user)
+            
             ip = get_client_ip(request)
             user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
-            # --- Check active ---
             if not user.is_active:
                 messages.error(request, "Tài khoản của bạn đã bị khóa.")
                 return render(request, 'accounts/login.html', {'form': form})
 
-            # --- ADMIN ---
+            # --- 1. ƯU TIÊN ADMIN ---
             if user.is_superuser:
                 login(request, user)
-                ActivityLog.objects.create(
-                    user=user, action='login',
-                    ip_address=ip, user_agent=user_agent
-                )
+                ActivityLog.objects.create(user=user, action='login', ip_address=ip, user_agent=user_agent)
                 messages.success(request, f"Chào Admin, {user.username}!")
                 return redirect('admin_dashboard')
 
-            # --- Đồng bộ 2FA ---
+            # --- 2. KIỂM TRA 2FA CHO USER THƯỜNG ---
+            # Đồng bộ trạng thái từ User2FA nếu có (giữ logic của bạn nhưng tối ưu hơn)
             user_2fa = getattr(user, 'user2fa', None)
             if user_2fa and user_2fa.force_disable_2fa:
                 profile.has_app_otp = False
                 profile.has_email_otp = False
                 profile.save()
 
-            # --- KIỂM TRA 2FA ---
-            if profile.has_app_otp or profile.has_email_otp:
+            # FIX LỖI: Kiểm tra xem user có thực sự bật 2FA nào không
+        if profile.has_app_otp or profile.has_email_otp:
+            request.session['pre_2fa_user_id'] = user.id
 
-                # Lưu session trước 2FA
-                request.session['pre_2fa_user_id'] = user.id
+            # --- TỰ ĐỘNG TẠO THÔNG BÁO DYNAMIC ---
+            methods_enabled = []
+            if profile.has_app_otp:
+                methods_enabled.append("Authenticator")
+            if profile.has_email_otp:
+                methods_enabled.append("Email OTP")
+            
+            # Kiểm tra xem có thiết bị nào khác đang online không để gợi ý xác thực thiết bị
+            other_devices = TrustedDevice.objects.filter(user=user, is_active=True).exclude(session_key=request.session.session_key)
+            if other_devices.exists():
+                methods_enabled.append("Thiết bị khác")
 
-                methods_enabled = []
+            # Ghép chuỗi thông báo
+            if len(methods_enabled) > 1:
+                msg = "Xác thực bằng " + ", ".join(methods_enabled[:-1]) + " hoặc " + methods_enabled[-1]
+            else:
+                msg = f"Xác thực bằng {methods_enabled[0]}"
 
-                if profile.has_app_otp:
-                    methods_enabled.append("Authenticator")
-
-                if profile.has_email_otp:
-                    methods_enabled.append("Email OTP")
-
-                # Check thiết bị khác
-                other_devices = TrustedDevice.objects.filter(
-                    user=user, is_active=True
-                ).exclude(session_key=request.session.session_key)
-
-                if other_devices.exists():
-                    methods_enabled.append("Thiết bị khác")
-
-                # 🔥 FIX: tránh list rỗng
-                if not methods_enabled:
-                    login(request, user)
-                    return redirect('dashboard')
-
-                # Tạo message
-                if len(methods_enabled) > 1:
-                    msg = "Xác thực bằng " + ", ".join(methods_enabled[:-1]) + " hoặc " + methods_enabled[-1]
-                else:
-                    msg = f"Xác thực bằng {methods_enabled[0]}"
-
-                messages.info(request, msg)
-                return redirect('verify_2fa')
-
-            # --- LOGIN THƯỜNG ---
+            messages.info(request, msg) # Truyền biến msg đã ghép vào đây
+            return redirect('verify_2fa')
+            # --- 3. ĐĂNG NHẬP THÔNG THƯỜNG ---
             login(request, user)
-
-            ActivityLog.objects.create(
-                user=user,
-                action='login',
-                ip_address=ip,
-                user_agent=user_agent
-            )
-
-            # --- Trusted Device ---
+            ActivityLog.objects.create(user=user, action='login', ip_address=ip, user_agent=user_agent)
+            
+            # Quản lý TrustedDevice
             if not request.session.session_key:
                 request.session.create()
-
+            
             TrustedDevice.objects.update_or_create(
                 session_key=request.session.session_key,
                 defaults={
@@ -816,16 +794,15 @@ def login_view(request):
                     "is_active": True
                 }
             )
-
             messages.success(request, f"Chào mừng trở lại, {user.username}!")
             return redirect('dashboard')
-
+        
         else:
+            # Xử lý khi sai mật khẩu/username
             messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
-
     else:
         form = AuthenticationForm()
-
+    
     return render(request, 'accounts/login.html', {'form': form})
 
 
