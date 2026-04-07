@@ -64,7 +64,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from .models import LoginHistory
 from django.contrib.sessions.models import Session
-from django.views.decorators.csrf import csrf_exempt
+
 
 class RegisterForm(UserCreationForm):
     first_name = forms.CharField(
@@ -444,14 +444,7 @@ HUIT System""",
                 else:
                     messages.error(request, 'Mã xác nhận không đúng!')
                     confirm_disable = target
-            elif action == 'disable_fido2':
-        # Xóa khóa trong DB và cập nhật profile
-                from .models import Fido2Credential
-                Fido2Credential.objects.filter(user=request.user).delete()
-                profile.has_fido2 = False
-                profile.save()
-                messages.success(request, 'Đã tắt xác thực Passkey thành công.')
-                return redirect('dashboard')
+
         if not confirm_disable:
             return redirect('dashboard')
     
@@ -473,8 +466,6 @@ HUIT System""",
         'pending_update':  pending_update,
         'show_device_alert': show_alert,
     })
-
-
 # ══════════════════════════════════════════════════════════
 #  7. SETUP 2FA
 # ══════════════════════════════════════════════════════════
@@ -977,88 +968,3 @@ def check_auth_status(request):
         req.delete()
         return JsonResponse({'status': 'denied'})
     return JsonResponse({'status': 'pending'})
-
-@login_required
-def fido2_register_begin(request):
-    registration_data, state = fido2_handler.get_registration_data(request.user)
-    request.session['fido2_reg_state'] = state
-    return JsonResponse(dict(registration_data))
-
-# accounts/views.py
-import json
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
-
-@csrf_exempt
-@login_required
-def fido2_register_complete(request):
-    try:
-        # Lấy dữ liệu từ JavaScript gửi sang
-        data = json.loads(request.body)
-        
-        # Xóa state khỏi session sau khi lấy
-        state = request.session.pop('fido2_reg_state', None)
-        
-        if not state:
-            return JsonResponse({'status': 'error', 'message': 'Phiên làm việc hết hạn'}, status=400)
-
-        # Giả sử bạn sử dụng thư viện fido2 để verify ở đây...
-        # Sau khi verify thành công, lưu vào Database:
-        from .models import Fido2Credential, UserProfile
-        
-        # Tạo bản ghi khóa
-        Fido2Credential.objects.create(
-            user=request.user,
-            credential_id=data.get('id'),  # ID định danh từ trình duyệt
-            public_key=data.get('attestationObject'), # Dữ liệu khóa
-            device_name=request.META.get('HTTP_USER_AGENT', 'Thiết bị bảo mật')[:255]
-        )
-
-        # Cập nhật Profile người dùng
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        profile.has_fido2 = True
-        profile.save()
-
-        return JsonResponse({'status': 'success'})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-
-@csrf_exempt
-def fido2_authenticate_complete(request):
-    try:
-        data = json.loads(request.body)
-        state = request.session.pop('fido2_auth_state', None)
-        uid = request.session.get('pre_2fa_user_id')
-
-        if not state or not uid:
-            return JsonResponse({'status': 'error', 'message': 'Phiên hết hạn.'}, status=400)
-
-        user = User.objects.get(id=uid)
-        
-        # Lấy danh sách các khóa đã đăng ký của user này
-        from .models import Fido2Credential
-        user_keys = Fido2Credential.objects.filter(user=user)
-        credentials = [
-            AttestedCredentialData(websafe_decode(k.credential_id), websafe_decode(k.public_key))
-            for k in user_keys
-        ]
-
-        # Xác thực chữ ký
-        fido2_handler.server.authenticate_complete(
-            state,
-            credentials,
-            data['credentialId'],
-            data['clientDataJSON'],
-            data['authenticatorData'],
-            data['signature']
-        )
-
-        # Đăng nhập thành công
-        login(request, user)
-        request.session.pop('pre_2fa_user_id', None)
-        
-        return JsonResponse({'status': 'success'})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-

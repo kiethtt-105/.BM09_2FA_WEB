@@ -211,18 +211,12 @@ body::after {
     </div>
     <h1>Google Authenticator</h1>
     <p>Thiết lập xác thực bằng ứng dụng Authenticator</p>
-    {% elif method == 'email' %}
+    {% else %}
     <div class="header-icon icon-green">
       <i class="fas fa-envelope-shield"></i>
     </div>
     <h1>Email OTP</h1>
     <p>Thiết lập xác thực hai lớp qua Email</p>
-    {% elif method == 'fido2' %}
-    <div class="header-icon icon-indigo" style="background: linear-gradient(135deg, var(--accent2), var(--accent));">
-      <i class="fas fa-fingerprint"></i>
-    </div>
-    <h1>FIDO2 / Passkey</h1>
-    <p>Thiết lập xác thực sinh trắc học trên thiết bị</p>
     {% endif %}
   </div>
 
@@ -308,56 +302,15 @@ body::after {
       <i class="fas fa-shield-check"></i> Xác nhận
     </button>
   </form>
-  {% endif %} 
-
-  {% if method == 'fido2' %}
-    <div class="info-box">
-      <i class="fas fa-shield-check" style="color:var(--accent2);flex-shrink:0"></i>
-      <span>Sử dụng vân tay, khuôn mặt hoặc mã PIN để đăng nhập nhanh chóng.</span>
-    </div>
-
-    <button id="btn-fido2-setup" class="btn btn-indigo" style="background: linear-gradient(135deg, var(--accent2), var(--accent));">
-      <i class="fas fa-plus-circle"></i> Kích hoạt Passkey ngay
-    </button>
-
-    <script src="https://unpkg.com/@github/webauthn-json@0.5.7/dist/browser-global/webauthn-json.browser-global.min.js"></script>
-    <script>
-      document.getElementById('btn-fido2-setup').onclick = async () => {
-          try {
-              // 1. Lấy challenge từ Django view fido2_register_begin
-              const resBegin = await fetch("{% url 'fido2_register_begin' %}");
-              const options = await resBegin.json();
-              
-              // 2. Gọi popup xác thực của hệ điều hành
-              const credential = await webauthnJSON.create({ publicKey: options });
-
-              // 3. Gửi kết quả về Django view fido2_register_complete
-              const resComplete = await fetch("{% url 'fido2_register_complete' %}", {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
-                  body: JSON.stringify(credential)
-              });
-
-              if (resComplete.ok) {
-                  alert("🎉 Đã kích hoạt Passkey thành công!");
-                  window.location.href = "{% url 'dashboard' %}";
-              } else {
-                  const errorData = await resComplete.json();
-                  alert("Lỗi: " + errorData.message);
-              }
-          } catch (err) {
-              console.error(err);
-              alert("Thao tác bị hủy hoặc thiết bị không hỗ trợ FIDO2.");
-          }
-      };
-    </script>
   {% endif %}
 
   <div class="divider"></div>
   <a href="{% url 'dashboard' %}" class="back-link">
     <i class="fas fa-arrow-left"></i> Quay lại Dashboard
   </a>
-  <div> <script>
+</div>
+
+<script>
 function handleOtpInput(current, index) {
   current.value = current.value.replace(/\D/g,'');
   let otp = '';
@@ -382,6 +335,7 @@ function copySecretKey() {
     }, 2000);
   });
 }
+
 // Countdown
 let timeLeft = 300, timerInterval = null;
 function startCountdown() {

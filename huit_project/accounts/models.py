@@ -196,16 +196,3 @@ class RemoteAuthRequest(models.Model):
         default='pending'
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    
-#
-class Fido2Credential(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='fido2_keys')
-    # Lưu định dạng base64 của CredentialData
-    credential_id = models.TextField(unique=True)
-    public_key = models.TextField()
-    sign_count = models.IntegerField(default=0)
-    device_name = models.CharField(max_length=255, default="Thiết bị bảo mật")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.user.username} - {self.device_name}"
