@@ -191,11 +191,18 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'tuankiet5274@gmail.com' # Email gửi email
 EMAIL_HOST_PASSWORD = 'aqgu lwlm askj clnt' # pass email (cần tạo app password nếu dùng Gmail)'''
+# Drive015
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'kiethtt@drive015.com' # Email gửi email
+EMAIL_HOST_PASSWORD = 'vqrx dfnb zyko zubz'
 
 
 
 #mail icloud
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+'''EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.mail.me.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
@@ -204,6 +211,6 @@ EMAIL_HOST_USER = 'kiethtt@icloud.com' # Email gửi email
 EMAIL_HOST_PASSWORD = 'aejx-dcfq-edjc-yibq' # pass email (cần tạo app password nếu dùng iCloud)
 #
 #SỬA LỖI 550 5.7.0 "Relaying denied" 
-DEFAULT_FROM_EMAIL = 'kiethtt@icloud.com'
+DEFAULT_FROM_EMAIL = 'kiethtt@icloud.com' '''
 
 
