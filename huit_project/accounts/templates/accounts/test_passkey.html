@@ -1,0 +1,37 @@
+<script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+
+<button id="btnRegister" style="padding: 10px 20px; background: blue; color: white;">
+    Bấm để Quét QR Passkey (Test)
+</button>
+
+<script>
+    const { startRegistration } = SimpleWebAuthnBrowser;
+
+    document.getElementById('btnRegister').onclick = async () => {
+        // 1. Giả lập lấy dữ liệu từ Backend (Bước 1)
+        // Trong dự án thật, bạn sẽ dùng fetch('/fido2/begin-registration/')
+        const options = {
+            publicKey: {
+                challenge: 'SGVsbG8gV29ybGQ', // Giả lập challenge
+                rp: { name: 'Kiet MFA', id: window.location.hostname },
+                user: {
+                    id: 'dXNlcl9pZF8wMDE',
+                    name: 'kiet07',
+                    displayName: 'Tuấn Kiệt'
+                },
+                pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+                authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' }
+            }
+        };
+
+        try {
+            // 2. KÍCH HOẠT QUÉT QR
+            const regResult = await startRegistration(options.publicKey);
+            console.log("Kết quả từ điện thoại:", regResult);
+            alert("Quét thành công! Check Console log.");
+        } catch (err) {
+            console.error(err);
+            alert("Lỗi: " + err.message);
+        }
+    };
+</script>
