@@ -81,7 +81,7 @@ import json
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from fido2.utils import websafe_encode, websafe_decode
-import pickle # Thêm import này
+import pickle 
 from fido2.utils import websafe_encode, websafe_decode
 from fido2.features import webauthn_json_mapping
 import json
@@ -99,8 +99,8 @@ from fido2.webauthn import (
     PublicKeyCredentialUserEntity,
     UserVerificationRequirement,
     ResidentKeyRequirement,
-    CollectedClientData,
-
+    CollectedClientData,     
+    AttestationObject,        
 )
 from fido2.server import Fido2Server
 from fido2.utils import websafe_encode, websafe_decode
@@ -112,7 +112,10 @@ import base64, json, pickle
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
-
+try:
+    webauthn_json_mapping.enabled = True
+except ValueError:
+    pass
 
 class RegisterForm(UserCreationForm):
     first_name = forms.CharField(
@@ -1023,7 +1026,7 @@ def test_passkey_view(request):
 
 # FIDO2 
 
-webauthn_json_mapping.enabled = True
+
 # Lưu ý: RP_ID phải khớp chính xác với domain ngrok bạn đang chạy trong terminal
 from fido2.webauthn import (
     PublicKeyCredentialRpEntity,
@@ -1105,49 +1108,37 @@ def fido2_reg_begin(request):
 
 
 # ── COMPLETE ─────────────────────────────────────────────────────
-
 @csrf_exempt
 @login_required
 def fido2_reg_complete(request):
     try:
         data = json.loads(request.body)
-        print(f"[COMPLETE] keys: {list(data.keys())}")
 
         state_encoded = request.session.get('fido2_state')
         if not state_encoded:
-            return JsonResponse(
-                {'status': 'error', 'message': 'Hết hạn phiên, vui lòng thử lại'},
-                status=400
-            )
+            return JsonResponse({'status': 'error', 'message': 'Hết hạn phiên'}, status=400)
 
-        state = pickle.loads(websafe_decode(state_encoded))
-
-        rp_id = request.get_host().split(':')[0]
-        server_local = Fido2Server(
-            PublicKeyCredentialRpEntity(id=rp_id, name="HUIT MFA System")
-        )
-
-        client_data_bytes     = _b64url_to_bytes(data["response"]["clientDataJSON"])
         attestation_obj_bytes = _b64url_to_bytes(data["response"]["attestationObject"])
 
-        # ✅ Dùng đúng class — không dùng cbor_decode thô
-        client_data     = CollectedClientData(client_data_bytes)
-        attestation_obj = AttestationObject(attestation_obj_bytes)
+        from fido2.cbor import decode as cbor_decode, encode as cbor_encode
+        att_obj = cbor_decode(attestation_obj_bytes)
 
-        auth_data = server_local.register_complete(
-            state,
-            client_data,
-            attestation_obj,
-        )
+        auth_data_raw = att_obj.get("authData") or att_obj.get(b"authData")
+
+        from fido2.webauthn import AuthenticatorData
+        auth_data = AuthenticatorData(bytes(auth_data_raw))
 
         credential_data = auth_data.credential_data
+
+        # ✅ public_key là dict (CoseKey) → dùng cbor_encode thay vì bytes()
+        pk_bytes = cbor_encode(dict(credential_data.public_key))
 
         UserPasskey.objects.update_or_create(
             user=request.user,
             credential_id=data['id'],
             defaults={
-                'public_key': websafe_encode(bytes(credential_data.public_key)),
-                'sign_count': credential_data.sign_count,
+                'public_key': websafe_encode(pk_bytes),
+                'sign_count': auth_data.counter,
             }
         )
 
@@ -1158,4 +1149,3 @@ def fido2_reg_complete(request):
     except Exception as e:
         import traceback; traceback.print_exc()
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-
