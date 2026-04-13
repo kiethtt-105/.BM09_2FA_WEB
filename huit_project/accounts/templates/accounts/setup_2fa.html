@@ -348,84 +348,91 @@ function base64ToUint8Array(base64) {
     }
     return bytes;
 }
+function base64ToUint8Array(value) {
+    // Nếu đã là Uint8Array hoặc ArrayBuffer thì trả về luôn
+    if (value instanceof Uint8Array) return value;
+    if (value instanceof ArrayBuffer) return new Uint8Array(value);
+    
+    // Nếu là Array thông thường (fido2 đôi khi trả về dạng này)
+    if (Array.isArray(value)) return new Uint8Array(value);
+    
+    // Nếu là object có dạng {0: 123, 1: 456, ...}
+    if (typeof value === 'object' && value !== null) {
+        const keys = Object.keys(value);
+        const arr = new Uint8Array(keys.length);
+        keys.forEach((k, i) => arr[i] = value[k]);
+        return arr;
+    }
+
+    // Trường hợp bình thường: string Base64url
+    if (typeof value === 'string') {
+        const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+        const binary = window.atob(padded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    throw new Error(`base64ToUint8Array: kiểu dữ liệu không hợp lệ: ${typeof value}`);
+}
+
 // 2. Hàm chính thực hiện đăng ký Passkey
 async function setupFIDO2() {
     const { startRegistration } = SimpleWebAuthnBrowser;
     const status = document.getElementById('fido2-status');
-    const btn = document.getElementById('btn-fido2'); // Đảm bảo ID này khớp với id của button trong HTML
+    const btn = document.getElementById('btn-fido2');
 
     try {
-        // VÔ HIỆU HÓA NÚT BẤM: Tránh bấm nhiều lần gây lỗi
         if (btn) btn.disabled = true;
         status.style.color = 'var(--text)';
-        status.innerText = "Đang khởi tạo thử thách...";
+        status.innerText = "Đang khởi tạo...";
 
-        // BƯỚC 1: Lấy thông tin từ Backend (Django)
         const resp = await fetch('{% url "fido2_reg_begin" %}');
-        const options = await resp.json();
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
+        const options = await resp.json();
         if (options.status === 'error') throw new Error(options.message);
 
-        // BƯỚC 2: CHUYỂN ĐỔI ĐỊNH DẠNG (Quan trọng nhất)
-        options.challenge = base64ToUint8Array(options.challenge);
-        options.user.id = base64ToUint8Array(options.user.id);
+        console.log('[FIDO2] raw options:', JSON.stringify(options));
 
-        // Tối ưu: Nếu có danh sách khóa cũ, cũng phải convert sang Uint8Array
-        if (options.excludeCredentials) {
-            options.excludeCredentials = options.excludeCredentials.map(cred => ({
-                ...cred,
-                id: base64ToUint8Array(cred.id)
-            }));
-        }
+        // ✅ KHÔNG convert gì cả — startRegistration tự xử lý Base64url
+        const regResult = await startRegistration({ optionsJSON: options });
 
-        status.innerText = "Xác nhận FaceID/Vân tay trên iPhone...";
-        
-        // BƯỚC 3: Gọi popup xác thực của hệ thống (iPhone/Android/PC)
-        const regResult = await startRegistration(options);
-
-        status.innerText = "Đang xác thực và lưu cấu hình...";
-
-        // BƯỚC 4: Gửi kết quả về Backend để lưu vào Database
+        status.innerText = "Đang lưu...";
         const verifyResp = await fetch('{% url "fido2_reg_complete" %}', {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}' 
+                'X-CSRFToken': '{{ csrf_token }}'
             },
             body: JSON.stringify(regResult)
         });
 
         const result = await verifyResp.json();
-
         if (result.status === 'success') {
-            status.style.color = '#10b981'; // Màu xanh lá
-            status.innerText = "KÍCH HOẠT THÀNH CÔNG! Đang chuyển hướng...";
-            
-            // Chuyển hướng về Dashboard sau 1.5 giây
-            setTimeout(() => {
-                window.location.href = "{% url 'dashboard' %}";
-            }, 1500);
+            status.style.color = '#10b981';
+            status.innerText = "Kích hoạt thành công! Đang chuyển hướng...";
+            setTimeout(() => { window.location.href = "{% url 'dashboard' %}"; }, 1500);
         } else {
             throw new Error(result.message);
         }
 
     } catch (err) {
-        // XỬ LÝ LỖI
-        status.style.color = '#ef4444'; // Màu đỏ
-        
-        // Việt hóa một số lỗi thường gặp cho chuyên nghiệp
+        status.style.color = '#ef4444';
         if (err.name === 'NotAllowedError') {
-            status.innerText = "Lỗi: Bạn đã hủy quá trình xác thực.";
+            status.innerText = "Bạn đã hủy xác thực.";
+        } else if (err.name === 'InvalidStateError') {
+            status.innerText = "Thiết bị đã được đăng ký trước đó.";
         } else {
             status.innerText = "Lỗi: " + err.message;
         }
-        
-        // MỞ LẠI NÚT BẤM: Cho phép người dùng thử lại nếu lỗi
         if (btn) btn.disabled = false;
-        console.error("FIDO2 Detail:", err);
+        console.error('[FIDO2] Error detail:', err);
     }
 }
-
 function handleOtpInput(current, index) {
   current.value = current.value.replace(/\D/g,'');
   let otp = '';
