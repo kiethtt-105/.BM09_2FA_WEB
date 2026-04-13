@@ -795,9 +795,11 @@ def login_view(request):
                 profile.save()
 
             # FIX LỖI: Kiểm tra xem user có thực sự bật 2FA nào không
-        if profile.has_app_otp or profile.has_email_otp:
+        if profile.has_fido2 or profile.has_app_otp or profile.has_email_otp:
             request.session['pre_2fa_user_id'] = user.id
-
+            messages.info(request, "Vui lòng xác thực 2FA để hoàn tất đăng nhập.")
+            return redirect('verify_2fa')
+        
             # --- TỰ ĐỘNG TẠO THÔNG BÁO DYNAMIC ---
             methods_enabled = []
             if profile.has_app_otp:
