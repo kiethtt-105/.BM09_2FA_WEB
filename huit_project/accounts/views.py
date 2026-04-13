@@ -590,6 +590,7 @@ def setup_2fa(request):
 
 # ══════════════════════════════════════════════════════════
 #  8. VERIFY 2FA
+
 def verify_2fa(request):
     # 1. Lấy user tạm thời
     uid = request.session.get('pre_2fa_user_id')
