@@ -25,4 +25,12 @@ urlpatterns = [
     path('api/get-auth-request/', views.get_pending_auth_request),
     path('api/respond-auth/<int:req_id>/', views.respond_auth_request),
     path('api/check-auth-status/', views.check_auth_status),
+    
+    
+    
+    #TEST FIDO2
+    path('test-passkey/', views.test_passkey_view, name='test_passkey'),
+    #FIDO2 API endpoints
+    path('fido2/begin/', views.fido2_reg_begin, name='fido2_reg_begin'),
+    path('fido2/complete/', views.fido2_reg_complete, name='fido2_reg_complete'),
 ]

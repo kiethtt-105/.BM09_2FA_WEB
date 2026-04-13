@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+<link rel="icon" href="data:,">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Thiết lập 2FA · HUIT</title>
@@ -218,7 +219,8 @@ body::after {
     <h1>Email OTP</h1>
     <p>Thiết lập xác thực hai lớp qua Email</p>
     {% endif %}
-  </div>
+  
+   </div>
 
   {% if messages %}
     {% for message in messages %}
@@ -276,6 +278,7 @@ body::after {
     </div>
   {% endif %}
 
+
   <!-- ══ GOOGLE AUTHENTICATOR ══ -->
   {% if method == 'app' and qr_code_base64 and otp_secret %}
   <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">
@@ -303,14 +306,126 @@ body::after {
     </button>
   </form>
   {% endif %}
+  
+  <!-- ══ FIDO2 ══ -->
+  {% if method == 'fido2' %}
+    <div class="header-icon icon-indigo" style="background: linear-gradient(135deg, #6366f1, #a855f7);">
+      <i class="fas fa-fingerprint"></i>
+    </div>
+    <h1 style="text-align: center;">FIDO2 / Passkey</h1>
+    <p style="text-align: center; font-size: 13px; color: var(--muted); margin-bottom: 20px;">
+        Sử dụng vân tay, khuôn mặt hoặc khóa bảo mật vật lý
+    </p>
 
+    <div class="info-box">
+      <i class="fas fa-shield-halved" style="color:var(--accent2)"></i>
+      <span>Xác thực an toàn không cần mật khẩu qua thiết bị của bạn.</span>
+    </div>
+
+    <button id="btn-fido2" onclick="setupFIDO2()" class="btn btn-indigo">
+      <i class="fas fa-key"></i> Bắt đầu thiết lập Passkey
+    </button>
+    <div id="fido2-status" style="text-align:center; margin-top:10px; font-size:12px;"></div>
+
+  {% endif %}
   <div class="divider"></div>
   <a href="{% url 'dashboard' %}" class="back-link">
     <i class="fas fa-arrow-left"></i> Quay lại Dashboard
   </a>
 </div>
 
+<script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+
+
 <script>
+// 1. Hàm hỗ trợ: Chuyển Base64 (từ Django) sang Uint8Array (cho Trình duyệt)
+function base64ToUint8Array(base64) {
+    const binaryString = window.atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+}
+// 2. Hàm chính thực hiện đăng ký Passkey
+async function setupFIDO2() {
+    const { startRegistration } = SimpleWebAuthnBrowser;
+    const status = document.getElementById('fido2-status');
+    const btn = document.getElementById('btn-fido2'); // Đảm bảo ID này khớp với id của button trong HTML
+
+    try {
+        // VÔ HIỆU HÓA NÚT BẤM: Tránh bấm nhiều lần gây lỗi
+        if (btn) btn.disabled = true;
+        status.style.color = 'var(--text)';
+        status.innerText = "Đang khởi tạo thử thách...";
+
+        // BƯỚC 1: Lấy thông tin từ Backend (Django)
+        const resp = await fetch('{% url "fido2_reg_begin" %}');
+        const options = await resp.json();
+
+        if (options.status === 'error') throw new Error(options.message);
+
+        // BƯỚC 2: CHUYỂN ĐỔI ĐỊNH DẠNG (Quan trọng nhất)
+        options.challenge = base64ToUint8Array(options.challenge);
+        options.user.id = base64ToUint8Array(options.user.id);
+
+        // Tối ưu: Nếu có danh sách khóa cũ, cũng phải convert sang Uint8Array
+        if (options.excludeCredentials) {
+            options.excludeCredentials = options.excludeCredentials.map(cred => ({
+                ...cred,
+                id: base64ToUint8Array(cred.id)
+            }));
+        }
+
+        status.innerText = "Xác nhận FaceID/Vân tay trên iPhone...";
+        
+        // BƯỚC 3: Gọi popup xác thực của hệ thống (iPhone/Android/PC)
+        const regResult = await startRegistration(options);
+
+        status.innerText = "Đang xác thực và lưu cấu hình...";
+
+        // BƯỚC 4: Gửi kết quả về Backend để lưu vào Database
+        const verifyResp = await fetch('{% url "fido2_reg_complete" %}', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}' 
+            },
+            body: JSON.stringify(regResult)
+        });
+
+        const result = await verifyResp.json();
+
+        if (result.status === 'success') {
+            status.style.color = '#10b981'; // Màu xanh lá
+            status.innerText = "KÍCH HOẠT THÀNH CÔNG! Đang chuyển hướng...";
+            
+            // Chuyển hướng về Dashboard sau 1.5 giây
+            setTimeout(() => {
+                window.location.href = "{% url 'dashboard' %}";
+            }, 1500);
+        } else {
+            throw new Error(result.message);
+        }
+
+    } catch (err) {
+        // XỬ LÝ LỖI
+        status.style.color = '#ef4444'; // Màu đỏ
+        
+        // Việt hóa một số lỗi thường gặp cho chuyên nghiệp
+        if (err.name === 'NotAllowedError') {
+            status.innerText = "Lỗi: Bạn đã hủy quá trình xác thực.";
+        } else {
+            status.innerText = "Lỗi: " + err.message;
+        }
+        
+        // MỞ LẠI NÚT BẤM: Cho phép người dùng thử lại nếu lỗi
+        if (btn) btn.disabled = false;
+        console.error("FIDO2 Detail:", err);
+    }
+}
+
 function handleOtpInput(current, index) {
   current.value = current.value.replace(/\D/g,'');
   let otp = '';

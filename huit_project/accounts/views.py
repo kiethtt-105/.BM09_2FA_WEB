@@ -64,6 +64,36 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from .models import LoginHistory
 from django.contrib.sessions.models import Session
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from fido2.server import Fido2Server
+from fido2.webauthn import PublicKeyCredentialRpEntity
+import json
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
+from fido2.server import Fido2Server
+from fido2.webauthn import PublicKeyCredentialRpEntity
+from fido2.utils import websafe_encode
+from .models import UserPasskey
+import json
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from fido2.utils import websafe_encode, websafe_decode
+import pickle # Thêm import này
+from fido2.utils import websafe_encode, websafe_decode
+from fido2.features import webauthn_json_mapping
+import json
+import pickle
+from django.http import JsonResponse
+from fido2.utils import websafe_encode, websafe_decode
+import json, pickle
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from fido2.utils import websafe_encode, websafe_decode
+from fido2.webauthn import PublicKeyCredentialRpEntity
+from fido2.server import Fido2Server
 
 
 class RegisterForm(UserCreationForm):
@@ -968,3 +998,99 @@ def check_auth_status(request):
         req.delete()
         return JsonResponse({'status': 'denied'})
     return JsonResponse({'status': 'pending'})
+
+#TEST FIDO2from django.shortcuts import render
+from django.shortcuts import render
+
+def test_passkey_view(request):
+    return render(request, 'accounts/test_passkey.html')
+
+# FIDO2 
+
+webauthn_json_mapping.enabled = True
+# Lưu ý: RP_ID phải khớp chính xác với domain ngrok bạn đang chạy trong terminal
+RP_ID = "spellable-sciuroid-maybell.ngrok-free.dev"
+rp = PublicKeyCredentialRpEntity(id=RP_ID, name="HUIT MFA System")
+server = Fido2Server(rp)
+@login_required
+def fido2_reg_begin(request):
+    try:
+        user = request.user
+        rp_id = request.get_host().split(':')[0]
+        
+        from fido2.webauthn import PublicKeyCredentialRpEntity
+        from fido2.server import Fido2Server
+        
+        rp = PublicKeyCredentialRpEntity(id=rp_id, name="HUIT MFA System")
+        server = Fido2Server(rp)
+
+        registration_data, state = server.register_begin({
+            'id': str(user.id).encode(),
+            'name': user.username,
+            'displayName': user.username,
+        })
+        
+        # Lưu state vào session
+        request.session['fido2_state'] = websafe_encode(pickle.dumps(state))
+        
+        # FIX LỖI: Cấu trúc PublicKeyCredentialCreationOptions chuẩn
+        options = {
+            "challenge": websafe_encode(registration_data.public_key.challenge),
+            "rp": {"name": "HUIT MFA System", "id": rp_id},
+            "user": {
+                # Trường id này BẮT BUỘC phải qua websafe_encode
+                "id": websafe_encode(registration_data.public_key.user.id),
+                "name": user.username,
+                "displayName": user.username
+            },
+            "pubKeyCredParams": [
+                {"type": "public-key", "alg": -7}, 
+                {"type": "public-key", "alg": -257}
+            ],
+            "timeout": 60000,
+            "attestation": "none",
+            "authenticatorSelection": {
+                "residentKey": "preferred",
+                "userVerification": "preferred"
+            }
+        }
+        return JsonResponse(options)
+    except Exception as e:
+        print(f"--- LỖI TẠI BEGIN: {e} ---")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    
+@csrf_exempt
+@login_required
+def fido2_reg_complete(request):
+    try:
+        data = json.loads(request.body)
+        state_encoded = request.session.get('fido2_state')
+        
+        if not state_encoded:
+            return JsonResponse({'status': 'error', 'message': 'Hết hạn phiên làm việc'}, status=400)
+
+        state = pickle.loads(websafe_decode(state_encoded))
+        
+        # Khởi tạo server tạm thời để xác thực khớp với domain hiện tại
+        rp_id = request.get_host().split(':')[0]
+        from fido2.webauthn import PublicKeyCredentialRpEntity
+        from fido2.server import Fido2Server
+        server = Fido2Server(PublicKeyCredentialRpEntity(id=rp_id, name="HUIT MFA System"))
+        
+        auth_data = server.register_complete(state, data)
+        
+        # Lưu vào Database cho đúng User đang thao tác
+        UserPasskey.objects.update_or_create(
+            user=request.user,
+            credential_id=data['id'],
+            defaults={
+                'public_key': websafe_encode(auth_data.credential_data.public_key),
+                'sign_count': auth_data.credential_data.sign_count
+            }
+        )
+        
+        del request.session['fido2_state']
+        return JsonResponse({'status': 'success'})
+    except Exception as e:
+        print(f"--- LỖI LƯU DATABASE: {e} ---")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)

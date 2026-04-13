@@ -212,5 +212,8 @@ EMAIL_HOST_PASSWORD = 'aejx-dcfq-edjc-yibq' # pass email (cần tạo app passwo
 #
 #SỬA LỖI 550 5.7.0 "Relaying denied" 
 DEFAULT_FROM_EMAIL = 'kiethtt@icloud.com' '''
+#FIDO2
+# Cho phép session lưu các object phức tạp 
 
-
+#SESSION_SERIALIZER = 'django.contrib.sessions.serializers.PickleSerializer'
+SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
