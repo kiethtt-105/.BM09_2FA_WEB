@@ -33,4 +33,6 @@ urlpatterns = [
     #FIDO2 API endpoints
     path('fido2/begin/', views.fido2_reg_begin, name='fido2_reg_begin'),
     path('fido2/complete/', views.fido2_reg_complete, name='fido2_reg_complete'),
+    path('passkeys/', views.manage_passkeys, name='manage_passkeys'),
+    path('passkeys/delete/<int:pk_id>/', views.delete_passkey, name='delete_passkey'),
 ]

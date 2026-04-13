@@ -1149,3 +1149,17 @@ def fido2_reg_complete(request):
     except Exception as e:
         import traceback; traceback.print_exc()
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    
+@login_required
+def manage_passkeys(request):
+    passkeys = request.user.passkeys.all().order_by('-created_at')
+    return render(request, 'accounts/manage_passkeys.html', {
+        'passkeys': passkeys,
+    })
+
+@login_required
+def delete_passkey(request, pk_id):
+    passkey = get_object_or_404(UserPasskey, id=pk_id, user=request.user)
+    passkey.delete()
+    messages.success(request, 'Đã xóa passkey thành công!')
+    return redirect('manage_passkeys')

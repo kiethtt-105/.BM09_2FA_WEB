@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Passkey · HUIT</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f8fafc; }
+        .animate-fade-in { animation: fadeIn .3s ease-out; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-10">
+
+    <div class="max-w-3xl mx-auto space-y-6 animate-fade-in">
+
+        <!-- Header -->
+        <div class="flex items-center gap-4 mb-2">
+            <a href="{% url 'dashboard' %}"
+               class="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition shadow-sm">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="text-3xl font-black text-slate-800">Quản lý Passkey</h1>
+                <p class="text-slate-400 text-sm">Xem và xóa các khóa FIDO2 đã đăng ký</p>
+            </div>
+        </div>
+
+        <!-- Thống kê -->
+        <div class="grid grid-cols-3 gap-4">
+            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm text-center">
+                <div class="text-3xl font-black text-purple-600">{{ passkeys.count }}</div>
+                <div class="text-xs text-slate-400 font-semibold mt-1 uppercase tracking-wide">Tổng khóa</div>
+            </div>
+            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm text-center">
+                <div class="text-3xl font-black text-indigo-600">{{ user.username }}</div>
+                <div class="text-xs text-slate-400 font-semibold mt-1 uppercase tracking-wide">Tài khoản</div>
+            </div>
+            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm text-center">
+                <div class="text-3xl font-black text-emerald-600">
+                    <i class="fas fa-shield-check text-2xl"></i>
+                </div>
+                <div class="text-xs text-slate-400 font-semibold mt-1 uppercase tracking-wide">Bảo mật cao</div>
+            </div>
+        </div>
+
+        <!-- Danh sách passkeys -->
+        <div class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+                <h2 class="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <i class="fas fa-fingerprint text-purple-500"></i>
+                    Danh sách thiết bị đã đăng ký
+                </h2>
+                <a href="{% url 'setup_2fa' %}?method=fido2"
+                   class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 transition shadow-sm">
+                    <i class="fas fa-plus"></i> Thêm thiết bị
+                </a>
+            </div>
+
+            {% if passkeys %}
+            <ul class="divide-y divide-slate-100">
+                {% for pk in passkeys %}
+                <li class="px-8 py-5 flex items-center justify-between hover:bg-slate-50 transition group">
+                    <div class="flex items-center gap-4">
+                        <!-- Icon -->
+                        <div class="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-600 text-xl flex-shrink-0">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <!-- Info -->
+                        <div>
+                            <div class="font-bold text-slate-800 text-sm">
+                                Passkey #{{ forloop.counter }}
+                            </div>
+                            <div class="text-xs text-slate-400 mt-0.5 font-mono">
+                                ID: {{ pk.credential_id|truncatechars:24 }}
+                            </div>
+                            <div class="flex items-center gap-3 mt-1">
+                                <span class="text-xs text-slate-400">
+                                    <i class="fas fa-clock mr-1"></i>
+                                    Đăng ký: {{ pk.created_at|date:"d/m/Y H:i" }}
+                                </span>
+                                <span class="text-xs text-slate-400">
+                                    <i class="fas fa-sync mr-1"></i>
+                                    Đã dùng: {{ pk.sign_count }} lần
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Xóa -->
+                    <button onclick="confirmDelete({{ pk.id }}, '{{ pk.credential_id|truncatechars:16 }}')"
+                            class="opacity-0 group-hover:opacity-100 transition w-9 h-9 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 flex items-center justify-center">
+                        <i class="fas fa-trash text-sm"></i>
+                    </button>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="px-8 py-16 text-center">
+                <i class="fas fa-fingerprint text-5xl text-slate-200 mb-4"></i>
+                <p class="text-slate-400 font-semibold">Chưa có passkey nào</p>
+                <a href="{% url 'setup_2fa' %}?method=fido2"
+                   class="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 transition">
+                    <i class="fas fa-plus"></i> Thêm passkey đầu tiên
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Hướng dẫn -->
+        <div class="bg-amber-50 border border-amber-200 rounded-3xl p-6">
+            <h3 class="font-bold text-amber-800 flex items-center gap-2 mb-3">
+                <i class="fas fa-lightbulb"></i> Lưu ý
+            </h3>
+            <ul class="text-sm text-amber-700 space-y-1.5 list-disc list-inside">
+                <li>Mỗi thiết bị (điện thoại, laptop) tạo ra một passkey riêng</li>
+                <li>Xóa passkey sẽ không thể đăng nhập bằng thiết bị đó nữa</li>
+                <li>Bạn có thể thêm nhiều passkey từ nhiều thiết bị khác nhau</li>
+                <li>Nếu xóa hết passkey, FIDO2 sẽ bị tắt hoàn toàn</li>
+            </ul>
+        </div>
+
+    </div>
+
+    <!-- Form xóa ẩn -->
+    <form id="delete-form" method="POST" action="{% url 'delete_passkey' 0 %}" style="display:none">
+        {% csrf_token %}
+    </form>
+
+    <script>
+        function confirmDelete(pkId, pkLabel) {
+            Swal.fire({
+                title: 'Xóa Passkey?',
+                html: `<p style="color:#64748b">Bạn sắp xóa khóa <code style="background:#f1f5f9;padding:2px 6px;border-radius:6px;font-size:12px">${pkLabel}...</code></p>
+                       <p style="color:#ef4444;font-size:13px;margin-top:8px">Thiết bị này sẽ không thể đăng nhập bằng passkey nữa!</p>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6366f1',
+                confirmButtonText: '<i class="fas fa-trash mr-1"></i> Xóa',
+                cancelButtonText: 'Hủy',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const form = document.getElementById('delete-form');
+                    // Cập nhật action URL với đúng ID
+                    form.action = `/passkeys/delete/${pkId}/`;
+                    form.submit();
+                }
+            });
+        }
+    </script>
+
+</body>
+</html>
