@@ -765,7 +765,8 @@ def verify_2fa(request):
         'other_devices_list': list(other_devices[:3]),
         'push_request_sent': push_request_sent,
     })
-
+ 
+ 
 
 # ── API: Thiết bị đang online lấy request chờ ────────────
 @login_required
