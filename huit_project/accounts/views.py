@@ -1461,3 +1461,36 @@ def user_list_view(request):
         'users': users,
     }
     return render(request, 'accounts/user_management.html', context)
+
+#
+# 4. TRANG QUẢN LÝ USER (Dành cho admin)    
+def user_management(request):
+    # Lấy dữ liệu profile đi kèm để hiển thị 2FA chính xác
+    users = User.objects.all().select_related('profile').order_by('-date_joined')
+
+    # Lấy tham số từ Filter Bar
+    search = request.GET.get('search')
+    two_fa = request.GET.get('2fa')
+
+    # Xử lý tìm kiếm
+    if search:
+        users = users.filter(
+            Q(username__icontains=search) | 
+            Q(email__icontains=search)
+        )
+
+    # Xử lý lọc 2FA
+    if two_fa == 'enabled':
+        users = users.filter(
+            Q(profile__has_email_otp=True) | 
+            Q(profile__has_app_otp=True) | 
+            Q(profile__has_fido2=True)
+        )
+    elif two_fa == 'disabled':
+        users = users.filter(
+            profile__has_email_otp=False,
+            profile__has_app_otp=False,
+            profile__has_fido2=False
+        )
+
+    return render(request, 'accounts/users.html', {'users': users})
