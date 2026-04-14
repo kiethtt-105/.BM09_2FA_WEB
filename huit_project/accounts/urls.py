@@ -41,4 +41,11 @@ urlpatterns = [
 
     # Test
     path('test-passkey/', views.test_passkey_view, name='test_passkey'),
+    
+      # Custom Admin Dashboard
+    path('admin-dashboard/users/', views.admin_users, name='admin_users'),
+    path('admin-dashboard/otp-history/', views.admin_otp_history, name='admin_otp_history'),
+    path('admin-dashboard/login-history/', views.admin_login_history, name='admin_login_history'),
+    path('admin-dashboard/security/', views.admin_security, name='admin_security'),
+    path('admin-dashboard/users/', views.user_list_view, name='user_list'),
 ]

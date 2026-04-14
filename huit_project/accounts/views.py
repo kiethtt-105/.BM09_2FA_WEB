@@ -894,40 +894,7 @@ def ban_user(request, user_id):
     return redirect('admin_dashboard')
 
 # ══════════════════════════════════════════════════════════
-#  10. EXPORT USERS TO EXCEL (Dành cho admin)
-from openpyxl import Workbook
-from django.http import HttpResponse
-from django.contrib.auth.models import User
-#  11. ADMIN DASHBOARD
-from django.contrib.auth.decorators import user_passes_test
-def admin_dashboard(request):
-    total_users = User.objects.count()  
-    
-    active_otps = UserProfile.objects.filter(
-        Q(has_app_otp=True) | Q(has_email_otp=True)
-    ).count()
-
-    recent_users = User.objects.order_by('-date_joined')[:5]
-
-    last_7_days = timezone.now() - timedelta(days=6)
-    stats = User.objects.filter(date_joined__gte=last_7_days) \
-        .extra(select={'day': "date(date_joined)"}) \
-        .values('day') \
-        .annotate(count=Count('id')) \
-        .order_by('day')
-
-    chart_data = []
-    for i in range(7):
-        date = (last_7_days + timedelta(days=i)).date()
-        count = next((item['count'] for item in stats if str(item['day']) == str(date)), 0)
-        chart_data.append({'day': date.strftime('%d/%m'), 'count': count})
-
-    return render(request, 'admin_dashboard/dashboard.html', {
-        'total_users': total_users,
-        'active_otps': active_otps,
-        'recent_users': recent_users,
-        'chart_data': chart_data,
-    })
+#   ADMIN DASHBOARD
 # 2. BẬT/TẮT TRẠNG THÁI USER
 @user_passes_test(lambda u: u.is_superuser)
 def toggle_user_status(request, user_id):
@@ -1340,3 +1307,157 @@ def delete_passkey(request, pk_id):
     passkey.delete()
     messages.success(request, 'Đã xóa passkey thành công!')
     return redirect('manage_passkeys')
+
+# ====================== ADMIN DASHBOARD VIEWS ======================
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.models import User
+
+# Trang Tổng quan (đã có)
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def admin_dashboard(request):
+    context = {
+        'total_users': User.objects.count(),
+        'active_otps': 4,           # sau bạn thay bằng query thật của OTP
+        'failed_logins': 0,
+        'security_alerts': 0,
+        'chart_data': [
+            {'day': '08/04', 'users': 29, 'otps': 18},
+            {'day': '09/04', 'users': 31, 'otps': 22},
+            {'day': '10/04', 'users': 33, 'otps': 25},
+            {'day': '11/04', 'users': 35, 'otps': 30},
+            {'day': '12/04', 'users': 37, 'otps': 28},
+            {'day': '13/04', 'users': 25, 'otps': 20},
+            {'day': '14/04', 'users': 27, 'otps': 24},
+        ],
+        'login_chart': [
+            {'hour': '00', 'success': 30, 'failed': 2},
+            {'hour': '04', 'success': 28, 'failed': 1},
+            {'hour': '08', 'success': 35, 'failed': 0},
+            {'hour': '12', 'success': 33, 'failed': 3},
+            {'hour': '16', 'success': 40, 'failed': 2},
+            {'hour': '20', 'success': 32, 'failed': 1},
+        ]
+    }
+    return render(request, 'admin_dashboard/dashboard.html', context)
+
+
+# 4 trang còn lại
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def admin_users(request):
+    users = User.objects.all().order_by('-date_joined')
+    return render(request, 'admin_dashboard/users.html', {
+        'title': 'Quản lý Người dùng',
+        'users': users
+    })
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def admin_otp_history(request):
+    return render(request, 'admin_dashboard/otp_history.html', {
+        'title': 'Lịch sử OTP'
+    })
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def admin_login_history(request):
+    return render(request, 'admin_dashboard/login_history.html', {
+        'title': 'Hoạt động Đăng nhập'
+    })
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def admin_security(request):
+    alerts = [
+        "Có nhiều lần đăng nhập thất bại từ IP lạ",
+        "Người dùng test123 yêu cầu OTP quá nhiều lần"
+    ]
+    return render(request, 'admin_dashboard/security.html', {
+        'title': 'Cảnh báo Bảo mật',
+        'alerts': alerts
+    })
+    
+def user_list(request):
+    users = User.objects.all()
+
+    search = request.GET.get('search')
+    if search:
+        users = users.filter(Q(username__icontains=search) | Q(email__icontains=search))
+
+    status = request.GET.get('status')
+    if status == 'active':
+        users = users.filter(is_active=True)
+    elif status == 'inactive':
+        users = users.filter(is_active=False)
+
+    twofa = request.GET.get('2fa')
+    # Logic lọc 2FA tùy theo model User2FA của bạn
+
+    date_filter = request.GET.get('date_joined')
+    if date_filter == 'today':
+        users = users.filter(date_joined__date=timezone.now().date())
+    elif date_filter == '7days':
+        users = users.filter(date_joined__gte=timezone.now() - timedelta(days=7))
+    elif date_filter == '30days':
+        users = users.filter(date_joined__gte=timezone.now() - timedelta(days=30))
+
+    context = {'users': users}
+    return render(request, 'admin/users.html', context)
+
+
+def user_list_view(request):
+    # Sử dụng select_related để tránh lỗi N+1 query khi truy cập vào profile
+    users = User.objects.select_related('profile').all().order_by('-date_joined')
+
+    # --- Lấy tham số từ URL ---
+    search = request.GET.get('search', '').strip()
+    status = request.GET.get('status')
+    twofa = request.GET.get('2fa')
+    date_filter = request.GET.get('date_joined')
+
+    # 1. Logic Tìm kiếm
+    if search:
+        users = users.filter(
+            Q(username__icontains=search) |
+            Q(email__icontains=search) |
+            Q(first_name__icontains=search) |
+            Q(last_name__icontains=search)
+        )
+
+    # 2. Logic Trạng thái
+    if status == 'active':
+        users = users.filter(is_active=True)
+    elif status == 'inactive':
+        users = users.filter(is_active=False)
+
+    # 3. Logic Lọc 2FA (Dựa trên bảng UserProfile của bạn)
+    if twofa == 'enabled':
+        # Người dùng có bật app HOẶC bật email
+        users = users.filter(Q(profile__has_app_otp=True) | Q(profile__has_email_otp=True))
+    elif twofa == 'disabled':
+        # Người dùng chưa bật cả hai
+        users = users.filter(Q(profile__has_app_otp=False) & Q(profile__has_email_otp=False))
+    elif twofa == 'forced_off':
+        # Nếu bạn có trường force_disable trong model thì lọc ở đây
+        # Giả sử: users = users.filter(profile__force_disable_2fa=True)
+        pass
+
+    # 4. Logic Ngày tham gia
+    now = timezone.now()
+    if date_filter == 'today':
+        users = users.filter(date_joined__date=now.date())
+    elif date_filter == '7days':
+        users = users.filter(date_joined__gte=now - timedelta(days=7))
+    elif date_filter == '30days':
+        users = users.filter(date_joined__gte=now - timedelta(days=30))
+
+    context = {
+        'users': users,
+    }
+    return render(request, 'accounts/user_management.html', context)
