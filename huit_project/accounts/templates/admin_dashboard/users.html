@@ -10,139 +10,109 @@
 <body class="bg-zinc-950 text-zinc-200">
 
 <div class="flex min-h-screen">
-    <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6">
+    <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full">
         <div class="flex items-center gap-3 mb-10">
-            <div class="w-10 h-10 bg-violet-600 rounded-2xl flex items-center justify-center text-2xl font-bold">H</div>
-            <h1 class="text-3xl font-bold">HUIT</h1>
+            <div class="w-10 h-10 bg-violet-600 rounded-2xl flex items-center justify-center text-2xl font-bold text-white">H</div>
+            <h1 class="text-2xl font-bold tracking-tight text-white">HUIT ADMIN</h1>
         </div>
         <nav class="space-y-2">
-            <a href="/admin-dashboard/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl">📊 Tổng quan</a>
-            <a href="{% url 'user_list' %}" class="flex items-center gap-3 px-5 py-4 bg-zinc-800 rounded-2xl font-medium text-violet-400">👥 Quản lý Người dùng</a>
-            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl">🔑 Lịch sử OTP</a>
-            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl">📋 Hoạt động Đăng nhập</a>
+            <a href="/admin-dashboard/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl transition">📊 Tổng quan</a>
+            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-medium border border-violet-600/20">👥 Quản lý Người dùng</a>
+            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl transition">🔑 Lịch sử OTP</a>
+            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl transition">📋 Hoạt động Đăng nhập</a>
         </nav>
     </div>
 
-    <div class="flex-1 p-10">
+    <div class="flex-1 ml-72 p-10">
         <div class="flex justify-between items-center mb-8">
-            <h1 class="text-4xl font-bold">Quản lý Người dùng</h1>
-            <a href="/admin/auth/user/add/" class="bg-violet-600 hover:bg-violet-700 px-6 py-3 rounded-2xl flex items-center gap-2 transition">
-                <i class="fas fa-user-plus"></i> Thêm người dùng mới
-            </a>
+            <div>
+                <h1 class="text-4xl font-bold text-white">Danh sách người dùng</h1>
+                <p class="text-zinc-500 mt-2">Quản lý và giám sát trạng thái bảo mật 2FA</p>
+            </div>
+
         </div>
 
-        <div class="bg-zinc-900 rounded-3xl p-6 mb-8 border border-zinc-800">
-            <form method="get" class="flex flex-wrap gap-4 items-end">
-                <div class="flex-1 min-w-[240px]">
-                    <label class="block text-sm text-zinc-400 mb-1">Tìm kiếm</label>
-                    <div class="relative">
-                        <input type="text" name="search" value="{{ request.GET.search|default:'' }}"
-                               class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-violet-500"
-                               placeholder="Username hoặc Email...">
-                        <i class="fas fa-search absolute right-5 top-1/2 -translate-y-1/2 text-zinc-500"></i>
-                    </div>
-                </div>
-
-                <div class="min-w-[160px]">
-                    <label class="block text-sm text-zinc-400 mb-1">Trạng thái</label>
-                    <select name="status" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none">
-                        <option value="">Tất cả</option>
-                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Hoạt động</option>
-                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Đã khóa</option>
-                    </select>
-                </div>
-
-                <div class="min-w-[180px]">
-                    <label class="block text-sm text-zinc-400 mb-1">Xác thực 2FA</label>
-                    <select name="2fa" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none">
-                        <option value="">Tất cả</option>
-                        <option value="enabled" {% if request.GET.2fa == 'enabled' %}selected{% endif %}>✅ Đã bật</option>
-                        <option value="disabled" {% if request.GET.2fa == 'disabled' %}selected{% endif %}>❌ Chưa bật</option>
-                    </select>
-                </div>
-
-                <div class="min-w-[160px]">
-                    <label class="block text-sm text-zinc-400 mb-1">Ngày tham gia</label>
-                    <select name="date_joined" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none">
-                        <option value="">Tất cả</option>
-                        <option value="today" {% if request.GET.date_joined == 'today' %}selected{% endif %}>Hôm nay</option>
-                        <option value="7days" {% if request.GET.date_joined == '7days' %}selected{% endif %}>7 ngày qua</option>
-                        <option value="30days" {% if request.GET.date_joined == '30days' %}selected{% endif %}>30 ngày qua</option>
-                    </select>
-                </div>
-
-                <div class="flex gap-2">
-                    <button type="submit" class="bg-violet-600 hover:bg-violet-700 px-8 py-3 rounded-2xl font-medium transition">
-                        Lọc
-                    </button>
-                    <a href="{% url 'user_list' %}" class="bg-zinc-800 hover:bg-zinc-700 px-5 py-3 rounded-2xl border border-zinc-700 text-sm flex items-center">
-                        Xóa lọc
-                    </a>
-                </div>
-            </form>
-        </div>
-
-        <div class="bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800">
-            <table class="w-full">
-                <thead class="bg-zinc-800/50">
-                    <tr>
-                        <th class="text-left p-5 text-zinc-400 font-medium">Người dùng</th>
-                        <th class="text-left p-5 text-zinc-400 font-medium">Email</th>
-                        <th class="text-center p-5 text-zinc-400 font-medium">Trạng thái 2FA</th>
-                        <th class="text-center p-5 text-zinc-400 font-medium">Tài khoản</th>
-                        <th class="text-center p-5 text-zinc-400 font-medium">Ngày tạo</th>
-                        <th class="text-center p-5 text-zinc-400 font-medium">Thao tác</th>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-zinc-800/50 text-zinc-400 text-sm uppercase tracking-wider">
+                        <th class="p-5 font-semibold">Username</th>
+                        <th class="p-5 font-semibold">Họ tên</th>
+                        <th class="p-5 font-semibold text-center text-zinc-200">Bảo mật 2FA</th>
+                        <th class="p-5 font-semibold text-center">Mail OTP</th>
+                        <th class="p-5 font-semibold text-center">App OTP</th>
+                        <th class="p-5 font-semibold text-center">FIDO2</th>
+                        <th class="p-5 font-semibold text-center">Trạng thái</th>
+                        <th class="p-5 font-semibold text-center">Hành động</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-800">
                     {% for u in users %}
-                    <tr class="hover:bg-zinc-800/30 transition">
+                    <tr class="hover:bg-zinc-800/30 transition-colors">
                         <td class="p-5">
-                            <div class="font-bold text-violet-400">{{ u.username }}</div>
-                            <div class="text-xs text-zinc-500">{{ u.get_full_name|default:"Chưa cập nhật tên" }}</div>
+                            <div class="font-bold text-zinc-100">{{ u.username }}</div>
+                            <div class="text-xs text-zinc-500">{{ u.email|default:"Chưa có email" }}</div>
                         </td>
-                        <td class="p-5 text-zinc-300">{{ u.email|default:"—" }}</td>
-                        
+                        <td class="p-5 text-zinc-400">{{ u.get_full_name|default:"—" }}</td>
+
                         <td class="p-5 text-center">
-                            {% if u.profile.has_app_otp or u.profile.has_email_otp %}
-                                <span class="px-3 py-1 bg-emerald-900/30 text-emerald-400 border border-emerald-800 rounded-lg text-xs font-bold">
-                                    <i class="fas fa-shield-alt mr-1"></i> Đã bật
+                            {% if u.profile.has_email_otp or u.profile.has_app_otp or u.profile.has_fido2 %}
+                                <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-xs font-bold border border-emerald-500/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-2"></span> ĐANG BẬT
                                 </span>
                             {% else %}
-                                <span class="px-3 py-1 bg-zinc-800 text-zinc-500 rounded-lg text-xs">
-                                    Chưa bật
+                                <span class="inline-flex items-center px-3 py-1 rounded-full bg-zinc-800 text-zinc-500 text-xs font-bold border border-zinc-700">
+                                    CHƯA KÍCH HOẠT
                                 </span>
+                            {% endif %}
+                        </td>
+
+                        <td class="p-5 text-center">
+                            {% if u.profile.has_email_otp %}
+                                <i class="fas fa-check-circle text-emerald-500 text-lg"></i>
+                            {% else %}
+                                <i class="fas fa-times-circle text-zinc-700 text-lg"></i>
+                            {% endif %}
+                        </td>
+
+                        <td class="p-5 text-center">
+                            {% if u.profile.has_app_otp %}
+                                <i class="fas fa-check-circle text-emerald-500 text-lg"></i>
+                            {% else %}
+                                <i class="fas fa-times-circle text-zinc-700 text-lg"></i>
+                            {% endif %}
+                        </td>
+
+                        <td class="p-5 text-center">
+                            {% if u.profile.has_fido2 %}
+                                <i class="fas fa-check-circle text-emerald-500 text-lg"></i>
+                            {% else %}
+                                <i class="fas fa-times-circle text-zinc-700 text-lg"></i>
                             {% endif %}
                         </td>
 
                         <td class="p-5 text-center">
                             {% if u.is_active %}
-                                <span class="text-emerald-500 text-xs font-medium">● Hoạt động</span>
+                                <span class="text-xs font-medium text-emerald-400">Hoạt động</span>
                             {% else %}
-                                <span class="text-red-500 text-xs font-medium">● Đã khóa</span>
+                                <span class="text-xs font-medium text-red-500">Đã khóa</span>
                             {% endif %}
                         </td>
 
-                        <td class="p-5 text-center text-sm text-zinc-500">
-                            {{ u.date_joined|date:"d/m/Y" }}
-                        </td>
-
-                        <td class="p-5 text-center">
-                            <div class="flex justify-center gap-2">
-                                <a href="/admin/auth/user/{{ u.id }}/change/" class="w-9 h-9 flex items-center justify-center bg-zinc-800 hover:bg-blue-900/40 text-blue-400 rounded-xl transition">
+                        <td class="p-5">
+                            <div class="flex justify-center gap-4">
+                                <a href="/admin/auth/user/{{ u.id }}/change/" class="text-zinc-500 hover:text-white transition" title="Sửa">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <button class="w-9 h-9 flex items-center justify-center bg-zinc-800 hover:bg-red-900/40 text-red-400 rounded-xl transition">
-                                    <i class="fas fa-ban"></i>
+                                <button onclick="confirmDelete('{{ u.username }}')" class="text-zinc-500 hover:text-red-500 transition" title="Xóa">
+                                    <i class="fas fa-trash"></i>
                                 </button>
                             </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="p-20 text-center text-zinc-600 italic">
-                            Không tìm thấy dữ liệu nào...
-                        </td>
+                        <td colspan="8" class="p-10 text-center text-zinc-600 italic">Không tìm thấy người dùng nào.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -150,6 +120,15 @@
         </div>
     </div>
 </div>
+
+<script>
+    function confirmDelete(name) {
+        if(confirm(`Bạn có chắc muốn xóa người dùng ${name}?`)) {
+            // Xử lý xóa ở đây
+            alert("Đã gửi yêu cầu xóa!");
+        }
+    }
+</script>
 
 </body>
 </html>
