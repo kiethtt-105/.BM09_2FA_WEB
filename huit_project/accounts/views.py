@@ -592,97 +592,92 @@ def setup_2fa(request):
 #  8. VERIFY 2FA
 
 def verify_2fa(request):
-    # 1. Lấy user tạm thời
     uid = request.session.get('pre_2fa_user_id')
     if not uid:
         return redirect('login')
-    
     try:
-        user = User.objects.get(id=uid)
-        # Sử dụng .profile vì Model của bạn đặt related_name='profile'
-        profile = user.profile 
+        user    = User.objects.get(id=uid)
+        profile = user.profile
     except Exception:
         return redirect('login')
-    # Lấy danh sách thiết bị đã xác thực (để hiển thị ở template)
-    # Loại trừ chính session hiện tại đang chờ xác thực
 
+    # Thiết bị đang online (trừ session hiện tại)
     other_devices = TrustedDevice.objects.filter(
-        user=user, 
-        is_active=True
+        user=user, is_active=True
     ).exclude(session_key=request.session.session_key)
 
+    has_fido2 = user.passkeys.exists()
 
-    # 2. Xây dựng danh sách phương thức để hiển thị ở template
+    # Chỉ thêm method user đã bật
     methods = []
     if profile.has_app_otp:
-        methods.append({'key': 'app', 'name': 'Authenticator', 'icon': '📱'})
+        methods.append({'key': 'app',   'name': 'Authenticator', 'icon': '📱'})
     if profile.has_email_otp:
-        methods.append({'key': 'email', 'name': 'Email OTP', 'icon': '📧'})
-
+        methods.append({'key': 'email', 'name': 'Email OTP',     'icon': '📧'})
+    if has_fido2:
+        methods.append({'key': 'fido2', 'name': 'Passkey',       'icon': '🔑'})
     if other_devices.exists():
-        methods.append({'key': 'push', 'name': 'Thiết bị khác', 'icon': '🔔'})
+        methods.append({'key': 'push',  'name': 'Thiết bị khác', 'icon': '🔔'})
 
     if not methods:
         messages.error(request, 'Tài khoản chưa thiết lập 2FA!')
         return redirect('login')
 
-    # --- THÊM CHÚ THÍCH THAY CHO "YÊU CẦU XÁC THỰC 2 LỚP" ---
-    method_names = [m['name'] for m in methods]
-    if len(method_names) > 1:
-        dynamic_msg = "Xác thực bằng " + ", ".join(method_names[:-1]) + " hoặc " + method_names[-1]
-    else:
-        dynamic_msg = f"Xác thực bằng {method_names[0]}"
-
-    # 3. Xác định phương thức hiện tại (mặc định chọn cái đầu tiên nếu URL trống)
-    method = request.GET.get('method')
+    method       = request.GET.get('method')
     enabled_keys = [m['key'] for m in methods]
-    
     if method not in enabled_keys:
         return redirect(f"{request.path}?method={enabled_keys[0]}")
 
-    # 4. Xử lý POST (Gửi mã hoặc Xác nhận mã)
+    push_request_sent = False
+
     if request.method == 'POST':
         action = request.POST.get('action')
-        code = request.POST.get('otp_code', '').strip()
+        code   = request.POST.get('otp_code', '').strip()
 
-        
-        # --- MỚI: Hiện thực hóa tạo yêu cầu Push (Không còn là giả sử) ---
+        # ── Push request ────────────────────────────────
         if action == 'send_push_request':
-            # Import model trực tiếp trong hàm để tránh lỗi vòng lặp import nếu có
-            from .models import RemoteAuthRequest 
-            
-            RemoteAuthRequest.objects.update_or_create(
-                user=user, 
+            from .models import RemoteAuthRequest
+            RemoteAuthRequest.objects.filter(
+                user=user,
+                session_key=request.session.session_key
+            ).delete()
+            RemoteAuthRequest.objects.create(
+                user=user,
                 session_key=request.session.session_key,
-                defaults={
-                    'status': 'pending', 
-                    'device_info': request.META.get('HTTP_USER_AGENT', 'Thiết bị lạ')
-                }
+                status='pending',
+                device_info=request.META.get('HTTP_USER_AGENT', 'Thiết bị lạ')[:255]
             )
-            messages.info(request, 'Yêu cầu xác nhận đã được gửi đến các thiết bị khác.')
-            return redirect(f'{request.path}?method=push')
+            push_request_sent = True
+            return render(request, 'accounts/verify_2fa.html', {
+                'methods':           methods,
+                'method':            'push',
+                'profile':           profile,
+                'has_app_otp':       profile.has_app_otp,
+                'has_email_otp':     profile.has_email_otp,
+                'has_fido2':         has_fido2,
+                'has_other_devices': other_devices.exists(),
+                'other_devices_list': list(other_devices[:3]),
+                'push_request_sent': True,
+            })
 
-        # Gửi mã Email OTP
+        # ── Email OTP ────────────────────────────────────
         if action == 'send_email_code' and profile.has_email_otp:
             otp = str(random.randint(100000, 999999))
-            profile.email_otp = otp
+            profile.email_otp  = otp
             profile.otp_expiry = timezone.now() + timedelta(minutes=5)
             profile.save()
-            
             send_mail(
-                'Mã xác thực đăng nhập',
-                f'Mã OTP của bạn là: {otp}',
-                None,
-                [user.email],
-                fail_silently=True
+                'Mã xác thực đăng nhập - HUIT',
+                f'Mã OTP của bạn là: {otp}\n\nHiệu lực 5 phút.',
+                None, [user.email], fail_silently=True
             )
             messages.success(request, 'Đã gửi mã OTP mới vào Email.')
             return redirect(f'{request.path}?method=email')
 
-        # Kiểm tra mã OTP
+        # ── Verify OTP ───────────────────────────────────
         valid = False
         if method == 'app' and profile.has_app_otp:
-            if code == get_totp_token(profile.otp_secret): # Đảm bảo bạn có hàm get_totp_token
+            if code == get_totp_token(profile.otp_secret):
                 valid = True
         elif method == 'email' and profile.has_email_otp:
             if code == profile.email_otp and profile.otp_expiry > timezone.now():
@@ -692,23 +687,205 @@ def verify_2fa(request):
             login(request, user)
             request.session.pop('pre_2fa_user_id', None)
             if method == 'email':
-                profile.email_otp = None # Dùng xong thì xóa
+                profile.email_otp = None
                 profile.save()
             return redirect('dashboard')
-        
+
         messages.error(request, 'Mã xác thực không chính xác hoặc hết hạn.')
 
-    # 5. Truyền đầy đủ dữ liệu xuống Template
     return render(request, 'accounts/verify_2fa.html', {
-        'methods': methods,
-        'method': method,
-        'profile': profile,
-        'has_app_otp': profile.has_app_otp,   # CỰC KỲ QUAN TRỌNG: Để HTML nhận diện
-        'has_email_otp': profile.has_email_otp, # CỰC KỲ QUAN TRỌNG: Để HTML nhận diện
-        'has_other_devices': other_devices.exists(), # Để hiển thị thông báo chờ xác nhận
-        'dynamic_msg': dynamic_msg # Dùng cái này thay cho text cứng ở template
+        'methods':           methods,
+        'method':            method,
+        'profile':           profile,
+        'has_app_otp':       profile.has_app_otp,
+        'has_email_otp':     profile.has_email_otp,
+        'has_fido2':         has_fido2,
+        'has_other_devices': other_devices.exists(),
+        'other_devices_list': list(other_devices[:3]),
+        'push_request_sent': push_request_sent,
     })
 
+
+# ── API: Thiết bị đang online lấy request chờ ────────────
+@login_required
+def get_pending_auth_request(request):
+    from .models import RemoteAuthRequest
+    req = RemoteAuthRequest.objects.filter(
+        user=request.user, status='pending'
+    ).order_by('-created_at').first()
+    if req:
+        return JsonResponse({
+            'has_request': True,
+            'request_id':  req.id,
+            'device_info': req.device_info,
+        })
+    return JsonResponse({'has_request': False})
+
+
+# ── API: Thiết bị online Đồng ý/Từ chối ─────────────────
+@login_required
+def respond_auth_request(request, req_id):
+    from .models import RemoteAuthRequest
+    status = request.GET.get('status')
+    if status in ['approved', 'denied']:
+        RemoteAuthRequest.objects.filter(
+            id=req_id, user=request.user
+        ).update(status=status)
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'error'}, status=400)
+
+
+# ── API: Máy mới polling trạng thái ──────────────────────
+def check_auth_status(request):
+    from .models import RemoteAuthRequest
+    session_key = request.session.session_key
+    req = RemoteAuthRequest.objects.filter(
+        session_key=session_key
+    ).order_by('-created_at').first()
+
+    if not req:
+        return JsonResponse({'status': 'pending'})
+
+    if req.status == 'approved':
+        uid = request.session.get('pre_2fa_user_id')
+        if uid:
+            try:
+                user = User.objects.get(id=uid)
+                login(request, user)
+                request.session.pop('pre_2fa_user_id', None)
+            except User.DoesNotExist:
+                pass
+        req.delete()
+        return JsonResponse({'status': 'approved'})
+
+    elif req.status == 'denied':
+        req.delete()
+        return JsonResponse({'status': 'denied'})
+
+    return JsonResponse({'status': 'pending'})
+
+def fido2_auth_begin(request):
+    """Trả về challenge để browser gọi WebAuthn API"""
+    try:
+        uid = request.session.get('pre_2fa_user_id')
+        if not uid:
+            return JsonResponse({'status': 'error', 'message': 'Không tìm thấy phiên'}, status=400)
+
+        user  = User.objects.get(id=uid)
+        rp_id = request.get_host().split(':')[0]
+
+        server_local = Fido2Server(
+            PublicKeyCredentialRpEntity(id=rp_id, name="HUIT MFA System")
+        )
+
+        # Lấy tất cả passkey của user để tạo allowCredentials
+        passkeys = user.passkeys.all()
+        if not passkeys.exists():
+            return JsonResponse({'status': 'error', 'message': 'Không có passkey nào'}, status=400)
+
+        credentials = []
+        for pk in passkeys:
+            credentials.append({
+                'type': 'public-key',
+                'id': pk.credential_id,
+            })
+
+        # Tạo authentication challenge
+        auth_data, state = server_local.authenticate_begin(
+            credentials=[],  # để trống → browser tự chọn passkey phù hợp
+            user_verification=UserVerificationRequirement.PREFERRED,
+        )
+
+        request.session['fido2_auth_state'] = websafe_encode(pickle.dumps(state))
+
+        options = {
+            'challenge':        websafe_encode(bytes(auth_data.public_key.challenge)),
+            'rpId':             rp_id,
+            'timeout':          60000,
+            'userVerification': 'preferred',
+            'allowCredentials': [
+                {'type': 'public-key', 'id': pk.credential_id}
+                for pk in passkeys
+            ],
+        }
+        return JsonResponse(options)
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@csrf_exempt
+def fido2_auth_complete(request):
+    try:
+        data = json.loads(request.body)
+
+        uid = request.session.get('pre_2fa_user_id')
+        if not uid:
+            return JsonResponse({'status': 'error', 'message': 'Không tìm thấy phiên'}, status=400)
+
+        user  = User.objects.get(id=uid)
+        rp_id = request.get_host().split(':')[0]
+
+        state_encoded = request.session.get('fido2_auth_state')
+        if not state_encoded:
+            return JsonResponse({'status': 'error', 'message': 'Hết hạn phiên xác thực'}, status=400)
+
+        state = pickle.loads(websafe_decode(state_encoded))
+
+        server_local = Fido2Server(
+            PublicKeyCredentialRpEntity(id=rp_id, name="HUIT MFA System")
+        )
+
+        credential_id = data.get('id')
+        passkey = user.passkeys.filter(credential_id=credential_id).first()
+        if not passkey:
+            return JsonResponse({'status': 'error', 'message': 'Không tìm thấy passkey'}, status=400)
+
+        # Decode public key từ DB
+        from fido2.cbor import decode as cbor_decode, encode as cbor_encode
+        pk_dict = cbor_decode(websafe_decode(passkey.public_key))
+
+        from fido2.webauthn import AttestedCredentialData
+        credential_data = AttestedCredentialData.create(
+            aaguid=b'\x00' * 16,
+            credential_id=_b64url_to_bytes(credential_id),
+            public_key=pk_dict,
+        )
+
+        # ── Parse thủ công clientDataJSON + authData ──────────────
+        client_data_bytes  = _b64url_to_bytes(data["response"]["clientDataJSON"])
+        auth_data_bytes    = _b64url_to_bytes(data["response"]["authenticatorData"])
+        signature_bytes    = _b64url_to_bytes(data["response"]["signature"])
+
+        from fido2.webauthn import CollectedClientData, AuthenticatorData
+        client_data = CollectedClientData(client_data_bytes)
+        auth_data   = AuthenticatorData(auth_data_bytes)
+
+        # Verify thủ công: challenge + origin + signature
+        server_local.authenticate_complete(
+            state,
+            [credential_data],
+            _b64url_to_bytes(credential_id),
+            client_data,
+            auth_data,
+            signature_bytes,
+        )
+
+        # Cập nhật sign_count từ authData (không phải từ result)
+        passkey.sign_count = auth_data.counter
+        passkey.save()
+
+        request.session.pop('fido2_auth_state', None)
+        request.session.pop('pre_2fa_user_id', None)
+
+        login(request, user)
+        print(f"[FIDO2 AUTH OK] user={user.username}")
+        return JsonResponse({'status': 'success', 'redirect': '/dashboard/'})
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    
 #  9. BAN USER (Dành cho admin)
 def ban_user(request, user_id):
     user = User.objects.get(id=user_id)
@@ -764,92 +941,89 @@ def toggle_user_status(request, user_id):
 # 3. HÀM LOGIN PHÂN QUYỀN + BỎ QUA 2FA CHO ADMIN
 
 
-
 def login_view(request):
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
-            user = form.get_user()
-            # Sử dụng select_related để tối ưu truy vấn database
+            user    = form.get_user()
             profile = UserProfile.objects.select_related('user').get(user=user)
-            
-            ip = get_client_ip(request)
-            user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
+            ip          = get_client_ip(request)
+            user_agent  = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
             if not user.is_active:
                 messages.error(request, "Tài khoản của bạn đã bị khóa.")
                 return render(request, 'accounts/login.html', {'form': form})
 
-            # --- 1. ƯU TIÊN ADMIN ---
+            # 1. ADMIN — bỏ qua 2FA
             if user.is_superuser:
                 login(request, user)
                 ActivityLog.objects.create(user=user, action='login', ip_address=ip, user_agent=user_agent)
                 messages.success(request, f"Chào Admin, {user.username}!")
                 return redirect('admin_dashboard')
 
-            # --- 2. KIỂM TRA 2FA CHO USER THƯỜNG ---
-            # Đồng bộ trạng thái từ User2FA nếu có (giữ logic của bạn nhưng tối ưu hơn)
+            # 2. Đồng bộ force_disable
             user_2fa = getattr(user, 'user2fa', None)
             if user_2fa and user_2fa.force_disable_2fa:
-                profile.has_app_otp = False
+                profile.has_app_otp   = False
                 profile.has_email_otp = False
                 profile.save()
 
-            # FIX LỖI: Kiểm tra xem user có thực sự bật 2FA nào không
-        if profile.has_fido2 or profile.has_app_otp or profile.has_email_otp:
-            request.session['pre_2fa_user_id'] = user.id
-            messages.info(request, "Vui lòng xác thực 2FA để hoàn tất đăng nhập.")
-            return redirect('verify_2fa')
-        
-            # --- TỰ ĐỘNG TẠO THÔNG BÁO DYNAMIC ---
-            methods_enabled = []
-            if profile.has_app_otp:
-                methods_enabled.append("Authenticator")
-            if profile.has_email_otp:
-                methods_enabled.append("Email OTP")
-            
-            # Kiểm tra xem có thiết bị nào khác đang online không để gợi ý xác thực thiết bị
-            other_devices = TrustedDevice.objects.filter(user=user, is_active=True).exclude(session_key=request.session.session_key)
-            if other_devices.exists():
-                methods_enabled.append("Thiết bị khác")
+            # 3. Kiểm tra 2FA
+            has_fido2 = user.passkeys.exists()
 
-            # Ghép chuỗi thông báo
-            if len(methods_enabled) > 1:
-                msg = "Xác thực bằng " + ", ".join(methods_enabled[:-1]) + " hoặc " + methods_enabled[-1]
-            else:
-                msg = f"Xác thực bằng {methods_enabled[0]}"
+            if profile.has_app_otp or profile.has_email_otp or has_fido2:
+                request.session['pre_2fa_user_id'] = user.id
 
-            messages.info(request, msg) # Truyền biến msg đã ghép vào đây
-            return redirect('verify_2fa')
-            # --- 3. ĐĂNG NHẬP THÔNG THƯỜNG ---
+                methods_enabled = []
+                if profile.has_app_otp:
+                    methods_enabled.append("Authenticator")
+                if profile.has_email_otp:
+                    methods_enabled.append("Email OTP")
+                if has_fido2:
+                    methods_enabled.append("Passkey")
+
+                other_devices = TrustedDevice.objects.filter(
+                    user=user, is_active=True
+                ).exclude(session_key=request.session.session_key)
+                if other_devices.exists():
+                    methods_enabled.append("Thiết bị khác")
+
+                if len(methods_enabled) > 1:
+                    msg = "Xác thực bằng " + ", ".join(methods_enabled[:-1]) + " hoặc " + methods_enabled[-1]
+                elif methods_enabled:
+                    msg = f"Xác thực bằng {methods_enabled[0]}"
+                else:
+                    msg = "Vui lòng xác thực 2FA"
+
+                messages.info(request, msg)
+                return redirect('verify_2fa')
+
+            # 4. Không có 2FA — đăng nhập thẳng
             login(request, user)
             ActivityLog.objects.create(user=user, action='login', ip_address=ip, user_agent=user_agent)
-            
-            # Quản lý TrustedDevice
+
             if not request.session.session_key:
                 request.session.create()
-            
+
             TrustedDevice.objects.update_or_create(
                 session_key=request.session.session_key,
                 defaults={
-                    "user": user,
+                    "user":       user,
                     "user_agent": user_agent,
                     "ip_address": ip,
-                    "last_seen": timezone.now(),
-                    "is_active": True
+                    "last_seen":  timezone.now(),
+                    "is_active":  True,
                 }
             )
             messages.success(request, f"Chào mừng trở lại, {user.username}!")
             return redirect('dashboard')
-        
+
         else:
-            # Xử lý khi sai mật khẩu/username
             messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
     else:
         form = AuthenticationForm()
-    
-    return render(request, 'accounts/login.html', {'form': form})
 
+    return render(request, 'accounts/login.html', {'form': form})
 
 @user_passes_test(lambda u: u.is_superuser)
 def export_users_excel(request):
