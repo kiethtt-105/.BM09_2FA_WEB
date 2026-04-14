@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Giám sát OTP | HUIT Security</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --huit-purple: #9b59b6;
+            --bg-dark: #0f0f12;
+            --card-dark: #1c1c21;
+            --border: #3d3d4d;
+            --text-bright: #ffffff;
+            --text-purple-light: #d6a2e8;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-bright);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 25px;
+        }
+
+        /* Tiêu đề rõ nét */
+        .page-header h1 { color: #ffffff; font-weight: 800; letter-spacing: 1px; }
+        .text-purple-huit { color: var(--text-purple-light) !important; }
+
+        .main-card {
+            background: var(--card-dark);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* Filter Section sáng sủa */
+        .filter-section { background: rgba(255,255,255,0.03); padding: 20px; border-bottom: 2px solid var(--border); }
+        .form-label { color: var(--text-purple-light); font-weight: 700; font-size: 0.85rem; }
+        .form-control, .form-select {
+            background-color: #25252e !important;
+            border: 1px solid var(--border) !important;
+            color: #ffffff !important;
+            font-size: 1rem;
+        }
+
+        /* Bảng: Đưa về nền tối, chữ trắng tinh */
+        .table { background: var(--card-dark); color: #ffffff !important; margin-bottom: 0; }
+        .table thead th {
+            background: #25252e;
+            color: #00d2ff; /* Màu xanh neon cho tiêu đề cột cho dễ nhìn */
+            font-weight: 800;
+            padding: 15px;
+            border-bottom: 2px solid var(--border);
+            text-transform: uppercase;
+        }
+        .table tbody td { 
+            padding: 18px; 
+            border-bottom: 1px solid var(--border); 
+            font-size: 1.1rem; /* Chữ to rõ */
+            vertical-align: middle; 
+            color: #ffffff !important;
+        }
+        .table tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+
+        /* Badge rực rỡ */
+        .badge-success { background: #27ae60; color: #fff; padding: 8px 12px; border-radius: 6px; }
+        .badge-danger { background: #c0392b; color: #fff; padding: 8px 12px; border-radius: 6px; }
+
+        .otp-code { 
+            background: #2c3e50; 
+            color: #f1c40f; 
+            padding: 4px 10px; 
+            border-radius: 5px; 
+            font-family: 'Consolas', monospace; 
+            font-weight: bold;
+            border: 1px solid #f1c40f;
+        }
+
+        .btn-export { background: var(--huit-purple); color: white; font-weight: 700; border-radius: 8px; border: none; padding: 10px 20px; }
+        .btn-export:hover { background: #8e44ad; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="page-header">
+            <h1 class="mb-0"><i class="fas fa-microchip me-2"></i>GIÁM SÁT OTP REAL-TIME</h1>
+            <p class="text-purple-huit small">Admin Panel - Hệ thống bảo mật HUIT 2026</p>
+        </div>
+        <div class="d-flex gap-3">
+            <a href="{% url 'export_otp_txt' %}" class="btn-export text-decoration-none">
+                <i class="fas fa-file-download me-2"></i>XUẤT LOG (.TXT)
+            </a>
+            <div class="text-center px-3 border-start border-secondary">
+                <div class="small text-muted fw-bold">TỔNG GIAO DỊCH</div>
+                <h2 class="fw-bold text-white mb-0">{{ total_otp }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-card">
+        <div class="filter-section">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">TÌM USERNAME</label>
+                    <input type="text" name="username" class="form-control" placeholder="Nhập tên..." value="{{ request.GET.username }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">TRẠNG THÁI</label>
+                    <select name="status" class="form-select">
+                        <option value="">Tất cả</option>
+                        <option value="login">Thành công</option>
+                        <option value="login_failed">Thất bại</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">NGÀY THỰC HIỆN</label>
+                    <input type="date" name="date" class="form-control" value="{{ request.GET.date }}">
+                </div>
+                <div class="col-md-3 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold" style="background: var(--huit-purple); border:none;">LỌC DỮ LIỆU</button>
+                    <a href="?" class="btn btn-dark border-secondary px-3"><i class="fas fa-sync"></i></a>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>NGƯỜI DÙNG</th>
+                        <th>PHƯƠNG THỨC</th>
+                        <th>MÃ OTP (ADMIN)</th> <th>KẾT QUẢ</th>
+                        <th>THỜI GIAN</th>
+                        <th>THAO TÁC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in otp_logs %}
+                    <tr>
+                        <td><strong class="text-white">{{ log.username_attempt }}</strong></td>
+                        <td>
+                            {% if "Email" in log.user_agent %}
+                                <span class="text-info"><i class="fas fa-envelope me-2"></i>Email OTP</span>
+                            {% else %}
+                                <span class="text-warning"><i class="fas fa-shield-alt me-2"></i>Google Authen</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="otp-code">
+                                {% if "Email" in log.user_agent %}
+                                    {{ log.user_agent|slice:":3" }}*** {% else %}
+                                    ******
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if log.action == 'login' %}
+                                <span class="badge-success">THÀNH CÔNG</span>
+                            {% else %}
+                                <span class="badge-danger">THẤT BẠI</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold text-white">{{ log.timestamp|date:"H:i:s" }}</div>
+                            <div class="small text-muted">{{ log.timestamp|date:"d/m/Y" }}</div>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" onclick="alert('Đã chặn IP: {{ log.ip_address }}')">
+                                <i class="fas fa-ban me-1"></i>CHẶN IP
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <i class="fas fa-search-minus fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Không tìm thấy dữ liệu nào khớp!</h5>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

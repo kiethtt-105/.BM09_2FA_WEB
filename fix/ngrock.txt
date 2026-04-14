@@ -1,13 +1,11 @@
-1. Sửa settings.py để cho phép ngrok
-	ALLOWED_HOSTS = ['*']
-2. Thêm CSRF
-	CSRF_TRUSTED_ORIGINS = [
-    'https://*.ngrok-free.app'
-]
+
+
+
 >> Tải ngrok
 LOGIN https://dashboard.ngrok.com/get-started/setup/windows --> LẤY TOKEN
 >> Kết nối tài khoản ngrok (one)
 	ngrok config add-authtoken YOUR_TOKEN
+
 	ngrok config add-authtoken 3BWe7tCQdEJRROamofTnTbMmsYk_6rSoghGmQ1q5S6Q5QAv5J
 >>Deploy
-ngrok http 80
+ngrok http 8000

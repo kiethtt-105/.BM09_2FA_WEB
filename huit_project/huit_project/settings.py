@@ -156,8 +156,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
+# Múi giờ Việt Nam (để log thời gian đăng nhập, đăng ký chính xác theo giờ Việt Nam)
+TIME_ZONE = 'Asia/Ho_Chi_Minh'
 
 USE_I18N = True
 

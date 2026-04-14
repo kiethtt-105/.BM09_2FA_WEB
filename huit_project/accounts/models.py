@@ -86,24 +86,29 @@ class ActivityLog(models.Model):
         ('2fa_enable', 'Bật bảo mật 2FA'),
         ('2fa_disable', 'Tắt bảo mật 2FA'),
         ('register', 'Đăng ký tài khoản'),
-    ] # Có thể mở rộng thêm các hành động khác như đổi mật khẩu, cập nhật thông tin cá nhân, v.v.
+    ]
 
-    # Liên kết với User thực tế
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activities')
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='activities',
+        null=True,
+        blank=True
+    )
+
+    username_attempt = models.CharField(max_length=150, null=True, blank=True)
+
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     ip_address = models.CharField(max_length=50, blank=True, null=True)
-    user_agent = models.TextField(blank=True, null=True) # Lưu trình duyệt/thiết bị
+    user_agent = models.TextField(blank=True, null=True)
     timestamp = models.DateTimeField(auto_now_add=True)
-    
-    #
+
     class Meta:
-        verbose_name = "Nhật ký hoạt động"
-        verbose_name_plural = "Nhật ký hoạt động"
-        ordering = ['-timestamp'] # Mới nhất hiện lên đầu
+        ordering = ['-timestamp']
 
     def __str__(self):
-        return f"{self.user.username} - {self.get_action_display()} - {self.timestamp.strftime('%d/%m/%Y %H:%i')}"
-
+        username = self.user.username if self.user else self.username_attempt
+        return f"{username} - {self.get_action_display()} - {self.timestamp.strftime('%d/%m/%Y %H:%M')}"
 # Model lưu OTP tạm thời cho các mục đích khác (ví dụ: xác thực 2FA login, reset mật khẩu...)
 class OTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

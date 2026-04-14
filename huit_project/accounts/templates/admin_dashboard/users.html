@@ -1,170 +1,148 @@
 <!DOCTYPE html>
+
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản lý Người dùng - HUIT Admin</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+```
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+```
+
 </head>
+
 <body class="bg-zinc-950 text-zinc-200">
 
 <div class="flex min-h-screen">
-    <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full">
-        <div class="flex items-center gap-3 mb-10">
-            <div class="w-10 h-10 bg-violet-600 rounded-2xl flex items-center justify-center text-2xl font-bold text-white shadow-lg shadow-violet-600/30">H</div>
-            <h1 class="text-2xl font-bold tracking-tight text-white uppercase">HUIT Admin</h1>
-        </div>
-        <nav class="space-y-2">
-            <a href="/admin-dashboard/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl transition">📊 Tổng quan</a>
-            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20 shadow-sm">👥 Quản lý Người dùng</a>
-            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl transition">🔑 Lịch sử OTP</a>
-            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl transition text-zinc-400">📋 Hoạt động Đăng nhập</a>
-        </nav>
+
+```
+<!-- SIDEBAR -->
+<div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full">
+    <div class="flex items-center gap-3 mb-10">
+        <div class="w-10 h-10 bg-violet-600 rounded-2xl flex items-center justify-center text-2xl font-bold text-white">H</div>
+        <h1 class="text-2xl font-bold text-white uppercase">HUIT Admin</h1>
     </div>
 
-    <div class="flex-1 ml-72 p-10">
-        <div class="flex justify-between items-center mb-10">
-            <div>
-                <h1 class="text-4xl font-extrabold text-white tracking-tight">Danh sách người dùng</h1>
-                <p class="text-zinc-500 mt-2">Dữ liệu thực tế từ bảng <code>accounts_userprofile</code></p>
-            </div>
-            <a href="/admin/auth/user/add/" class="bg-violet-600 hover:bg-violet-700 text-white px-7 py-3.5 rounded-2xl flex items-center gap-2 shadow-lg shadow-violet-600/20 transition-all active:scale-95">
-                <i class="fas fa-user-plus"></i> <span class="font-bold">Thêm người dùng</span>
-            </a>
-        </div>
-
-        <div class="bg-zinc-900/50 border border-zinc-800 rounded-[2rem] p-7 mb-8 backdrop-blur-sm">
-            <form method="get" class="flex flex-wrap gap-5 items-end">
-                <div class="flex-1 min-w-[300px]">
-                    <label class="block text-xs font-bold text-zinc-500 uppercase mb-3 ml-2 tracking-widest">Tìm kiếm tài khoản</label>
-                    <div class="relative group">
-                        <input type="text" name="search" value="{{ request.GET.search|default:'' }}"
-                               class="w-full bg-zinc-800/80 border border-zinc-700 rounded-2xl px-6 py-3.5 focus:outline-none focus:border-violet-500 text-zinc-100 transition-all group-hover:border-zinc-600"
-                               placeholder="Nhập Username hoặc Email...">
-                        <i class="fas fa-search absolute right-6 top-1/2 -translate-y-1/2 text-zinc-500"></i>
-                    </div>
-                </div>
-
-                <div class="min-w-[200px]">
-                    <label class="block text-xs font-bold text-zinc-500 uppercase mb-3 ml-2 tracking-widest">Bảo mật 2FA</label>
-                    <select name="2fa" class="w-full bg-zinc-800/80 border border-zinc-700 rounded-2xl px-6 py-3.5 focus:outline-none focus:border-violet-500 text-zinc-100 transition-all cursor-pointer">
-                        <option value="">Tất cả</option>
-                        <option value="enabled" {% if request.GET.2fa == 'enabled' %}selected{% endif %}>🟢 Đã kích hoạt 2FA</option>
-                        <option value="disabled" {% if request.GET.2fa == 'disabled' %}selected{% endif %}>🔴 Chưa bật 2FA</option>
-                    </select>
-                </div>
-
-                <div class="flex gap-3">
-                    <button type="submit" class="bg-violet-600 hover:bg-violet-700 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-violet-600/20 active:scale-95">
-                        <i class="fas fa-filter mr-2"></i> LỌC DỮ LIỆU
-                    </button>
-                    <a href="." class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-3.5 rounded-2xl font-bold border border-zinc-700 transition-all active:scale-95">
-                        <i class="fas fa-redo-alt"></i>
-                    </a>
-                </div>
-            </form>
-        </div>
-
-        <div class="bg-zinc-900 border border-zinc-800 rounded-[2rem] overflow-hidden shadow-2xl">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-zinc-800/40 text-zinc-400 text-[11px] uppercase tracking-[0.2em]">
-                        <th class="p-6 font-bold">Người dùng</th>
-                        <th class="p-6 font-bold text-center">Bảo mật 2FA</th>
-                        <th class="p-6 font-bold text-center">Mail OTP</th>
-                        <th class="p-6 font-bold text-center">App OTP</th>
-                        <th class="p-6 font-bold text-center">FIDO2</th>
-                        <th class="p-6 font-bold text-center">Trạng thái</th>
-                        <th class="p-6 font-bold text-center text-zinc-200">Hành động</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-800/50">
-                    {% for u in users %}
-                    <tr class="hover:bg-zinc-800/20 transition-all group">
-                        <td class="p-6">
-                            <div class="flex flex-col">
-                                <span class="font-bold text-zinc-100 text-lg group-hover:text-violet-400 transition-colors">{{ u.username }}</span>
-                                <span class="text-xs text-zinc-500 font-medium">{{ u.email|default:"(Chưa cập nhật email)" }}</span>
-                            </div>
-                        </td>
-
-                        <td class="p-6 text-center">
-                            {% if u.profile.has_email_otp or u.profile.has_app_otp or u.profile.has_fido2 %}
-                                <div class="inline-flex items-center px-4 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-[10px] font-black tracking-widest border border-emerald-500/20">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-2"></span> ĐANG BẬT
-                                </div>
-                            {% else %}
-                                <div class="inline-flex items-center px-4 py-1.5 rounded-xl bg-zinc-800/50 text-zinc-500 text-[10px] font-black tracking-widest border border-zinc-700">
-                                    CHƯA KÍCH HOẠT
-                                </div>
-                            {% endif %}
-                        </td>
-
-                        <td class="p-6 text-center">
-                            {% if u.profile.has_email_otp %}
-                                <i class="fas fa-check-circle text-emerald-500 text-xl shadow-sm"></i>
-                            {% else %}
-                                <i class="fas fa-times-circle text-zinc-800 text-xl"></i>
-                            {% endif %}
-                        </td>
-
-                        <td class="p-6 text-center">
-                            {% if u.profile.has_app_otp %}
-                                <i class="fas fa-shield-check text-emerald-500 text-xl"></i>
-                            {% else %}
-                                <i class="fas fa-times-circle text-zinc-800 text-xl"></i>
-                            {% endif %}
-                        </td>
-
-                        <td class="p-6 text-center">
-                            {% if u.profile.has_fido2 %}
-                                <i class="fas fa-key text-emerald-500 text-xl"></i>
-                            {% else %}
-                                <i class="fas fa-times-circle text-zinc-800 text-xl"></i>
-                            {% endif %}
-                        </td>
-
-                        <td class="p-6 text-center">
-                            {% if u.is_active %}
-                                <span class="px-3 py-1 bg-emerald-900/30 text-emerald-500 rounded-lg text-[10px] font-bold uppercase">Hoạt động</span>
-                            {% else %}
-                                <span class="px-3 py-1 bg-red-900/30 text-red-500 rounded-lg text-[10px] font-bold uppercase tracking-wider">Đã khóa</span>
-                            {% endif %}
-                        </td>
-
-                        <td class="p-6 text-center">
-                            <div class="flex justify-center gap-4">
-                                <a href="/admin/auth/user/{{ u.id }}/change/" class="w-9 h-9 flex items-center justify-center rounded-xl bg-zinc-800 text-zinc-400 hover:bg-violet-600 hover:text-white transition-all shadow-sm">
-                                    <i class="fas fa-edit text-sm"></i>
-                                </a>
-                                <button onclick="confirmDelete('{{ u.username }}')" class="w-9 h-9 flex items-center justify-center rounded-xl bg-zinc-800 text-zinc-400 hover:bg-red-600 hover:text-white transition-all shadow-sm">
-                                    <i class="fas fa-trash text-sm"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7" class="p-20 text-center text-zinc-500 italic tracking-wide">
-                            <i class="fas fa-user-slash block text-4xl mb-4 opacity-20"></i>
-                            Không có người dùng nào khớp với bộ lọc.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+    <nav class="space-y-2">
+        <a href="/admin-dashboard/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl">📊 Tổng quan</a>
+        <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">👥 Người dùng</a>
+    </nav>
 </div>
 
-<script>
-    function confirmDelete(name) {
-        if(confirm(`Xác nhận xóa tài khoản ${name}? Hành động này không thể hoàn tác!`)) {
-            alert("Yêu cầu xóa đã được gửi!");
-        }
-    }
-</script>
+<!-- MAIN -->
+<div class="flex-1 ml-72 p-10">
+
+    <h1 class="text-4xl font-extrabold text-white mb-8">
+        📊 Full UserProfile Data (Admin)
+    </h1>
+
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-auto">
+
+        <table class="w-full text-sm text-left">
+            <thead>
+                <tr class="bg-zinc-800 text-zinc-400 uppercase text-xs">
+                    <th class="p-4">Username</th>
+                    <th class="p-4">Email</th>
+                    <th class="p-4">Phone</th>
+                    <th class="p-4">App OTP</th>
+                    <th class="p-4">Email OTP</th>
+                    <th class="p-4">FIDO2</th>
+                    <th class="p-4">OTP Secret</th>
+                    <th class="p-4">Email OTP Code</th>
+                    <th class="p-4">OTP Expiry</th>
+                    <th class="p-4">Active</th>
+                </tr>
+            </thead>
+
+            <tbody class="divide-y divide-zinc-800">
+                {% for p in profiles %}
+                <tr class="hover:bg-zinc-800/40 transition">
+
+                    <!-- USER -->
+                    <td class="p-4 font-bold text-white">
+                        {{ p.user.username }}
+                    </td>
+
+                    <!-- EMAIL -->
+                    <td class="p-4 text-zinc-400">
+                        {{ p.user.email }}
+                    </td>
+
+                    <!-- PHONE -->
+                    <td class="p-4">
+                        {{ p.phone_number|default:"-" }}
+                    </td>
+
+                    <!-- APP OTP -->
+                    <td class="p-4 text-center">
+                        {% if p.has_app_otp %}
+                            <span class="text-emerald-400 font-bold">✔</span>
+                        {% else %}
+                            <span class="text-zinc-600">✖</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- EMAIL OTP -->
+                    <td class="p-4 text-center">
+                        {% if p.has_email_otp %}
+                            <span class="text-emerald-400 font-bold">✔</span>
+                        {% else %}
+                            <span class="text-zinc-600">✖</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- FIDO2 -->
+                    <td class="p-4 text-center">
+                        {% if p.has_fido2 %}
+                            <span class="text-emerald-400 font-bold">✔</span>
+                        {% else %}
+                            <span class="text-zinc-600">✖</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- OTP SECRET -->
+                    <td class="p-4 text-xs break-all text-yellow-400">
+                        {{ p.otp_secret|default:"NULL" }}
+                    </td>
+
+                    <!-- EMAIL OTP -->
+                    <td class="p-4 text-xs text-blue-400">
+                        {{ p.email_otp|default:"NULL" }}
+                    </td>
+
+                    <!-- EXPIRY -->
+                    <td class="p-4 text-xs">
+                        {{ p.otp_expiry|default:"NULL" }}
+                    </td>
+
+                    <!-- ACTIVE -->
+                    <td class="p-4 text-center">
+                        {% if p.user.is_active %}
+                            <span class="text-emerald-400 font-bold">ACTIVE</span>
+                        {% else %}
+                            <span class="text-red-400 font-bold">LOCKED</span>
+                        {% endif %}
+                    </td>
+
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="10" class="p-10 text-center text-zinc-500">
+                        Không có dữ liệu
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
+
+    </div>
+</div>
+```
+
+</div>
 
 </body>
 </html>

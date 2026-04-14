@@ -48,4 +48,7 @@ urlpatterns = [
     path('admin-dashboard/login-history/', views.admin_login_history, name='admin_login_history'),
     path('admin-dashboard/security/', views.admin_security, name='admin_security'),
     path('admin-dashboard/users/', views.user_list_view, name='user_list'),
+    path('manage/force-logout/<str:username>/', views.admin_force_logout, name='admin_force_logout'),
+    path('admin-dashboard/otp/export-txt/', views.export_otp_txt, name='export_otp_txt'),
+    
 ]
