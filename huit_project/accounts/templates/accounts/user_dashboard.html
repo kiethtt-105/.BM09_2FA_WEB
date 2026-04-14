@@ -234,7 +234,23 @@
 
                 </div>
             </div>
-
+            <!-- Popup xác nhận từ xa — thêm vào cuối <body> của user_dashboard.html -->
+            <div id="push-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:9999; display:none; align-items:center; justify-content:center;">
+                <div style="background:#0f1623; border:1px solid rgba(255,255,255,.1); border-radius:24px; padding:32px; max-width:380px; width:90%; text-align:center; box-shadow:0 40px 80px rgba(0,0,0,.6);">
+                    <div style="font-size:40px; margin-bottom:16px;">🔔</div>
+                    <h3 style="color:#e2e8f0; font-size:18px; font-weight:700; margin-bottom:8px;">Yêu cầu đăng nhập mới</h3>
+                    <p style="color:#64748b; font-size:13px; margin-bottom:8px;">Thiết bị đang yêu cầu xác nhận:</p>
+                    <div id="push-device-info" style="background:#161e2e; border-radius:10px; padding:10px 14px; font-size:12px; color:#94a3b8; margin-bottom:20px; font-family:monospace; word-break:break-all;"></div>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="respondPush('approved')" style="flex:1; padding:12px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;">
+                    ✅ Cho phép
+                </button>
+                        <button onclick="respondPush('denied')" style="flex:1; padding:12px; background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;">
+                    ❌ Từ chối
+                </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -319,6 +335,75 @@
             }
         });
         {% endif %}
+        // ══ Push notification polling cho thiết bị ĐANG ONLINE ══
+        let currentRequestId = null;
+        let pushCheckInterval = null;
+
+        function checkForPushRequest() {
+            fetch('/api/get-auth-request/')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.has_request && data.request_id !== currentRequestId) {
+                        currentRequestId = data.request_id;
+                        showPushModal(data.request_id, data.device_info);
+                    }
+                })
+                .catch(e => console.error('[Push check]', e));
+        }
+
+        function showPushModal(reqId, deviceInfo) {
+            const modal = document.getElementById('push-modal');
+            const info = document.getElementById('push-device-info');
+            if (!modal || !info) return;
+
+            // Parse user agent thành dạng dễ đọc
+            const ua = deviceInfo || 'Thiết bị không xác định';
+            const simplified = ua.includes('iPhone') ? '📱 iPhone' :
+                ua.includes('Android') ? '📱 Android' :
+                ua.includes('Windows') ? '💻 Windows PC' :
+                ua.includes('Mac') ? '💻 MacBook' :
+                '🖥️ ' + ua.substring(0, 60) + '...';
+
+            info.innerText = simplified;
+            modal.style.display = 'flex';
+
+            // Tự động từ chối sau 60 giây
+            setTimeout(() => {
+                if (currentRequestId === reqId) {
+                    respondPush('denied');
+                }
+            }, 60000);
+        }
+
+        function respondPush(status) {
+            if (!currentRequestId) return;
+            const modal = document.getElementById('push-modal');
+
+            fetch(`/api/respond-auth/${currentRequestId}/?status=${status}`)
+                .then(r => r.json())
+                .then(() => {
+                    if (modal) modal.style.display = 'none';
+                    currentRequestId = null;
+
+                    if (status === 'approved') {
+                        // Thông báo thành công
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                title: 'Đã cho phép!',
+                                text: 'Thiết bị kia đã được đăng nhập thành công.',
+                                icon: 'success',
+                                confirmButtonColor: '#6366f1',
+                                timer: 2000,
+                                showConfirmButton: false,
+                            });
+                        }
+                    }
+                })
+                .catch(e => console.error('[Push respond]', e));
+        }
+
+        // Chạy mỗi 5 giây
+        pushCheckInterval = setInterval(checkForPushRequest, 5000);
     </script>
 </body>
 </html>
