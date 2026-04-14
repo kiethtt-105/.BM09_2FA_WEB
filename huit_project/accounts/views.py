@@ -724,8 +724,8 @@ from django.contrib.auth.models import User
 #  11. ADMIN DASHBOARD
 from django.contrib.auth.decorators import user_passes_test
 def admin_dashboard(request):
-    total_users = User.objects.count()
-
+    total_users = User.objects.count()  
+    
     active_otps = UserProfile.objects.filter(
         Q(has_app_otp=True) | Q(has_email_otp=True)
     ).count()
