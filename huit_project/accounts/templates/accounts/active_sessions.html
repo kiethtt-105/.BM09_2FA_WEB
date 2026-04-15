@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý thiết bị hoạt động</title>
+    <title>Lịch Sử Đăng Nhập</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -29,9 +29,9 @@
                 <span class="bg-blue-600 text-white p-2 rounded-lg shadow-blue-200 shadow-lg">
                     <i class="fa-solid fa-shield-halved text-xl"></i>
                 </span>
-                Quản lý thiết bị
+                Lịch Sử Đăng Nhập
             </h2>
-            <p class="text-gray-500 mt-1 ml-14">Giám sát và kiểm soát các phiên đăng nhập đang hoạt động</p>
+            <p class="text-gray-500 mt-1 ml-14"> Danh sách các phiên đăng nhập</p>
         </div>
 
         {% if devices|length > 1 %}
@@ -49,7 +49,7 @@
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-widest border-b border-gray-100">
-                        <th class="p-6">Thiết bị & Nền tảng</th>
+                        <th class="p-6">Thiết bị </th>
                         <th class="p-6">Địa chỉ IP</th>
                         <th class="p-6">Hoạt động cuối</th>
                         <th class="p-6 text-center">Trạng thái / Thao tác</th>
