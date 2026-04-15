@@ -4,11 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản lý thiết bị hoạt động</title>
-
+    # Tailwind CSS CDN, Google Fonts, Font Awesome
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
     <style>
         body { font-family: 'Inter', sans-serif; }
         .glass-card {
@@ -18,11 +17,9 @@
         }
     </style>
 </head>
-
 <body class="bg-[#f8fafc] min-h-screen p-4 md:p-10">
-
+# Container chính
 <div class="max-w-6xl mx-auto">
-    
     <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
             <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
@@ -33,7 +30,7 @@
             </h2>
             <p class="text-gray-500 mt-1 ml-14">Giám sát và kiểm soát các phiên đăng nhập đang hoạt động</p>
         </div>
-
+        # Nút đăng xuất tất cả thiết bị khác
         {% if devices|length > 1 %}
         <a href="{% url 'logout_all_devices' %}" 
            onclick="return confirm('Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị khác không?')"
@@ -43,11 +40,11 @@
         </a>
         {% endif %}
     </div>
-
+    # Bảng hiển thị các thiết bị và phiên đăng nhập
     <div class="glass-card shadow-2xl rounded-[2rem] overflow-hidden border border-gray-100">
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
-                <thead>
+                <thead> 
                     <tr class="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-widest border-b border-gray-100">
                         <th class="p-6">Thiết bị & Nền tảng</th>
                         <th class="p-6">Địa chỉ IP</th>
@@ -55,11 +52,11 @@
                         <th class="p-6 text-center">Trạng thái / Thao tác</th>
                     </tr>
                 </thead>
-
+                # Vòng lặp hiển thị từng thiết bị và phiên đăng nhập
                 <tbody class="divide-y divide-gray-50">
                     {% for d in devices %}
                     <tr class="group hover:bg-blue-50/40 transition-colors duration-200">
-                        
+                        # Cột hiển thị biểu tượng thiết bị, tên thiết bị và user agent
                         <td class="p-6">
                             <div class="flex items-center gap-4">
                                 <div class="w-12 h-12 rounded-2xl bg-white shadow-sm border border-gray-100 flex items-center justify-center text-2xl transition-transform group-hover:scale-110">
@@ -77,22 +74,24 @@
                                 </div>
                             </div>
                         </td>
-
+                        # Cột hiển thị địa chỉ IP và thời gian đăng nhập cuối cùng với nút đăng xuất
+                        # Nếu phiên đăng nhập hiện tại, hiển thị trạng thái "Đang online" với hiệu ứng ping, 
+                        ngược lại hiển thị nút "Đăng xuất" để đăng xuất khỏi thiết bị đó
                         <td class="p-6">
                             <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-md font-mono text-sm border border-gray-200">
                                 {{ d.ip_address }}
                             </span>
                         </td>
-
+                        # Cột hiển thị thời gian đăng nhập cuối cùng
                         <td class="p-6 text-gray-500 font-medium">
                             <div class="flex flex-col">
                                 <span class="text-gray-700">{{ d.last_seen|date:"H:i" }}</span>
                                 <span class="text-xs text-gray-400">{{ d.last_seen|date:"d/m/Y" }}</span>
                             </div>
                         </td>
-
+                        # Cột hiển thị trạng thái và nút thao tác
                         <td class="p-6">
-                            <div class="flex justify-center">
+                            <div class="flex justify-center"> # Nếu phiên đăng nhập hiện tại, hiển thị trạng thái "Đang online" với hiệu ứng ping, ngược lại hiển thị nút "Đăng xuất" để đăng xuất khỏi thiết bị đó
                                 {% if d.session_key == request.session.session_key %}
                                     <div class="flex items-center gap-2 bg-green-50 text-green-600 px-4 py-2 rounded-full border border-green-100">
                                         <span class="relative flex h-2 w-2">
@@ -110,7 +109,6 @@
                                 {% endif %}
                             </div>
                         </td>
-
                     </tr>
                     {% empty %}
                     <tr>
@@ -125,17 +123,15 @@
                         </td>
                     </tr>
                     {% endfor %}
-
                 </tbody>
             </table>
         </div>
     </div>
-
+    # Thông báo cảnh báo nếu phát hiện thiết bị lạ
     <div class="mt-8 flex items-center gap-3 justify-center text-gray-400 text-sm">
         <i class="fa-solid fa-circle-info"></i>
         <span>Nếu bạn thấy thiết bị lạ, hãy đăng xuất ngay lập tức và đổi mật khẩu.</span>
     </div>
 </div>
-
 </body>
 </html>
