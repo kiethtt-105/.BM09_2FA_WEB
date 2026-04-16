@@ -1,147 +1,139 @@
 <!DOCTYPE html>
-
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý Người dùng - HUIT Admin</title>
-
-```
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-```
-
+    <title>Full UserProfile Data - HUIT Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
-
 <body class="bg-zinc-950 text-zinc-200">
 
 <div class="flex min-h-screen">
+    <!-- Sidebar cố định -->
+    <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full overflow-y-auto">
+        <div class="flex items-center gap-3 mb-10">
+            <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center text-3xl font-bold text-white">H</div>
+            <h1 class="text-3xl font-bold">HUIT</h1>
+        </div>
 
-```
-<!-- SIDEBAR -->
-<div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full">
-    <div class="flex items-center gap-3 mb-10">
-        <div class="w-10 h-10 bg-violet-600 rounded-2xl flex items-center justify-center text-2xl font-bold text-white">H</div>
-        <h1 class="text-2xl font-bold text-white uppercase">HUIT Admin</h1>
+        <nav class="space-y-1">
+            <a href="/admin-dashboard/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
+                📊 Tổng quan
+            </a>
+            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">
+                👥 Quản lý Người dùng
+            </a>
+            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
+                🔑 Lịch sử OTP
+            </a>
+            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
+                📋 Hoạt động Đăng nhập
+            </a>
+            <a href="/admin-dashboard/security/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
+                🛡️ Cảnh báo Bảo mật
+            </a>
+        </nav>
     </div>
 
-    <nav class="space-y-2">
-        <a href="/admin-dashboard/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl">📊 Tổng quan</a>
-        <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">👥 Người dùng</a>
-    </nav>
-</div>
+    <!-- Main Content -->
+    <div class="flex-1 ml-72 p-10">
 
-<!-- MAIN -->
-<div class="flex-1 ml-72 p-10">
+        <h1 class="text-4xl font-extrabold text-white mb-8">
+            📊 Full UserProfile Data (Admin)
+        </h1>
 
-    <h1 class="text-4xl font-extrabold text-white mb-8">
-        📊 Full UserProfile Data (Admin)
-    </h1>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
 
-    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-auto">
+            <table class="w-full text-sm text-left">
+                <thead>
+                    <tr class="bg-zinc-800 text-zinc-400 uppercase text-xs">
+                        <th class="p-5">Username</th>
+                        <th class="p-5">Email</th>
+                        <th class="p-5">Phone</th>
+                        <th class="p-5">App OTP</th>
+                        <th class="p-5">Email OTP</th>
+                        <th class="p-5">FIDO2</th>
+                        <th class="p-5">OTP Secret</th>
+                        <th class="p-5">Email OTP Code</th>
+                        <th class="p-5">OTP Expiry</th>
+                        <th class="p-5">Active</th>
+                    </tr>
+                </thead>
 
-        <table class="w-full text-sm text-left">
-            <thead>
-                <tr class="bg-zinc-800 text-zinc-400 uppercase text-xs">
-                    <th class="p-4">Username</th>
-                    <th class="p-4">Email</th>
-                    <th class="p-4">Phone</th>
-                    <th class="p-4">App OTP</th>
-                    <th class="p-4">Email OTP</th>
-                    <th class="p-4">FIDO2</th>
-                    <th class="p-4">OTP Secret</th>
-                    <th class="p-4">Email OTP Code</th>
-                    <th class="p-4">OTP Expiry</th>
-                    <th class="p-4">Active</th>
-                </tr>
-            </thead>
+                <tbody class="divide-y divide-zinc-800">
+                    {% for p in profiles %}
+                    <tr class="hover:bg-zinc-800/40 transition">
 
-            <tbody class="divide-y divide-zinc-800">
-                {% for p in profiles %}
-                <tr class="hover:bg-zinc-800/40 transition">
+                        <td class="p-5 font-bold text-white">
+                            {{ p.user.username }}
+                        </td>
 
-                    <!-- USER -->
-                    <td class="p-4 font-bold text-white">
-                        {{ p.user.username }}
-                    </td>
+                        <td class="p-5 text-zinc-400">
+                            {{ p.user.email|default:"—" }}
+                        </td>
 
-                    <!-- EMAIL -->
-                    <td class="p-4 text-zinc-400">
-                        {{ p.user.email }}
-                    </td>
+                        <td class="p-5">
+                            {{ p.phone_number|default:"—" }}
+                        </td>
 
-                    <!-- PHONE -->
-                    <td class="p-4">
-                        {{ p.phone_number|default:"-" }}
-                    </td>
+                        <td class="p-5 text-center">
+                            {% if p.has_app_otp %}
+                                <span class="text-emerald-400 font-bold">✔</span>
+                            {% else %}
+                                <span class="text-zinc-600">✖</span>
+                            {% endif %}
+                        </td>
 
-                    <!-- APP OTP -->
-                    <td class="p-4 text-center">
-                        {% if p.has_app_otp %}
-                            <span class="text-emerald-400 font-bold">✔</span>
-                        {% else %}
-                            <span class="text-zinc-600">✖</span>
-                        {% endif %}
-                    </td>
+                        <td class="p-5 text-center">
+                            {% if p.has_email_otp %}
+                                <span class="text-emerald-400 font-bold">✔</span>
+                            {% else %}
+                                <span class="text-zinc-600">✖</span>
+                            {% endif %}
+                        </td>
 
-                    <!-- EMAIL OTP -->
-                    <td class="p-4 text-center">
-                        {% if p.has_email_otp %}
-                            <span class="text-emerald-400 font-bold">✔</span>
-                        {% else %}
-                            <span class="text-zinc-600">✖</span>
-                        {% endif %}
-                    </td>
+                        <td class="p-5 text-center">
+                            {% if p.has_fido2 %}
+                                <span class="text-emerald-400 font-bold">✔</span>
+                            {% else %}
+                                <span class="text-zinc-600">✖</span>
+                            {% endif %}
+                        </td>
 
-                    <!-- FIDO2 -->
-                    <td class="p-4 text-center">
-                        {% if p.has_fido2 %}
-                            <span class="text-emerald-400 font-bold">✔</span>
-                        {% else %}
-                            <span class="text-zinc-600">✖</span>
-                        {% endif %}
-                    </td>
+                        <td class="p-5 text-xs break-all text-yellow-400">
+                            {{ p.otp_secret|default:"NULL" }}
+                        </td>
 
-                    <!-- OTP SECRET -->
-                    <td class="p-4 text-xs break-all text-yellow-400">
-                        {{ p.otp_secret|default:"NULL" }}
-                    </td>
+                        <td class="p-5 text-xs text-blue-400">
+                            {{ p.email_otp|default:"NULL" }}
+                        </td>
 
-                    <!-- EMAIL OTP -->
-                    <td class="p-4 text-xs text-blue-400">
-                        {{ p.email_otp|default:"NULL" }}
-                    </td>
+                        <td class="p-5 text-xs text-zinc-400">
+                            {{ p.otp_expiry|default:"NULL" }}
+                        </td>
 
-                    <!-- EXPIRY -->
-                    <td class="p-4 text-xs">
-                        {{ p.otp_expiry|default:"NULL" }}
-                    </td>
+                        <td class="p-5 text-center">
+                            {% if p.user.is_active %}
+                                <span class="text-emerald-400 font-bold">ACTIVE</span>
+                            {% else %}
+                                <span class="text-red-400 font-bold">LOCKED</span>
+                            {% endif %}
+                        </td>
 
-                    <!-- ACTIVE -->
-                    <td class="p-4 text-center">
-                        {% if p.user.is_active %}
-                            <span class="text-emerald-400 font-bold">ACTIVE</span>
-                        {% else %}
-                            <span class="text-red-400 font-bold">LOCKED</span>
-                        {% endif %}
-                    </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="p-10 text-center text-zinc-500">
+                            Không có dữ liệu
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
 
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="10" class="p-10 text-center text-zinc-500">
-                        Không có dữ liệu
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-
-        </table>
-
+        </div>
     </div>
-</div>
-```
-
 </div>
 
 </body>

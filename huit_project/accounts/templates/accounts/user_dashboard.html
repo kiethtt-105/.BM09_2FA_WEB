@@ -350,27 +350,21 @@
         }
 
         function showPushModal(reqId, deviceInfo) {
-            const modal = document.getElementById('push-modal');
-            const info = document.getElementById('push-device-info');
-            if (!modal || !info) return;
-
-            // Parse user agent thành dạng dễ đọc
             const ua = deviceInfo || 'Thiết bị không xác định';
-            const simplified = ua.includes('iPhone') ? '📱 iPhone' :
-                ua.includes('Android') ? '📱 Android' :
-                ua.includes('Windows') ? '💻 Windows PC' :
-                ua.includes('Mac') ? '💻 MacBook' :
-                '🖥️ ' + ua.substring(0, 60) + '...';
-
-            info.innerText = simplified;
-            modal.style.display = 'flex';
-
-            // Tự động từ chối sau 60 giây
-            setTimeout(() => {
-                if (currentRequestId === reqId) {
-                    respondPush('denied');
-                }
-            }, 60000);
+            Swal.fire({
+                title: 'Xác nhận đăng nhập?',
+                html: `<p>Thiết bị: <strong>${ua}</strong></p><p style="font-size:13px;color:#64748b">Đang yêu cầu truy cập tài khoản của bạn</p>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '✅ Cho phép',
+                cancelButtonText: '❌ Từ chối',
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#ef4444',
+                allowOutsideClick: false
+            }).then((result) => {
+                const status = result.isConfirmed ? 'approved' : 'denied';
+                fetch(`/api/respond-auth/${reqId}/?status=${status}`);
+            });
         }
 
         function respondPush(status) {
@@ -378,26 +372,22 @@
             const modal = document.getElementById('push-modal');
 
             fetch(`/api/respond-auth/${currentRequestId}/?status=${status}`)
-                .then(r => r.json())
                 .then(() => {
-                    if (modal) modal.style.display = 'none';
+                    if (modal) {
+                        modal.style.opacity = '0';
+                        setTimeout(() => {
+                            modal.style.display = 'none';
+                            modal.style.opacity = '1';
+                        }, 300);
+                    }
                     currentRequestId = null;
 
                     if (status === 'approved') {
-                        // Thông báo thành công
-                        if (typeof Swal !== 'undefined') {
-                            Swal.fire({
-                                title: 'Đã cho phép!',
-                                text: 'Thiết bị kia đã được đăng nhập thành công.',
-                                icon: 'success',
-                                confirmButtonColor: '#6366f1',
-                                timer: 2000,
-                                showConfirmButton: false,
-                            });
-                        }
+                        Swal.fire({ title: '✅ Đã cho phép!', icon: 'success', timer: 1500, showConfirmButton: false });
+                    } else {
+                        Swal.fire({ title: '❌ Đã từ chối', icon: 'error', timer: 1500, showConfirmButton: false });
                     }
-                })
-                .catch(e => console.error('[Push respond]', e));
+                });
         }
 
         // Chạy mỗi 5 giây
