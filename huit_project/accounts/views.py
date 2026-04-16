@@ -67,7 +67,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from fido2.server import Fido2Server
 from fido2.webauthn import PublicKeyCredentialRpEntity
-import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
