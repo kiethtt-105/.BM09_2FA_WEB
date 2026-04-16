@@ -30,7 +30,6 @@ from .models import OTP, UserProfile # Giả sử bạn có UserProfile
 from django.db.models import Count
 from django.utils.timezone import now, timedelta
 import random
-import random
 import pyotp
 import io
 import base64
