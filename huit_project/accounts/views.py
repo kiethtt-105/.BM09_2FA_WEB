@@ -993,17 +993,20 @@ def toggle_user_status(request, user_id):
     return redirect('admin_dashboard')
 
 # 3. HÀM LOGIN PHÂN QUYỀN + BỎ QUA 2FA CHO ADMIN
-
-# Hàm login_view này sẽ được sử dụng thay thế cho hàm login mặc định của Django
-# nên cần xử lý logic đăng nhập và 2FA thủ công để có thể bỏ qua 2FA cho admin.
-def login_view(request): # Xử lý đăng nhập thủ công để có thể bỏ qua 2FA cho admin
-    username_input = request.POST.get('username', '') # Lấy username từ form để ghi log, vì user object có thể đã bị khóa (is_active=False) nên không lấy username từ user.username
-    ip = get_client_ip(request)             # Hàm get_client_ip sẽ lấy IP thực của client, kể cả khi có proxy/nginx ở giữa
-    user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown') # Lấy user agent của client để ghi log và có thể dùng cho tính năng nhận diện thiết bị sau này
+from django.views.decorators.cache import never_cache
+from django.contrib.auth import login
+# Dùng @never_cache để đảm bảo trình duyệt không cache trang login, tránh các vấn đề liên quan đến session và xác thực
+@never_cache
+def login_view(request): 
+    if request.user.is_authenticated:
+        if request.user.is_superuser:
+            return redirect('admin_dashboard')
+        return redirect('dashboard')
+    ip = get_client_ip(request)             
+    user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown') 
     if request.method == 'POST':
-        form = AuthenticationForm(request, data=request.POST)   #Sử dụng form xác thực của Django để kiểm tra username/password
-        if form.is_valid():                                     # Nếu username/password đúng, tiếp tục kiểm tra 2FA hoặc quyền admin
-            # Lấy user từ form đã xác thực thành công
+        form = AuthenticationForm(request, data=request.POST)  
+        if form.is_valid():                                     
             user    = form.get_user()
             username_input = request.POST.get('username') # Lấy username từ form để ghi log, vì user object có thể đã bị khóa (is_active=False) nên không lấy username từ user.username
             profile = UserProfile.objects.select_related('user').get(user=user) # Lấy profile liên quan đến user để kiểm tra 2FA và trạng thái tài khoản
