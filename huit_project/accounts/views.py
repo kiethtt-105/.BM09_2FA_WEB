@@ -1,6 +1,6 @@
 import profile
 from urllib import request
-from .models import LoginHistory, RemoteAuthRequest, TrustedDevice
+from .models import LoginHistory, RemoteAuthRequest, TrustedDevice,EmailOTP
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -58,6 +58,8 @@ from django.contrib.auth.models import User
 from .models import UserProfile, ActivityLog
 from .utils import get_client_ip
 from django.db.models import Q, Count 
+from django.core.paginator import Paginator
+
 from django.http import JsonResponse  
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -1487,45 +1489,63 @@ def admin_users(request):
         'fields': fields
     })
 
+
+
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_otp_history(request):
-    from .models import ActivityLog
-    from django.db.models import Q
-    from django.core.paginator import Paginator
+    # ====================== EMAIL OTP ======================
+    email_otp_queryset = EmailOTP.objects.select_related('user').order_by('-created_at')
 
-    # 1. Lọc các log liên quan đến OTP (dựa trên action hoặc user_agent)
-    # Bạn kiểm tra xem action của bạn lưu là gì (login_failed, login...)
-    otp_logs_list = ActivityLog.objects.filter(
-        Q(user_agent__icontains="OTP") | Q(action__icontains="otp")
-    ).order_by('-timestamp')
-
-    # 2. Xử lý bộ lọc từ Giao diện (Search/Status/Date)
-    username_query = request.GET.get('username')
-    status_query = request.GET.get('status')
-    date_query = request.GET.get('date')
+    # Bộ lọc
+    username_query = request.GET.get('username', '').strip()
+    status_query = request.GET.get('status', '')
+    date_query = request.GET.get('date', '')
 
     if username_query:
-        otp_logs_list = otp_logs_list.filter(username_attempt__icontains=username_query)
+        email_otp_queryset = email_otp_queryset.filter(user__username__icontains=username_query)
+
     if status_query:
-        otp_logs_list = otp_logs_list.filter(action=status_query)
+        if status_query == 'used':
+            email_otp_queryset = email_otp_queryset.filter(is_used=True)
+        elif status_query == 'pending':
+            email_otp_queryset = email_otp_queryset.filter(is_used=False, created_at__gt=timezone.now() - timezone.timedelta(minutes=5))
+        elif status_query == 'expired':
+            email_otp_queryset = email_otp_queryset.filter(is_used=False, created_at__lt=timezone.now() - timezone.timedelta(minutes=5))
+
     if date_query:
-        otp_logs_list = otp_logs_list.filter(timestamp__date=date_query)
+        email_otp_queryset = email_otp_queryset.filter(created_at__date=date_query)
 
-    # 3. Phân trang (10 dòng mỗi trang)
-    paginator = Paginator(otp_logs_list, 10)
+    # Phân trang
+    paginator = Paginator(email_otp_queryset, 15)  # 15 dòng mỗi trang
     page_number = request.GET.get('page')
-    otp_logs = paginator.get_page(page_number)
+    email_otps = paginator.get_page(page_number)
 
-    # 4. Truyền dữ liệu ra ngoài Template
+    # ====================== GOOGLE AUTHENTICATOR ======================
+    google_auths = []
+    for profile in UserProfile.objects.filter(has_app_otp=True).select_related('user'):
+        secret = profile.otp_secret
+        masked = secret[:4] + "****" + secret[-4:] if len(secret) > 8 else "********"
+        
+        google_auths.append({
+            'username': profile.user.username,
+            'masked_secret': masked,
+            'full_secret': secret,
+            'current_totp': get_totp_token(secret),   # real-time TOTP
+        })
+
+    # Tổng số
+    total_otp = email_otp_queryset.count() + len(google_auths)
+
     context = {
-        'otp_logs': otp_logs,
-        'total_otp': otp_logs_list.count(),
-        'title': 'Lịch sử OTP'
+        'email_otps': email_otps,           # dùng trong template cho bảng Email OTP
+        'google_auths': google_auths,       # dùng cho bảng Google Auth
+        'total_otp': total_otp,
+        'paginator': paginator,
+        'page_obj': email_otps,
     }
-    # Nhớ để đúng đường dẫn template mà bạn vừa fix xong nhé
-    return render(request, 'admin_dashboard/otp_history.html', context)
 
+    return render(request, 'admin_dashboard/otp_history.html', context)
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_login_history(request):
@@ -1646,18 +1666,6 @@ def user_management(request):
         )
 
     return render(request, 'accounts/users.html', {'users': users})
-
-# 5. TRANG LỊCH SỬ OTP (Dành cho admin)
-def admin_otp_history(request):
-    # Lấy log OTP từ database, sắp xếp mới nhất lên đầu
-    # Lưu ý: Thay đổi tên model 'OTP' nếu bạn đặt tên khác trong models.py
-    from .models import OTP 
-    otp_logs = OTP.objects.all().order_by('-created_at')
-    
-    return render(request, 'admin_dashboard/otp_history.html', {
-        'otp_logs': otp_logs
-    })
-
 
 
 def is_admin(user):
