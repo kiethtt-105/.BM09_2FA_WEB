@@ -546,8 +546,8 @@ def setup_2fa(request):
         'otp_secret':      None,
     }
     # Chỉ cho phép chọn method đã bật
-    if request.method == 'POST':    # Xử lý form submit cho từng method
-        if method == 'email':       # Nếu user chưa có email, yêu cầu cập nhật email trước khi bật email OTP
+    if request.method == 'POST':    
+        if method == 'email':       
             if 'send_email_otp' in request.POST: 
                 if not request.user.email:
                     messages.error(request, 'Vui lòng cập nhật email trước!')
@@ -575,6 +575,13 @@ def setup_2fa(request):
                     profile.email_otp     = None    # Xoá mã OTP đã lưu sau khi xác nhận thành công
                     profile.otp_expiry    = None    # Xoá thời gian hết hạn sau khi xác nhận thành công
                     profile.save()                  # Lưu profile sau khi cập nhật trạng thái email OTP
+                    ActivityLog.objects.create(
+                        user=request.user,
+                        action='2fa_enable',
+                        ip_address=get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                        username_attempt=request.user.username
+                    )
                     messages.success(request, '🎉 Đã kích hoạt Email OTP thành công!')
                     return redirect('dashboard')
                 else:
@@ -589,6 +596,13 @@ def setup_2fa(request):
                     profile.has_app_otp = True
                     profile.save()
                     request.session.pop('temp_otp_secret', None)
+                    ActivityLog.objects.create(
+                        user=request.user,
+                        action='2fa_enable',
+                        ip_address=get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                        username_attempt=request.user.username
+                    )
                     messages.success(request, '✅ Thiết lập Google Authenticator thành công!')
                     return redirect('dashboard')
                 else:
