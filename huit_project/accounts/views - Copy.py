@@ -1005,13 +1005,12 @@ def login_view(request):
     ip = get_client_ip(request)             
     user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown') 
     if request.method == 'POST':
-        username_input = request.POST.get('username')
         form = AuthenticationForm(request, data=request.POST)  
         if form.is_valid():                                     
             user    = form.get_user()
-            #username_input = request.POST.get('username') 
-            profile = UserProfile.objects.select_related('user').get(user=user) 
-            ip          = get_client_ip(request) 
+            username_input = request.POST.get('username') # Lấy username từ form để ghi log, vì user object có thể đã bị khóa (is_active=False) nên không lấy username từ user.username
+            profile = UserProfile.objects.select_related('user').get(user=user) # Lấy profile liên quan đến user để kiểm tra 2FA và trạng thái tài khoản
+            ip          = get_client_ip(request) # Hàm get_client_ip sẽ lấy IP thực của client, kể cả khi có proxy/nginx ở giữa
             user_agent  = request.META.get('HTTP_USER_AGENT', 'Unknown') #  Lấy user agent của client để ghi log và có thể dùng cho tính năng nhận diện thiết bị sau này
 
             # Kiểm tra nếu tài khoản bị khóa (is_active=False), không cho đăng nhập và hiển thị thông báo lỗi
@@ -1021,16 +1020,16 @@ def login_view(request):
 
             # 1. ADMIN — bỏ qua 2FA
             if user.is_superuser:
-                login(request, user)                   
+                login(request, user)                    # Đăng nhập thẳng cho admin mà không cần qua 2FA
                 ActivityLog.objects.create(
-                    #user=user if user else None,        nhưng không liên kết với user nào
-                    username_attempt=username_input,   
-                    action='login',                     
-                    ip_address=ip,                      
-                    user_agent=user_agent               
-                ) 
-                messages.success(request, f"Chào Admin, {user.username}!")  
-                return redirect('admin_dashboard') 
+                    #user=user if user else None,        # Nếu user bị khóa (is_active=False) thì user sẽ là None, vẫn ghi log nhưng không liên kết với user nào
+                    username_attempt=username_input,    # Ghi log đăng nhập cho admin
+                    action='login',                     # Ghi log đăng nhập cho admin
+                    ip_address=ip,                      # Ghi log đăng nhập cho admin
+                    user_agent=user_agent               # Ghi log đăng nhập cho admin
+                ) # Ghi log đăng nhập cho admin
+                messages.success(request, f"Chào Admin, {user.username}!")  # Hiển thị tên admin trong thông báo chào mừng
+                return redirect('admin_dashboard') # Đưa admin về trang quản lý thay vì dashboard người dùng
 
             # 2. Đồng bộ force_disable
             # Nếu admin bật force_disable_2fa trên user, tự động tắt 2FA và bỏ qua bước xác thực
