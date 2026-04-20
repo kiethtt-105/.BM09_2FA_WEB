@@ -331,6 +331,8 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
+    if request.user.is_superuser:
+        return redirect('admin_dashboard')
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     confirm_disable = None
     pending_update  = request.session.get('pending_update')
@@ -1532,18 +1534,7 @@ def admin_login_history(request):
     })
 
 
-@login_required
-@user_passes_test(lambda u: u.is_staff or u.is_superuser)
-def admin_security(request):
-    alerts = [
-        "Có nhiều lần đăng nhập thất bại từ IP lạ",
-        "Người dùng test123 yêu cầu OTP quá nhiều lần"
-    ]
-    return render(request, 'admin_dashboard/security.html', {
-        'title': 'Cảnh báo Bảo mật',
-        'alerts': alerts
-    })
-    
+  
 def user_list(request):
     users = User.objects.all()
 

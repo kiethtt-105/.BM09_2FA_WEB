@@ -1531,18 +1531,7 @@ def admin_login_history(request):
     })
 
 
-@login_required
-@user_passes_test(lambda u: u.is_staff or u.is_superuser)
-def admin_security(request):
-    alerts = [
-        "Có nhiều lần đăng nhập thất bại từ IP lạ",
-        "Người dùng test123 yêu cầu OTP quá nhiều lần"
-    ]
-    return render(request, 'admin_dashboard/security.html', {
-        'title': 'Cảnh báo Bảo mật',
-        'alerts': alerts
-    })
-    
+   
 def user_list(request):
     users = User.objects.all()
 
