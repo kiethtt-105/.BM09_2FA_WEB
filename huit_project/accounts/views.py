@@ -122,6 +122,9 @@ from django.contrib.sessions.models import Session
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
+import jwt
+import time
+
 from django.contrib.auth.decorators import login_required
 try:
     webauthn_json_mapping.enabled = True
@@ -758,6 +761,9 @@ def verify_2fa(request):
                 ip_address=ip, 
                 user_agent=user_agent
             )
+            if request.session.get('sso_pending'):
+                request.session.pop('sso_pending', None)
+                return redirect('sso_send')
             return redirect('dashboard')
         
         # ✅ GHI LOG THẤT BẠI (Copy đoạn này đè lên cái cũ)
@@ -1109,6 +1115,9 @@ def login_view(request):
                 }
             )
             messages.success(request, f"Chào mừng trở lại, {user.username}!")
+            if request.session.get('sso_pending'):
+                request.session.pop('sso_pending', None)
+                return redirect('sso_send')
             return redirect('dashboard')
 
         else:
@@ -1808,3 +1817,33 @@ def export_otp_txt(request):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
     return response
+
+# ══════════════════════════════════════════════════════════
+#  SSO — Tạo JWT token và redirect sang web mới
+# ══════════════════════════════════════════════════════════
+
+
+@login_required
+def sso_send(request):
+    """
+    Tạo JWT token chứa thông tin user và redirect sang web_sso.
+    Chỉ được gọi sau khi đã login + xác thực 2FA xong.
+    """
+    user = request.user
+    from django.conf import settings
+
+    payload = {
+        'user_id':    user.id,
+        'username':   user.username,
+        'email':      user.email,
+        'first_name': user.first_name,
+        'last_name':  user.last_name,
+        'is_staff':   user.is_staff,
+        'iat':        int(time.time()),
+        'exp':        int(time.time()) + settings.SSO_TOKEN_EXPIRY,
+    }
+
+    token = jwt.encode(payload, settings.SSO_SECRET_KEY, algorithm='HS256')
+
+    callback = f"{settings.WEB_SSO_CALLBACK_URL}?token={token}"
+    return redirect(callback)

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Web mới - Trang chủ</title>
+    <style>
+        body { font-family: Arial; display:flex; justify-content:center; margin-top:80px; background:#f5f5f5; }
+        .box { width:460px; padding:36px; background:white; border-radius:10px; box-shadow:0 2px 12px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; }
+        .row { margin: 10px 0; }
+        .label { color: #666; font-size:13px; }
+        .value { font-weight: bold; }
+        .badge { background:#e8f0fe; color:#1a73e8; padding:2px 10px; border-radius:12px; font-size:13px; }
+        .btn { display:inline-block; margin-top:20px; padding:10px 20px; background:#d93025; color:white; border-radius:6px; text-decoration:none; }
+    </style>
+</head>
+<body>
+<div class="box">
+    <h2>✅ Đăng nhập SSO thành công!</h2>
+    <p style="color:#666">Bạn đã được xác thực từ hệ thống HUIT</p>
+    <hr>
+    <div class="row">
+        <div class="label">Username</div>
+        <div class="value">{{ user.username }}</div>
+    </div>
+    <div class="row">
+        <div class="label">Email</div>
+        <div class="value">{{ user.email }}</div>
+    </div>
+    <div class="row">
+        <div class="label">Họ tên</div>
+        <div class="value">{{ user.first_name }} {{ user.last_name }}</div>
+    </div>
+    <div class="row">
+        <div class="label">Quyền Staff</div>
+        <div class="value">
+            {% if user.is_staff %}
+                <span class="badge">✓ Có</span>
+            {% else %}
+                <span class="badge">✗ Không</span>
+            {% endif %}
+        </div>
+    </div>
+    <a href="/logout/" class="btn">🚪 Đăng xuất</a>
+</div>
+</body>
+</html>

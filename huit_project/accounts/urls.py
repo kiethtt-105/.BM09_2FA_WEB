@@ -50,4 +50,7 @@ urlpatterns = [
     path('manage/force-logout/<str:username>/', views.admin_force_logout, name='admin_force_logout'),
     path('admin-dashboard/otp/export-txt/', views.export_otp_txt, name='export_otp_txt'),
     
+    # SSO Endpoint  
+    path('sso/send/', views.sso_send, name='sso_send'),
+    
 ]
