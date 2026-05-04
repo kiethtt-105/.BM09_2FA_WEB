@@ -226,4 +226,6 @@ import os
 
 SSO_SECRET_KEY = os.environ.get('SSO_SECRET_KEY', 'huit-sso-secret-2024-change-this')
 SSO_TOKEN_EXPIRY = 300  # 5 phút
-WEB_SSO_CALLBACK_URL = os.environ.get('WEB_SSO_CALLBACK_URL', 'http://localhost:8001/sso/callback/')
+
+WEB_SSO_CALLBACK_URL = 'http://localhost:8001/sso/callback/'
+#WEB_SSO_CALLBACK_URL = os.environ.get('WEB_SSO_CALLBACK_URL', 'http://localhost:8001/sso/callback/')

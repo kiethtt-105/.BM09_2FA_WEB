@@ -1,135 +1,61 @@
-import profile
-from urllib import request
-from .models import LoginHistory, RemoteAuthRequest, TrustedDevice,EmailOTP
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.contrib.auth import login, logout
-from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
-from django import forms
-from django.contrib.auth.forms import UserCreationForm
-from django.core.mail import send_mail
-from django.utils import timezone
-from datetime import timedelta
-import random
-import pyotp
-from django.shortcuts import redirect
-from .models import TrustedDevice, UserProfile, PendingRegistration
-from .utils import get_totp_token, generate_qr_base64
-import openpyxl
-from openpyxl.styles import Font, Alignment, PatternFill
-from django.http import HttpResponse
-from django.db.models import Count
-from django.utils.timezone import now, timedelta
-from .models import OTP
-#from django.shortcuts import from django.shortcuts import render
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import user_passes_test
-from django.contrib.auth.models import User
-from .models import OTP, UserProfile # Giả sử bạn có UserProfile
-from django.db.models import Count
-from django.utils.timezone import now, timedelta
-import random
+import jwt
+import time
 import datetime
-from datetime import datetime
+import random
 import pyotp
 import io
 import base64
+import json
+import pickle
+import openpyxl
+from datetime import timedelta
+from urllib import request
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+# CHỖ THÊM QUAN TRỌNG: user_passes_test PHẢI ở đây mới đúng
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.http import JsonResponse, HttpResponse
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import never_cache
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.timezone import now
-from django.contrib.auth import login, authenticate
-from django.contrib.auth.forms import AuthenticationForm
-from .models import UserProfile, ActivityLog
-from .utils import get_client_ip 
-from django.core.mail import send_mail
-from .models import UserProfile, PendingRegistration, OTP, ActivityLog
-from .utils import get_totp_token, generate_qr_base64
-from django.contrib.auth import login, authenticate
-from django.contrib.auth.forms import AuthenticationForm
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.contrib.auth.models import User
-from .models import UserProfile, ActivityLog
-from .utils import get_client_ip
-from django.db.models import Q, Count 
+from django.utils.dateparse import parse_date
+from django.db.models import Q, Count
 from django.core.paginator import Paginator
-from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
-from django.http import JsonResponse  
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from .models import LoginHistory
 from django.contrib.sessions.models import Session
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
-from fido2.server import Fido2Server
-from fido2.webauthn import PublicKeyCredentialRpEntity
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
-from fido2.server import Fido2Server
-from fido2.webauthn import PublicKeyCredentialRpEntity
-from fido2.utils import websafe_encode
-from .models import UserPasskey
-import json
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
-from fido2.utils import websafe_encode, websafe_decode
-import pickle 
-from fido2.utils import websafe_encode, websafe_decode
-from fido2.features import webauthn_json_mapping
-import json
-import pickle
-from django.http import JsonResponse
-from fido2.utils import websafe_encode, websafe_decode
-import json, pickle
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
-from fido2.utils import websafe_encode, websafe_decode
-from fido2.webauthn import PublicKeyCredentialRpEntity
+from django.core.serializers.json import DjangoJSONEncoder
+from django import forms
+
+# Import từ local app
+from .models import (
+    LoginHistory, RemoteAuthRequest, TrustedDevice, 
+    EmailOTP, UserProfile, PendingRegistration, 
+    OTP, ActivityLog, UserPasskey
+)
+from .utils import get_totp_token, generate_qr_base64, get_client_ip
+
+# Thư viện FIDO2/WebAuthn
 from fido2.server import Fido2Server
 from fido2.webauthn import (
-    PublicKeyCredentialRpEntity,
-    PublicKeyCredentialUserEntity,
-    UserVerificationRequirement,
-    ResidentKeyRequirement,
-    CollectedClientData,     
-    AttestationObject,        
+    PublicKeyCredentialRpEntity, PublicKeyCredentialUserEntity,
+    UserVerificationRequirement, ResidentKeyRequirement,
+    CollectedClientData, AttestationObject, AuthenticatorData
 )
-from fido2.server import Fido2Server
 from fido2.utils import websafe_encode, websafe_decode
-import pickle, json
-
-from fido2.webauthn import AuthenticatorData
+from fido2.features import webauthn_json_mapping
 from fido2.cbor import decode as cbor_decode
-from .models import ActivityLog
-import base64, json, pickle
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.dateparse import parse_date
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.paginator import Paginator
-from django.db.models import Q
-from django.utils.dateparse import parse_date
-from .models import ActivityLog 
-from django.contrib.sessions.models import Session
-from django.utils import timezone
-from django.shortcuts import get_object_or_404, redirect
-from django.contrib import messages
-from django.core.serializers.json import DjangoJSONEncoder
-import json
-import jwt
-import time
-from django.contrib.auth.decorators import login_required
+
+# Thư viện Excel
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Font, Alignment, PatternFill
+
 try:
     webauthn_json_mapping.enabled = True
 except ValueError:
@@ -982,9 +908,6 @@ def toggle_user_status(request, user_id):
     return redirect('admin_dashboard')
 
 # 3. HÀM LOGIN PHÂN QUYỀN + BỎ QUA 2FA CHO ADMIN
-from django.views.decorators.cache import never_cache
-from django.contrib.auth import login
-# Dùng @never_cache để đảm bảo trình duyệt không cache trang login, tránh các vấn đề liên quan đến session và xác thực
 @never_cache
 def login_view(request): 
     if request.user.is_authenticated:
@@ -1086,13 +1009,33 @@ def login_view(request):
             return redirect('dashboard')
 
         else:
+            from django.contrib.auth.models import User
+            try:
+                # Kiểm tra xem có phải user tồn tại nhưng bị Admin khóa (is_active=False) không
+                check_user = User.objects.get(username=username_input)
+                if not check_user.is_active:
+                    # Nếu bị khóa, ghi log  và báo lỗi rõ ràng
+                    ActivityLog.objects.create(
+                        username_attempt=username_input,
+                        action='login_locked_attempt', 
+                        ip_address=ip,
+                        user_agent=user_agent
+                    )
+                    messages.error(request, "Tài khoản của bạn hiện đang bị khóa. Vui lòng liên hệ Admin HUIT.")
+                else:
+                    # User vẫn active nhưng nhập sai pass
+                    messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
+            except User.DoesNotExist:
+                # Không có user này trong hệ thống
+                messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
+
+            # Vẫn ghi log failed chung để theo dõi
             ActivityLog.objects.create(
                 username_attempt=username_input,
                 action='login_failed',
                 ip_address=ip,
                 user_agent=user_agent
             )
-            messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
     else:
         form = AuthenticationForm()
 
@@ -1431,11 +1374,6 @@ def delete_passkey(request, pk_id):
     return redirect('manage_passkeys')
 
 # ====================== ADMIN DASHBOARD VIEWS ======================
-
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.contrib.auth.models import User
-
 # Trang Tổng quan admin_dashboard
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
@@ -1907,36 +1845,23 @@ def export_otp_excel(request):
     return response
 # ══════════════════════════════════════════════════════════
 #  SSO — Tạo JWT token và redirect sang web mới
-# ══════════════════════════════════════════════════════════
-
-
+# ═════════════════════════════════════════════════════════
 @login_required
 def sso_send(request):
-    """
-    Tạo JWT token chứa thông tin user và redirect sang web_sso.
-    Chỉ được gọi sau khi đã login + xác thực 2FA xong.
-    """
     user = request.user
-    from django.conf import settings
-
     payload = {
-        'user_id':    user.id,
+        'token_type': 'access',
+        'user_id':    user.id,  # Theo chuẩn SimpleJWT
+        'id':         user.id,  # Dự phòng nếu App B cấu hình USER_ID_FIELD là 'id'
         'username':   user.username,
         'email':      user.email,
-        'first_name': user.first_name,
-        'last_name':  user.last_name,
-        'is_staff':   user.is_staff,
         'iat':        int(time.time()),
         'exp':        int(time.time()) + settings.SSO_TOKEN_EXPIRY,
     }
-
+    # Ký bằng mã bí mật: huit-sso-secret-2024-change-this
     token = jwt.encode(payload, settings.SSO_SECRET_KEY, algorithm='HS256')
-
-    callback = f"{settings.WEB_SSO_CALLBACK_URL}?token={token}"
-    return redirect(callback)
-
-
-
+    return redirect(f"{settings.WEB_SSO_CALLBACK_URL}?token={token}")
+# 8. ADMIN EXPORT LỊCH SỬ OTP RA FILE EXCEL (Dành cho admin)
 @user_passes_test(lambda u: u.is_superuser)
 def export_otp_excel(request):
     # Lấy dữ liệu
