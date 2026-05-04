@@ -17,7 +17,8 @@ import pyotp
 from django.shortcuts import redirect
 from .models import TrustedDevice, UserProfile, PendingRegistration
 from .utils import get_totp_token, generate_qr_base64
-from openpyxl import Workbook
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill
 from django.http import HttpResponse
 from django.db.models import Count
 from django.utils.timezone import now, timedelta
@@ -30,6 +31,8 @@ from .models import OTP, UserProfile # Giả sử bạn có UserProfile
 from django.db.models import Count
 from django.utils.timezone import now, timedelta
 import random
+import datetime
+from datetime import datetime
 import pyotp
 import io
 import base64
@@ -46,7 +49,6 @@ from django.contrib.auth import login, authenticate
 from django.contrib.auth.forms import AuthenticationForm
 from .models import UserProfile, ActivityLog
 from .utils import get_client_ip 
-from openpyxl import Workbook
 from django.core.mail import send_mail
 from .models import UserProfile, PendingRegistration, OTP, ActivityLog
 from .utils import get_totp_token, generate_qr_base64
@@ -59,7 +61,8 @@ from .models import UserProfile, ActivityLog
 from .utils import get_client_ip
 from django.db.models import Q, Count 
 from django.core.paginator import Paginator
-
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 from django.http import JsonResponse  
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -1105,6 +1108,7 @@ def export_users_excel(request):
         users = users.filter(username__icontains=keyword)
 
     wb = Workbook()
+    #wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Users List"
     ws.append(['ID', 'Username', 'Email', 'Họ Tên', 'Ngày tham gia', 'Trạng thái'])
@@ -1114,7 +1118,8 @@ def export_users_excel(request):
         ws.append([u.id, u.username, u.email, f"{u.first_name} {u.last_name}", 
                    u.date_joined.strftime("%d/%m/%Y"), status])
     response = HttpResponse(content_type='application/ms-excel')
-    response['Content-Disposition'] = 'attachment; filename=Users_HUIT.xlsx'
+    #response['Content-Disposition'] = 'attachment; filename = f"Huit_Auth_User_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="Huit_Auth_User_Log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
     wb.save(response)
     return response
 
@@ -1431,7 +1436,7 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 
-# Trang Tổng quan (đã có)
+# Trang Tổng quan admin_dashboard
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_dashboard(request):
@@ -1704,38 +1709,45 @@ def user_list_view(request):
     return render(request, 'admin_dashboard/users.html', context)
 
 
-# 4. TRANG QUẢN LÝ USER (Dành cho admin)    
+# 4. TRANG QUẢN LÝ USER (Dành cho admin)@login_required
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def user_management(request):
-    # Lấy dữ liệu profile đi kèm để hiển thị 2FA chính xác
-    users = User.objects.all().select_related('profile').order_by('-date_joined')
+    # Lấy danh sách user
+    users = User.objects.select_related('profile').prefetch_related('groups').order_by('-date_joined')
 
-    # Lấy tham số từ Filter Bar
-    search = request.GET.get('search')
-    two_fa = request.GET.get('2fa')
-
-    # Xử lý tìm kiếm
+    # Tìm kiếm
+    search = request.GET.get('search', '').strip()
     if search:
         users = users.filter(
-            Q(username__icontains=search) | 
-            Q(email__icontains=search)
+            Q(username__icontains=search) |
+            Q(email__icontains=search) |
+            Q(first_name__icontains=search) |
+            Q(last_name__icontains=search)
         )
 
-    # Xử lý lọc 2FA
-    if two_fa == 'enabled':
-        users = users.filter(
-            Q(profile__has_email_otp=True) | 
-            Q(profile__has_app_otp=True) | 
-            Q(profile__has_fido2=True)
-        )
-    elif two_fa == 'disabled':
-        users = users.filter(
-            profile__has_email_otp=False,
-            profile__has_app_otp=False,
-            profile__has_fido2=False
-        )
+    # ==================== TÍNH TOÁN STAT CARDS ====================
+    total_users = users.count()
+    active_users = users.filter(is_active=True).count()
+    locked_users = total_users - active_users
 
-    return render(request, 'accounts/users.html', {'users': users})
+    # Đếm user có bật 2FA
+    twofa_users = users.filter(
+        Q(profile__has_app_otp=True) | 
+        Q(profile__has_email_otp=True) | 
+        Q(profile__has_fido2=True)
+    ).distinct().count()
 
+    context = {
+        'users': users,
+        'total_users': total_users,
+        'active_users': active_users,
+        'locked_users': locked_users,
+        'twofa_users': twofa_users,
+    }
+
+    #return render(request, 'accounts/users.html', context)
+    return render(request, 'admin_dashboard/users.html', context)
 
 def is_admin(user):
     return user.is_superuser
@@ -1835,35 +1847,64 @@ def admin_force_logout(request, username):
     return redirect('admin_login_history')
 
 # 7. ADMIN EXPORT LỊCH SỬ OTP RA FILE TXT (Dành cho admin)
+
+
 @user_passes_test(lambda u: u.is_superuser)
-def export_otp_txt(request):
-    # 1. Lấy dữ liệu (có thể kết hợp với các bộ lọc hiện tại của bạn)
+def export_otp_excel(request):
+    # Lấy dữ liệu
     logs = ActivityLog.objects.filter(
         Q(action='login') | Q(action='login_failed'),
-        user_agent__icontains="OTP" 
+        user_agent__icontains="OTP"
     ).order_by('-timestamp')
 
-    # 2. Tạo nội dung file TXT
-    content = f"BAO CAO LICH SU XAC THUC OTP - HUIT SECURITY\n"
-    content += f"Ngay xuat: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
-    content += "="*60 + "\n\n"
-    
-    # Định dạng cột
-    content += f"{'THOI GIAN':<20} | {'USER':<15} | {'TRANG THAI':<10} | {'IP ADDRESS':<15}\n"
-    content += "-"*60 + "\n"
+    # Tạo workbook Excel
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Lich Su OTP"
 
-    for log in logs:
-        status = "THANH CONG" if log.action == 'login' else "THAT BAI"
-        time_str = log.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-        content += f"{time_str:<20} | {log.username_attempt:<15} | {status:<10} | {log.ip_address:<15}\n"
+    # Tiêu đề file
+    ws['A1'] = "LOG_OTP SECURITY"
+    ws.merge_cells('A1:E1')
+    ws['A1'].font = Font(size=14, bold=True)
+    ws['A1'].alignment = Alignment(horizontal="center")
 
-    # 3. Phản hồi về trình duyệt để tải xuống
-    response = HttpResponse(content, content_type='text/plain; charset=utf-8')
-    filename = f"otp_history_{datetime.datetime.now().strftime('%Y%md_%H%M%S')}.txt"
+    ws['A2'] = f"Ngày xuất: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    ws['A2'].font = Font(bold=True)
+
+    # Header
+    headers = ["STT", "THỜI GIAN", "USERNAME", "TRẠNG THÁI", "IP ADDRESS", "USER AGENT"]
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center")
+
+    # Ghi dữ liệu
+    for idx, log in enumerate(logs, start=1):
+        row = idx + 4
+        status = "THÀNH CÔNG" if log.action == 'login' else "THẤT BẠI"
+        
+        ws.cell(row=row, column=1, value=idx)
+        ws.cell(row=row, column=2, value=log.timestamp.strftime('%d/%m/%Y %H:%M:%S'))
+        ws.cell(row=row, column=3, value=log.username_attempt or "")
+        ws.cell(row=row, column=4, value=status)
+        ws.cell(row=row, column=5, value=log.ip_address or "")
+        ws.cell(row=row, column=6, value=log.user_agent or "")
+
+    # Điều chỉnh độ rộng cột
+    column_widths = [6, 20, 18, 15, 18, 50]
+    for i, width in enumerate(column_widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+
+    # Tạo response
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"Huit_Auth_OTP_LOG__History_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
-    return response
 
+    wb.save(response)
+    return response
 # ══════════════════════════════════════════════════════════
 #  SSO — Tạo JWT token và redirect sang web mới
 # ══════════════════════════════════════════════════════════
@@ -1893,3 +1934,60 @@ def sso_send(request):
 
     callback = f"{settings.WEB_SSO_CALLBACK_URL}?token={token}"
     return redirect(callback)
+
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def export_otp_excel(request):
+    # Lấy dữ liệu
+    logs = ActivityLog.objects.filter(
+        Q(action__in=['login', 'login_failed'])
+    ).order_by('-timestamp')
+
+    # Tạo Excel
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Lich_Su_OTP"
+
+    # Tiêu đề
+    ws['A1'] = "LOG_OTP"
+    ws.merge_cells('A1:F1')
+    ws['A1'].font = Font(size=14, bold=True)
+    ws['A1'].alignment = Alignment(horizontal="center")
+
+    ws['A2'] = f"Ngày xuất: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    ws['A2'].font = Font(bold=True)
+
+    # Header
+    headers = ["STT", "THỜI GIAN", "USERNAME", "TRẠNG THÁI", "IP ADDRESS", "USER AGENT"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center")
+
+    # Dữ liệu
+    for idx, log in enumerate(logs, start=1):
+        row = idx + 4
+        status = "THÀNH CÔNG" if log.action == 'login' else "THẤT BẠI"
+        
+        ws.cell(row=row, column=1, value=idx)
+        ws.cell(row=row, column=2, value=log.timestamp.strftime('%d/%m/%Y %H:%M:%S'))
+        ws.cell(row=row, column=3, value=str(log.username_attempt or ""))
+        ws.cell(row=row, column=4, value=status)
+        ws.cell(row=row, column=5, value=str(log.ip_address or ""))
+        ws.cell(row=row, column=6, value=str(log.user_agent or "")[:100])
+
+    # Điều chỉnh độ rộng cột
+    for i, width in enumerate([6, 22, 20, 15, 18, 60], start=1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+
+    # Response
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"Huit_Auth_OTP_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    wb.save(response)
+    return response

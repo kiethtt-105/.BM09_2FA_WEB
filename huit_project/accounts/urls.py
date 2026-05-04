@@ -43,14 +43,17 @@ urlpatterns = [
     path('test-passkey/', views.test_passkey_view, name='test_passkey'),
     
       # Custom Admin Dashboard
-    path('admin-dashboard/users/', views.admin_users, name='admin_users'),
+    #path('admin-dashboard/users/', views.admin_users, name='admin_users'),
     path('admin-dashboard/otp-history/', views.admin_otp_history, name='admin_otp_history'),
     path('admin-dashboard/login-history/', views.admin_login_history, name='admin_login_history'),
-    path('admin-dashboard/users/', views.user_list_view, name='user_list'),
+    #path('admin-dashboard/users/', views.user_list_view, name='user_list'),
     path('manage/force-logout/<str:username>/', views.admin_force_logout, name='admin_force_logout'),
-    path('admin-dashboard/otp/export-txt/', views.export_otp_txt, name='export_otp_txt'),
-    
+    #path('admin-dashboard/otp/export-txt/', views.export_otp_txt, name='export_otp_txt'),
+    path('export-excel/', views.export_otp_excel, name='export_otp_excel'),
     # SSO Endpoint  
     path('sso/send/', views.sso_send, name='sso_send'),
+    
+    path('admin-dashboard/users/', views.user_management, name='user_management'),
+    path('admin-dashboard/export-users-excel/', views.export_users_excel, name='export_users_excel'),
     
 ]
