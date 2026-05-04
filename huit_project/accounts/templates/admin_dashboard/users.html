@@ -3,138 +3,298 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Full UserProfile Data - HUIT Admin</title>
+    <title>HUIT Admin – Quản lý Người dùng</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 
+{# Truyền dữ liệu Django xuống JS an toàn qua json_script #}
+{{ users_json|json_script:"users-data" }}
+
 <div class="flex min-h-screen">
-    <!-- Sidebar cố định -->
+    <!-- Sidebar -->
     <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full overflow-y-auto">
         <div class="flex items-center gap-3 mb-10">
             <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center text-3xl font-bold text-white">H</div>
             <h1 class="text-3xl font-bold">HUIT</h1>
         </div>
-
         <nav class="space-y-1">
-            <a href="/admin-dashboard/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
-                📊 Tổng quan
-            </a>
-            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">
-                👥 Quản lý Người dùng
-            </a>
-            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
-                🔑 Lịch sử OTP
-            </a>
-            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
-                📋 Hoạt động Đăng nhập
-            </a>
-            <a href="/admin-dashboard/security/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
-                🛡️ Cảnh báo Bảo mật
-            </a>
+            <a href="/admin-dashboard/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">📊 Tổng quan</a>
+            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">👥 Quản lý Người dùng</a>
+            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">🔑 Lịch sử OTP</a>
+            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">📋 Hoạt động Đăng nhập</a>
         </nav>
     </div>
 
     <!-- Main Content -->
     <div class="flex-1 ml-72 p-10">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-4xl font-bold">Quản lý Người dùng</h1>
+            <a href="/admin/auth/user/add/" class="bg-violet-600 hover:bg-violet-700 px-6 py-3 rounded-2xl flex items-center gap-2">
+                <i class="fas fa-user-plus"></i> Thêm người dùng mới
+            </a>
+        </div>
 
-        <h1 class="text-4xl font-extrabold text-white mb-8">
-            📊 Full UserProfile Data (Admin)
-        </h1>
+        <!-- Stat Cards -->
+        <div class="grid grid-cols-4 gap-4 mb-8" id="stat-cards">
+            <div class="bg-zinc-900 rounded-2xl p-5">
+                <div class="text-sm text-zinc-400 mb-1">Tổng người dùng</div>
+                <div class="text-3xl font-bold" id="stat-total">—</div>
+            </div>
+            <div class="bg-zinc-900 rounded-2xl p-5">
+                <div class="text-sm text-zinc-400 mb-1">Đang hoạt động</div>
+                <div class="text-3xl font-bold text-emerald-400" id="stat-active">—</div>
+            </div>
+            <div class="bg-zinc-900 rounded-2xl p-5">
+                <div class="text-sm text-zinc-400 mb-1">Đã bật 2FA</div>
+                <div class="text-3xl font-bold text-violet-400" id="stat-2fa">—</div>
+            </div>
+            <div class="bg-zinc-900 rounded-2xl p-5">
+                <div class="text-sm text-zinc-400 mb-1">Bị khóa</div>
+                <div class="text-3xl font-bold text-red-400" id="stat-locked">—</div>
+            </div>
+        </div>
 
-        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+        <!-- Filter Bar -->
+        <div class="bg-zinc-900 rounded-3xl p-6 mb-6">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[260px]">
+                    <label class="block text-sm text-zinc-400 mb-1">Tìm kiếm</label>
+                    <div class="relative">
+                        <input type="text" id="filter-search"
+                               class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-violet-500"
+                               placeholder="Username, Email hoặc Họ tên..."
+                               oninput="applyFilters()">
+                        <i class="fas fa-search absolute right-5 top-1/2 -translate-y-1/2 text-zinc-500"></i>
+                    </div>
+                </div>
+                <div class="min-w-[160px]">
+                    <label class="block text-sm text-zinc-400 mb-1">Trạng thái</label>
+                    <select id="filter-status" onchange="applyFilters()"
+                            class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-violet-500">
+                        <option value="">Tất cả</option>
+                        <option value="active">Hoạt động</option>
+                        <option value="inactive">Đã khóa</option>
+                    </select>
+                </div>
+                <div class="min-w-[180px]">
+                    <label class="block text-sm text-zinc-400 mb-1">2FA</label>
+                    <select id="filter-2fa" onchange="applyFilters()"
+                            class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-violet-500">
+                        <option value="">Tất cả</option>
+                        <option value="enabled">✅ Đã bật</option>
+                        <option value="disabled">❌ Chưa kích hoạt</option>
+                        <option value="forced_off">Tắt bởi Admin</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 pt-6">
+                    <button onclick="clearFilters()"
+                            class="bg-zinc-800 hover:bg-zinc-700 px-6 py-3 rounded-2xl font-medium flex items-center gap-2 border border-zinc-700">
+                        <i class="fas fa-times"></i> Xóa lọc
+                    </button>
+                </div>
+            </div>
+        </div>
 
-            <table class="w-full text-sm text-left">
-                <thead>
-                    <tr class="bg-zinc-800 text-zinc-400 uppercase text-xs">
-                        <th class="p-5">Username</th>
-                        <th class="p-5">Email</th>
-                        <th class="p-5">Phone</th>
-                        <th class="p-5">App OTP</th>
-                        <th class="p-5">Email OTP</th>
-                        <th class="p-5">FIDO2</th>
-                        <th class="p-5">OTP Secret</th>
-                        <th class="p-5">Email OTP Code</th>
-                        <th class="p-5">OTP Expiry</th>
-                        <th class="p-5">Active</th>
+        <!-- Bulk Actions -->
+        <div class="flex items-center justify-between mb-4 px-2">
+            <div class="flex items-center gap-4">
+                <input type="checkbox" id="select-all" onclick="toggleSelectAll()" class="w-5 h-5 accent-violet-600">
+                <select id="bulk-action" class="bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-2 text-sm">
+                    <option value="">Hành động hàng loạt...</option>
+                    <option value="lock">Khóa tài khoản</option>
+                    <option value="unlock">Mở khóa tài khoản</option>
+                    <option value="reset_password">Reset mật khẩu</option>
+                    <option value="force_logout">Buộc đăng xuất tất cả</option>
+                </select>
+                <button onclick="performBulkAction()"
+                        class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-2xl text-sm font-medium">Thực hiện</button>
+            </div>
+            <div class="text-sm text-zinc-400">
+                Tổng cộng: <strong class="text-white" id="count-display">0</strong> người dùng
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-zinc-900 rounded-3xl overflow-hidden">
+            <table class="w-full">
+                <thead class="bg-zinc-800">
+                    <tr>
+                        <th class="w-10 p-5"></th>
+                        <th class="text-left p-5">Username</th>
+                        <th class="text-left p-5">Email</th>
+                        <th class="text-left p-5">Họ tên</th>
+                        <th class="text-left p-5">Vai trò</th>
+                        <th class="text-center p-5">2FA</th>
+                        <th class="text-center p-5">Trạng thái</th>
+                        <th class="text-center p-5">Last Login</th>
+                        <th class="text-center p-5">Ngày tham gia</th>
+                        <th class="text-center p-5">Hành động</th>
                     </tr>
                 </thead>
-
-                <tbody class="divide-y divide-zinc-800">
-                    {% for p in profiles %}
-                    <tr class="hover:bg-zinc-800/40 transition">
-
-                        <td class="p-5 font-bold text-white">
-                            {{ p.user.username }}
-                        </td>
-
-                        <td class="p-5 text-zinc-400">
-                            {{ p.user.email|default:"—" }}
-                        </td>
-
-                        <td class="p-5">
-                            {{ p.phone_number|default:"—" }}
-                        </td>
-
-                        <td class="p-5 text-center">
-                            {% if p.has_app_otp %}
-                                <span class="text-emerald-400 font-bold">✔</span>
-                            {% else %}
-                                <span class="text-zinc-600">✖</span>
-                            {% endif %}
-                        </td>
-
-                        <td class="p-5 text-center">
-                            {% if p.has_email_otp %}
-                                <span class="text-emerald-400 font-bold">✔</span>
-                            {% else %}
-                                <span class="text-zinc-600">✖</span>
-                            {% endif %}
-                        </td>
-
-                        <td class="p-5 text-center">
-                            {% if p.has_fido2 %}
-                                <span class="text-emerald-400 font-bold">✔</span>
-                            {% else %}
-                                <span class="text-zinc-600">✖</span>
-                            {% endif %}
-                        </td>
-
-                        <td class="p-5 text-xs break-all text-yellow-400">
-                            {{ p.otp_secret|default:"NULL" }}
-                        </td>
-
-                        <td class="p-5 text-xs text-blue-400">
-                            {{ p.email_otp|default:"NULL" }}
-                        </td>
-
-                        <td class="p-5 text-xs text-zinc-400">
-                            {{ p.otp_expiry|default:"NULL" }}
-                        </td>
-
-                        <td class="p-5 text-center">
-                            {% if p.user.is_active %}
-                                <span class="text-emerald-400 font-bold">ACTIVE</span>
-                            {% else %}
-                                <span class="text-red-400 font-bold">LOCKED</span>
-                            {% endif %}
-                        </td>
-
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="10" class="p-10 text-center text-zinc-500">
-                            Không có dữ liệu
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <tbody id="user-tbody" class="divide-y divide-zinc-800"></tbody>
             </table>
-
+            <div id="empty-state" class="hidden text-center py-16 text-zinc-500">
+                <i class="fas fa-users text-4xl mb-3 block"></i>
+                Không tìm thấy người dùng nào
+            </div>
         </div>
     </div>
 </div>
 
+<script>
+// ── Đọc dữ liệu từ Django (json_script) ──────────────────────────────────────
+const allUsers = JSON.parse(document.getElementById('users-data').textContent);
+
+// ── Cập nhật stat cards ───────────────────────────────────────────────────────
+function updateStats(data) {
+    document.getElementById('stat-total').textContent  = data.length;
+    document.getElementById('stat-active').textContent = data.filter(u => u.active).length;
+    document.getElementById('stat-2fa').textContent    = data.filter(u => u.twofa === 'on').length;
+    document.getElementById('stat-locked').textContent = data.filter(u => !u.active).length;
+}
+
+// ── Badge helpers ─────────────────────────────────────────────────────────────
+function twofaBadge(t) {
+    if (t === 'on')    return '<span class="px-4 py-1 bg-emerald-900 text-emerald-400 rounded-full text-xs font-medium">✅ Đã bật</span>';
+    if (t === 'admin') return '<span class="px-4 py-1 bg-red-900 text-red-400 rounded-full text-xs font-medium">Tắt bởi Admin</span>';
+    return '<span class="px-4 py-1 bg-amber-900 text-amber-400 rounded-full text-xs">❌ Chưa kích hoạt</span>';
+}
+
+function statusBadge(active) {
+    return active
+        ? '<span class="px-4 py-1 bg-emerald-900 text-emerald-400 rounded-full text-xs">Hoạt động</span>'
+        : '<span class="px-4 py-1 bg-red-900 text-red-400 rounded-full text-xs">Đã khóa</span>';
+}
+
+function roleBadges(roles) {
+    if (!roles || roles.length === 0) return '<span class="text-zinc-500">—</span>';
+    return roles.map(r => `<span class="px-3 py-1 bg-blue-950 text-blue-400 text-xs rounded-full">${r}</span>`).join(' ');
+}
+
+// ── Render bảng ───────────────────────────────────────────────────────────────
+function renderTable(data) {
+    const tbody = document.getElementById('user-tbody');
+    const empty = document.getElementById('empty-state');
+    document.getElementById('count-display').textContent = data.length;
+
+    if (data.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+
+    tbody.innerHTML = data.map(u => `
+        <tr class="hover:bg-zinc-800 transition group">
+            <td class="p-5">
+                <input type="checkbox" name="user_ids" value="${u.id}" class="user-checkbox w-5 h-5 accent-violet-600">
+            </td>
+            <td class="p-5 font-medium">${u.username}</td>
+            <td class="p-5">${u.email || '—'}</td>
+            <td class="p-5">${u.name || '—'}</td>
+            <td class="p-5">
+                <div class="flex flex-wrap gap-1">${roleBadges(u.roles)}</div>
+            </td>
+            <td class="p-5 text-center">${twofaBadge(u.twofa)}</td>
+            <td class="p-5 text-center">${statusBadge(u.active)}</td>
+            <td class="p-5 text-sm text-zinc-400 text-center">${u.last_login || 'Chưa đăng nhập'}</td>
+            <td class="p-5 text-sm text-zinc-400 text-center">${u.date_joined}</td>
+            <td class="p-5 text-center">
+                <div class="flex justify-center gap-5 text-lg">
+                    <a href="/admin/auth/user/${u.id}/change/" class="text-blue-400 hover:text-blue-300" title="Chỉnh sửa"><i class="fas fa-edit"></i></a>
+                    <button onclick="resetPassword(${u.id})" class="text-orange-400 hover:text-orange-300" title="Reset mật khẩu"><i class="fas fa-key"></i></button>
+                    ${u.active
+                        ? `<button onclick="lockAccount(${u.id})" class="text-amber-400 hover:text-amber-300" title="Khóa"><i class="fas fa-lock"></i></button>`
+                        : `<button onclick="unlockAccount(${u.id})" class="text-emerald-400 hover:text-emerald-300" title="Mở khóa"><i class="fas fa-unlock"></i></button>`
+                    }
+                    <button onclick="forceLogout(${u.id}, '${u.username}')" class="text-red-400 hover:text-red-300" title="Buộc logout"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// ── Lọc dữ liệu ──────────────────────────────────────────────────────────────
+function applyFilters() {
+    const q      = document.getElementById('filter-search').value.toLowerCase();
+    const status = document.getElementById('filter-status').value;
+    const twofa  = document.getElementById('filter-2fa').value;
+
+    const filtered = allUsers.filter(u => {
+        const matchQ = !q || u.username.toLowerCase().includes(q)
+                           || (u.email || '').toLowerCase().includes(q)
+                           || (u.name || '').toLowerCase().includes(q);
+        const matchS = !status
+                    || (status === 'active'   &&  u.active)
+                    || (status === 'inactive' && !u.active);
+        const matchT = !twofa
+                    || (twofa === 'enabled'    && u.twofa === 'on')
+                    || (twofa === 'disabled'   && u.twofa === 'off')
+                    || (twofa === 'forced_off' && u.twofa === 'admin');
+        return matchQ && matchS && matchT;
+    });
+
+    renderTable(filtered);
+}
+
+function clearFilters() {
+    document.getElementById('filter-search').value = '';
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-2fa').value    = '';
+    renderTable(allUsers);
+}
+
+// ── Bulk actions ──────────────────────────────────────────────────────────────
+function toggleSelectAll() {
+    const checked = document.getElementById('select-all').checked;
+    document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = checked);
+}
+
+function performBulkAction() {
+    const action   = document.getElementById('bulk-action').value;
+    const selected = Array.from(document.querySelectorAll('.user-checkbox:checked')).map(cb => cb.value);
+    if (!action)          { alert('Vui lòng chọn hành động!'); return; }
+    if (!selected.length) { alert('Chưa chọn người dùng nào!'); return; }
+    if (confirm(`Xác nhận thực hiện "${action}" cho ${selected.length} người dùng?`)) {
+        // Gửi POST đến endpoint backend
+        fetch('/admin-dashboard/users/bulk-action/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ action, user_ids: selected }),
+        }).then(r => r.json()).then(d => { alert(d.message || 'Đã thực hiện'); location.reload(); })
+          .catch(() => alert('Lỗi kết nối đến server'));
+    }
+}
+
+// ── Hành động đơn lẻ ─────────────────────────────────────────────────────────
+function lockAccount(id) {
+    if (confirm('Xác nhận KHÓA tài khoản này?'))
+        window.location.href = `/admin/auth/user/${id}/change/?action=deactivate`;
+}
+function unlockAccount(id) {
+    if (confirm('Xác nhận MỞ KHÓA tài khoản này?'))
+        window.location.href = `/admin/auth/user/${id}/change/?action=activate`;
+}
+function resetPassword(id) {
+    if (confirm('Reset mật khẩu cho người dùng này?'))
+        window.location.href = `/admin/auth/user/${id}/change/?action=reset_password`;
+}
+function forceLogout(id, username) {
+    if (confirm(`Buộc đăng xuất tất cả thiết bị của "${username}"?`))
+        window.location.href = `/admin-dashboard/force-logout/${username}/`;
+}
+
+// ── Tiện ích CSRF ─────────────────────────────────────────────────────────────
+function getCookie(name) {
+    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+}
+
+// ── Khởi động ─────────────────────────────────────────────────────────────────
+updateStats(allUsers);
+renderTable(allUsers);
+</script>
 </body>
 </html>

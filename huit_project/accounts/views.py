@@ -122,9 +122,10 @@ from django.contrib.sessions.models import Session
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
+from django.core.serializers.json import DjangoJSONEncoder
+import json
 import jwt
 import time
-
 from django.contrib.auth.decorators import login_required
 try:
     webauthn_json_mapping.enabled = True
@@ -1592,17 +1593,17 @@ def user_list(request):
     return render(request, 'admin/users.html', context)
 
 
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def user_list_view(request):
-    # Sử dụng select_related để tránh lỗi N+1 query khi truy cập vào profile
-    users = User.objects.select_related('profile').all().order_by('-date_joined')
+    users = User.objects.select_related('profile').prefetch_related('groups').all().order_by('-date_joined')
 
-    # --- Lấy tham số từ URL ---
-    search = request.GET.get('search', '').strip()
-    status = request.GET.get('status')
-    twofa = request.GET.get('2fa')
+    search      = request.GET.get('search', '').strip()
+    status      = request.GET.get('status')
+    twofa       = request.GET.get('2fa')
     date_filter = request.GET.get('date_joined')
 
-    # 1. Logic Tìm kiếm
+    # 1. Tìm kiếm
     if search:
         users = users.filter(
             Q(username__icontains=search) |
@@ -1611,39 +1612,62 @@ def user_list_view(request):
             Q(last_name__icontains=search)
         )
 
-    # 2. Logic Trạng thái
+    # 2. Trạng thái
     if status == 'active':
         users = users.filter(is_active=True)
     elif status == 'inactive':
         users = users.filter(is_active=False)
 
-    # 3. Logic Lọc 2FA (Dựa trên bảng UserProfile của bạn)
+    # 3. Lọc 2FA
     if twofa == 'enabled':
-        # Người dùng có bật app HOẶC bật email
         users = users.filter(Q(profile__has_app_otp=True) | Q(profile__has_email_otp=True))
     elif twofa == 'disabled':
-        # Người dùng chưa bật cả hai
-        users = users.filter(Q(profile__has_app_otp=False) & Q(profile__has_email_otp=False))
+        users = users.filter(profile__has_app_otp=False, profile__has_email_otp=False)
     elif twofa == 'forced_off':
-        # Nếu bạn có trường force_disable trong model thì lọc ở đây
-        # Giả sử: users = users.filter(profile__force_disable_2fa=True)
-        pass
+        users = users.filter(profile__force_disable_2fa=True)  # nếu có trường này
 
-    # 4. Logic Ngày tham gia
-    now = timezone.now()
+    # 4. Ngày tham gia
+    now_dt = timezone.now()
     if date_filter == 'today':
-        users = users.filter(date_joined__date=now.date())
+        users = users.filter(date_joined__date=now_dt.date())
     elif date_filter == '7days':
-        users = users.filter(date_joined__gte=now - timedelta(days=7))
+        users = users.filter(date_joined__gte=now_dt - timedelta(days=7))
     elif date_filter == '30days':
-        users = users.filter(date_joined__gte=now - timedelta(days=30))
+        users = users.filter(date_joined__gte=now_dt - timedelta(days=30))
+
+    # 5. Serialize sang JSON để JS dùng trực tiếp
+    def get_twofa(u):
+        p = getattr(u, 'profile', None)
+        if p:
+            if getattr(p, 'force_disable_2fa', False):
+                return 'admin'
+            if getattr(p, 'has_app_otp', False) or getattr(p, 'has_email_otp', False):
+                return 'on'
+        return 'off'
+
+    users_data = [
+        {
+            'id':         u.id,
+            'username':   u.username,
+            'email':      u.email or '',
+            'name':       u.get_full_name() or '',
+            'roles':      [g.name for g in u.groups.all()],
+            'twofa':      get_twofa(u),
+            'active':     u.is_active,
+            'last_login': u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '',
+            'date_joined': u.date_joined.strftime('%d/%m/%Y'),
+        }
+        for u in users
+    ]
 
     context = {
-        'users': users,
+        'users':      users,        # vẫn giữ để các tag Django template khác dùng nếu cần
+        'users_json': json.dumps(users_data, ensure_ascii=False),
     }
-    return render(request, 'accounts/user_management.html', context)
+    #return render(request, 'accounts/user_management.html', context)
+    return render(request, 'admin_dashboard/users.html', context)
 
-#
+
 # 4. TRANG QUẢN LÝ USER (Dành cho admin)    
 def user_management(request):
     # Lấy dữ liệu profile đi kèm để hiển thị 2FA chính xác
