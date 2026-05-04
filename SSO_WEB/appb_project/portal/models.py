@@ -3,6 +3,13 @@ from django.contrib.auth.models import User
 
 
 class UserProfile(models.Model):
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    # Thêm unique=True để 1 tài khoản HUIT chỉ được liên kết 1 lần[cite: 4]
+    huit_username = models.CharField(max_length=150, unique=True, null=True, blank=True)
+    is_linked = models.BooleanField(default=False)
+    phone = models.CharField(max_length=15, null=True, blank=True)
+    
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='portal_profile'
     )
@@ -33,3 +40,5 @@ from django.dispatch import receiver
 def create_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.get_or_create(user=instance)
+        
+        

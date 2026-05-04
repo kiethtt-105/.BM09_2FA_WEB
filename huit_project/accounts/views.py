@@ -911,6 +911,9 @@ def toggle_user_status(request, user_id):
 @never_cache
 def login_view(request): 
     if request.user.is_authenticated:
+        next_url = request.GET.get('next')
+        if next_url:
+            return redirect(next_url)
         if request.user.is_superuser:
             return redirect('admin_dashboard')
         return redirect('dashboard')
@@ -982,6 +985,9 @@ def login_view(request):
 
             # 4. Không có 2FA — đăng nhập thẳng
             login(request, user)
+            next_url = request.GET.get('next')
+            if next_url:
+                return redirect(next_url)
             ActivityLog.objects.create(
                 user=user, action='login', 
                 username_attempt=username_input,
@@ -1846,21 +1852,32 @@ def export_otp_excel(request):
 # ══════════════════════════════════════════════════════════
 #  SSO — Tạo JWT token và redirect sang web mới
 # ═════════════════════════════════════════════════════════
+# accounts/views.py (App A)
 @login_required
 def sso_send(request):
     user = request.user
+    
+    # Lấy profile an toàn để tránh lỗi 'User' object has no attribute 'userprofile'
+    profile = getattr(user, 'userprofile', None)
+    phone_number = profile.phone if profile else ""
+
     payload = {
         'token_type': 'access',
-        'user_id':    user.id,  # Theo chuẩn SimpleJWT
-        'id':         user.id,  # Dự phòng nếu App B cấu hình USER_ID_FIELD là 'id'
+        'user_id':    user.id,
         'username':   user.username,
         'email':      user.email,
+        'first_name': user.first_name, # Phan[cite: 3]
+        'last_name':  user.last_name,  # Khoi[cite: 3]
+        'phone':      phone_number,    # Số điện thoại[cite: 3]
         'iat':        int(time.time()),
         'exp':        int(time.time()) + settings.SSO_TOKEN_EXPIRY,
     }
-    # Ký bằng mã bí mật: huit-sso-secret-2024-change-this
+
     token = jwt.encode(payload, settings.SSO_SECRET_KEY, algorithm='HS256')
+    
+    # ĐẢM BẢO dòng return này nằm riêng biệt, không dính với def sso_send[cite: 3]
     return redirect(f"{settings.WEB_SSO_CALLBACK_URL}?token={token}")
+
 # 8. ADMIN EXPORT LỊCH SỬ OTP RA FILE EXCEL (Dành cho admin)
 @user_passes_test(lambda u: u.is_superuser)
 def export_otp_excel(request):

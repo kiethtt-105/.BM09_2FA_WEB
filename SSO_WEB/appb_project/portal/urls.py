@@ -3,10 +3,8 @@ from . import views
 
 urlpatterns = [
     path('',                views.portal_home,    name='portal_home'),
-    path('portal/home/',    views.portal_home,    name='portal_home_root'),
     path('login/',          views.portal_login,   name='portal_login'),
     path('logout/',         views.logout_view,    name='logout'),
     path('sso/callback/',   views.sso_callback,   name='sso_callback'),
     path('sso/link/',       views.link_huit_account, name='link_huit'),
-    path('sso/link/callback/', views.link_callback, name='link_callback'),
 ]

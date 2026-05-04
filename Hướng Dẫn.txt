@@ -30,7 +30,10 @@ LOGIN https://dashboard.ngrok.com/get-started/setup/windows --> LẤY TOKEN
 	ngrok http 8000
 
 
- 
+ #Chay file de lay du lieu mau
+
+init_data.py
+python init_data.py
 
 
 
