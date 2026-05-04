@@ -534,8 +534,10 @@ HUIT System""",
         'pending_update':  pending_update,
         'show_device_alert': show_alert,
     })
+
+
 # ══════════════════════════════════════════════════════════
-#  7. SETUP 2FA
+#  7. SETUP 2FA  
 # ══════════════════════════════════════════════════════════
 @login_required
 def setup_2fa(request):
@@ -545,40 +547,50 @@ def setup_2fa(request):
     context = {
         'profile':        profile,
         'method':         method,
-        'user_email':      request.user.email or 'Chưa có email',
+        'user_email':     request.user.email or 'Chưa có email',
         'qr_code_base64': None,
-        'otp_secret':      None,
+        'otp_secret':     None,
     }
-    # Chỉ cho phép chọn method đã bật
-    if request.method == 'POST':    # Xử lý form submit cho từng method
-        if method == 'email':       # Nếu user chưa có email, yêu cầu cập nhật email trước khi bật email OTP
-            if 'send_email_otp' in request.POST: 
+
+    if request.method == 'POST':
+        if method == 'email':
+            if 'send_email_otp' in request.POST:
                 if not request.user.email:
                     messages.error(request, 'Vui lòng cập nhật email trước!')
                     return redirect('dashboard')
-                otp = str(random.randint(100000, 999999))   # Tạo OTP mới mỗi lần gửi
-                profile.email_otp  = otp                    # Lưu OTP vào profile để sau này so sánh khi user nhập
-                profile.otp_expiry = timezone.now() + timedelta(minutes=5) # OTP có hiệu lực 5 phút
-                profile.save()                              # Lưu profile sau khi cập nhật OTP và thời gian hết hạn
-                try: # Gửi email OTP cho user
+                otp = str(random.randint(100000, 999999))
+                profile.email_otp  = otp
+                profile.otp_expiry = timezone.now() + timedelta(minutes=5)
+                profile.save()
+                try:
                     send_mail(
                         subject='🔐 Mã OTP Thiết lập Email 2FA - HUIT',
                         message=f'Mã OTP thiết lập 2FA: {otp}\n\nHiệu lực 5 phút.\n\nHUIT System',
-                        from_email=None, recipient_list=[request.user.email], fail_silently=False,
+                        from_email=None,
+                        recipient_list=[request.user.email],
+                        fail_silently=False,
+                    )
+                    # ✅ GHI LOG EmailOTP
+                    EmailOTP.objects.create(
+                        user=request.user,
+                        otp_code=otp,
+                        is_used=False,
                     )
                     messages.success(request, '✅ Mã OTP đã gửi đến email của bạn!')
-                    # Gửi email OTP thành công, yêu cầu user nhập mã OTP để xác nhận kích hoạt
                 except Exception as e:
                     messages.error(request, f'Lỗi gửi email: {str(e)}')
-                    # Gửi email OTP thất bại, không yêu cầu user nhập mã OTP nữa
-            elif 'verify_email_otp' in request.POST: # Xử lý khi user submit mã OTP để xác nhận kích hoạt email OTP
+
+            elif 'verify_email_otp' in request.POST:
                 code = request.POST.get('email_otp_code', '').strip()
-                if profile.email_otp and code == profile.email_otp and profile.otp_expiry > timezone.now(): 
-                    # So sánh mã OTP user nhập với mã OTP đã lưu và kiểm tra thời gian hết hạn
-                    profile.has_email_otp = True    # Nếu OTP hợp lệ, bật email OTP cho user
-                    profile.email_otp     = None    # Xoá mã OTP đã lưu sau khi xác nhận thành công
-                    profile.otp_expiry    = None    # Xoá thời gian hết hạn sau khi xác nhận thành công
-                    profile.save()                  # Lưu profile sau khi cập nhật trạng thái email OTP
+                if profile.email_otp and code == profile.email_otp and profile.otp_expiry > timezone.now():
+                    profile.has_email_otp = True
+                    profile.email_otp     = None
+                    profile.otp_expiry    = None
+                    profile.save()
+                    # ✅ ĐÁNH DẤU ĐÃ DÙNG
+                    EmailOTP.objects.filter(
+                        user=request.user, otp_code=code, is_used=False
+                    ).update(is_used=True)
                     messages.success(request, '🎉 Đã kích hoạt Email OTP thành công!')
                     return redirect('dashboard')
                 else:
@@ -586,7 +598,7 @@ def setup_2fa(request):
 
         elif method == 'app':
             if 'verify_app_otp' in request.POST:
-                code         = request.POST.get('otp_code', '').strip()
+                code        = request.POST.get('otp_code', '').strip()
                 temp_secret = request.session.get('temp_otp_secret')
                 if temp_secret and code == get_totp_token(temp_secret):
                     profile.otp_secret  = temp_secret
@@ -602,179 +614,142 @@ def setup_2fa(request):
         new_secret = pyotp.random_base32()
         request.session['temp_otp_secret'] = new_secret
         context['qr_code_base64'] = generate_qr_base64(request.user.username, new_secret)
-        context['otp_secret']      = new_secret
+        context['otp_secret']     = new_secret
 
     return render(request, 'accounts/setup_2fa.html', context)
 
 
 # ══════════════════════════════════════════════════════════
-#  8. VERIFY 2FA
+#  8. VERIFY 2FA  
 # ══════════════════════════════════════════════════════════
 def verify_2fa(request):
-    user_id = request.session.get('pre_2fa_user_id')
-    uid = request.session.get('pre_2fa_user_id') # Lấy user_id tạm thời đã lưu ở bước đăng nhập trước khi xác thực 2FA
-    if not uid:             # Nếu không tìm thấy user_id trong session, chuyển hướng về trang login để bắt đầu lại quá trình đăng nhập
-        return redirect('login') # Nếu không tìm thấy user_id trong session, chuyển hướng về trang login để bắt đầu lại quá trình đăng nhập
+    uid = request.session.get('pre_2fa_user_id')
+    if not uid:
+        return redirect('login')
     try:
-        user    = User.objects.get(id=uid) # Lấy đối tượng User từ database dựa trên user_id đã lưu trong session
-        profile = user.profile # Lấy đối tượng UserProfile của user
+        user    = User.objects.get(id=uid)
+        profile = user.profile
     except Exception:
-        return redirect('login') # Nếu có lỗi (ví dụ user không tồn tại), chuyển hướng về trang login để bắt đầu lại quá trình đăng nhập
+        return redirect('login')
 
-    user = User.objects.get(id=user_id)
-    ip = get_client_ip(request)
+    ip         = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
-    
+
     other_devices = TrustedDevice.objects.filter(
         user=user, is_active=True
     ).exclude(session_key=request.session.session_key)
 
-    has_fido2 = user.passkeys.exists()  # Kiểm tra xem user có passkey nào đã đăng ký hay không để hiển thị tùy chọn đăng nhập bằng Passkey (FIDO2)
+    has_fido2 = user.passkeys.exists()
 
-    # Chỉ thêm method user đã bật
     methods = []
-    if profile.has_app_otp:     # Nếu user đã bật app OTP, thêm tùy chọn đăng nhập bằng Authenticator vào danh sách phương thức xác thực
-        methods.append({'key': 'app',   'name': 'Authenticator', 'icon': '📱'}) 
-    if profile.has_email_otp:   #   
-        methods.append({'key': 'email', 'name': 'Email OTP',     'icon': '📧'})
-    if has_fido2:               # Nếu user đã đăng ký passkey, thêm tùy chọn đăng nhập bằng Passkey (FIDO2) vào danh sách phương thức xác thực
-        methods.append({'key': 'fido2', 'name': 'Passkey',       'icon': '🔑'})
-    if other_devices.exists():  # Nếu có thiết bị tin cậy khác đang hoạt động, thêm tùy chọn đăng nhập qua thiết bị khác vào danh sách phương thức xác thực
-        methods.append({'key': 'push',  'name': 'Thiết bị khác', 'icon': '🔔'})
+    if profile.has_app_otp:   methods.append({'key': 'app',   'name': 'Authenticator', 'icon': '📱'})
+    if profile.has_email_otp: methods.append({'key': 'email', 'name': 'Email OTP',     'icon': '📧'})
+    if has_fido2:             methods.append({'key': 'fido2', 'name': 'Passkey',       'icon': '🔑'})
+    if other_devices.exists():methods.append({'key': 'push',  'name': 'Thiết bị khác','icon': '🔔'})
 
-    if not methods: # Nếu user chưa bật bất kỳ phương thức 2FA nào, hiển thị thông báo lỗi và chuyển hướng về trang login để bắt đầu lại quá trình đăng nhập
+    if not methods:
         messages.error(request, 'Tài khoản chưa thiết lập 2FA!')
-        return redirect('login')    # Nếu user chưa bật bất kỳ phương thức 2FA nào, hiển thị thông báo lỗi và chuyển hướng về trang login để bắt đầu lại quá trình đăng nhập
+        return redirect('login')
 
-    method       = request.GET.get('method')    # Lấy phương thức xác thực được chọn từ query parameter để hiển thị form tương ứng
-    enabled_keys = [m['key'] for m in methods]  # Tạo danh sách các key của phương thức đã bật để kiểm tra tính hợp lệ của phương thức được chọn
-    if method not in enabled_keys:              # Nếu phương thức được chọn không hợp lệ (không có trong danh sách phương thức đã bật), chuyển hướng lại với phương thức mặc định là phương thức đầu tiên trong danh sách đã bật
+    method       = request.GET.get('method')
+    enabled_keys = [m['key'] for m in methods]
+    if method not in enabled_keys:
         return redirect(f"{request.path}?method={enabled_keys[0]}")
 
-    push_request_sent = False # Biến cờ để theo dõi xem đã gửi yêu cầu đăng nhập qua thiết bị khác hay chưa, dùng để hiển thị thông báo trên giao diện nếu cần
-        # Nếu request là POST, 
-        # xử lý các hành động tương ứng với từng phương thức xác thực 
-        # như gửi OTP mới, xác nhận OTP, hoặc gửi yêu cầu đăng nhập qua thiết bị khác
-    if request.method == 'POST':
-        action = request.POST.get('action') # Lấy hành động được thực hiện từ form submit để xác định loại xử lý cần thực hiện, ví dụ như gửi OTP mới, xác nhận OTP, hoặc gửi yêu cầu đăng nhập qua thiết bị khác
-        code   = request.POST.get('otp_code', '').strip()   # Lấy mã OTP được user nhập từ form submit để xác thực nếu hành động là xác nhận OTP cho app hoặc email, mã này sẽ được so sánh với mã OTP đã lưu trong profile để xác thực tính hợp lệ
+    push_request_sent = False
 
-        # ── Push request ────────────────────────────────
-        if action == 'send_push_request':   # Nếu hành động là gửi yêu cầu đăng nhập qua thiết bị khác, thực hiện các bước sau:
-            from .models import RemoteAuthRequest   # Import model RemoteAuthRequest để lưu trữ yêu cầu đăng nhập qua thiết bị khác vào database
-            
-            # Xoá các yêu cầu cũ cùng session để tránh tồn đọng nhiều yêu cầu nếu user gửi đi gửi lại nhiều lần
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        code   = request.POST.get('otp_code', '').strip()
+
+        # ── Push request ─────────────────────────────────
+        if action == 'send_push_request':
+            from .models import RemoteAuthRequest
             RemoteAuthRequest.objects.filter(
-                user=user,
-                session_key=request.session.session_key
+                user=user, session_key=request.session.session_key
             ).delete()
-            # Tạo một bản ghi mới trong RemoteAuthRequest với trạng thái 'pending' 
-            # để đánh dấu có một yêu cầu đăng nhập qua thiết bị khác đang chờ xử lý,
-            # lưu thông tin thiết bị từ user agent để hiển thị trên thiết bị nhận yêu cầu
             RemoteAuthRequest.objects.create(
                 user=user,
                 session_key=request.session.session_key,
                 status='pending',
                 device_info=request.META.get('HTTP_USER_AGENT', 'Thiết bị lạ')[:255]
             )
-            
-            # Đặt biến cờ push_request_sent thành True để hiển thị thông báo đã gửi yêu cầu trên giao diện
-            push_request_sent = True
-            
-            # Chuyển hướng lại trang verify_2fa với method hiện tại 
-            # để hiển thị thông báo đã gửi yêu cầu đăng nhập qua thiết bị khác
             return render(request, 'accounts/verify_2fa.html', {
-                'methods':           methods,
-                'method':            'push',
-                'profile':           profile,
-                'has_app_otp':       profile.has_app_otp,
-                'has_email_otp':     profile.has_email_otp,
-                'has_fido2':         has_fido2,
-                'has_other_devices': other_devices.exists(),
-                'other_devices_list': list(other_devices[:3]),
-                'push_request_sent': True,
+                'methods': methods, 'method': 'push', 'profile': profile,
+                'has_app_otp': profile.has_app_otp, 'has_email_otp': profile.has_email_otp,
+                'has_fido2': has_fido2, 'has_other_devices': other_devices.exists(),
+                'other_devices_list': list(other_devices[:3]), 'push_request_sent': True,
             })
 
-        # ── Email OTP ────────────────────────────────────
-            # Nếu hành động là gửi mã OTP mới cho phương thức email OTP, thực hiện các bước sau:
+        # ── Gửi Email OTP mới ────────────────────────────
         if action == 'send_email_code' and profile.has_email_otp:
-            otp = str(random.randint(100000, 999999))   # Tạo mã OTP mới
-            profile.email_otp  = otp            # Lưu mã OTP mới vào profile để sau này so sánh khi user nhập
-            profile.otp_expiry = timezone.now() + timedelta(minutes=5)              # Cập nhật thời gian hết hạn của mã OTP mới (5 phút từ thời điểm tạo)
-            profile.save()  #   Lưu profile sau khi cập nhật mã OTP và thời gian hết hạn
-             # Gửi email chứa mã OTP mới cho user để xác thực khi user chọn phương thức
-             # Nếu gửi email thành công, hiển thị thông báo đã gửi mã OTP mới trên giao diện, 
-             # nếu có lỗi khi gửi email, hiển thị thông báo lỗi
+            otp = str(random.randint(100000, 999999))
+            profile.email_otp  = otp
+            profile.otp_expiry = timezone.now() + timedelta(minutes=5)
+            profile.save()
             send_mail(
                 'Mã xác thực đăng nhập - HUIT',
                 f'Mã OTP của bạn là: {otp}\n\nHiệu lực 5 phút.',
                 None, [user.email], fail_silently=True
             )
+            # ✅ GHI LOG EmailOTP
+            EmailOTP.objects.create(
+                user=user,
+                otp_code=otp,
+                is_used=False,
+            )
             messages.success(request, 'Đã gửi mã OTP mới vào Email.')
             return redirect(f'{request.path}?method=email')
 
-        # ── Verify OTP ───────────────────────────────────
-        # Nếu hành động là xác nhận mã OTP cho phương thức app OTP hoặc email OTP, thực hiện các bước sau:
+        # ── Xác thực OTP ─────────────────────────────────
         valid = False
-        # Kiểm tra tính hợp lệ của mã OTP dựa trên phương thức được chọn, 
-        # nếu là app OTP thì so sánh với mã OTP được tạo từ secret đã lưu trong profile, 
-        # nếu là email OTP thì so sánh với mã OTP đã lưu trong profile và kiểm tra thời gian hết hạn
-        if method == 'app' and profile.has_app_otp:     #
+        if method == 'app' and profile.has_app_otp:
             if code == get_totp_token(profile.otp_secret):
                 valid = True
-        # Nếu mã OTP hợp lệ, thực hiện đăng nhập cho user, 
-        # xoá user_id tạm thời đã lưu trong session, 
-        # nếu là phương thức email OTP thì xoá mã OTP đã lưu trong profile sau khi xác nhận thành công, 
-        # sau đó chuyển hướng về dashboard
         elif method == 'email' and profile.has_email_otp:
             if code == profile.email_otp and profile.otp_expiry > timezone.now():
                 valid = True
-        # Nếu mã OTP không hợp lệ, hiển thị thông báo lỗi trên giao diện
-        # ── XỬ LÝ KẾT QUẢ XÁC THỰC ───────────────────────
+
         if valid:
             login(request, user)
             request.session.pop('pre_2fa_user_id', None)
-            
-            # Nếu là email thì dọn dẹp mã
+
             if method == 'email':
                 profile.email_otp = None
                 profile.save()
+                # ✅ ĐÁNH DẤU ĐÃ DÙNG
+                EmailOTP.objects.filter(
+                    user=user, is_used=False
+                ).order_by('-created_at').first() and \
+                EmailOTP.objects.filter(
+                    user=user, is_used=False
+                ).order_by('-created_at').update(is_used=True)
 
-            # ✅ GHI LOG THÀNH CÔNG
             ActivityLog.objects.create(
-                user=user, 
-                action='login', 
+                user=user, action='login',
                 username_attempt=user.username,
-                ip_address=ip, 
-                user_agent=user_agent
+                ip_address=ip, user_agent=user_agent
             )
             if request.session.get('sso_pending'):
                 request.session.pop('sso_pending', None)
                 return redirect('sso_send')
             return redirect('dashboard')
-        
-        # ✅ GHI LOG THẤT BẠI (Copy đoạn này đè lên cái cũ)
+
+        # ✅ GHI LOG thất bại
         ActivityLog.objects.create(
-            user=user, 
-            action='login_failed', 
+            user=user, action='login_failed',
             username_attempt=user.username,
-            ip_address=ip, 
-            user_agent=user_agent
+            ip_address=ip, user_agent=user_agent
         )
         messages.error(request, 'Mã xác thực không chính xác hoặc hết hạn.')
+
     return render(request, 'accounts/verify_2fa.html', {
-        'methods':           methods,
-        'method':            method,
-        'profile':           profile,
-        'has_app_otp':       profile.has_app_otp,
-        'has_email_otp':     profile.has_email_otp,
-        'has_fido2':         has_fido2,
-        'has_other_devices': other_devices.exists(),
+        'methods': methods, 'method': method, 'profile': profile,
+        'has_app_otp': profile.has_app_otp, 'has_email_otp': profile.has_email_otp,
+        'has_fido2': has_fido2, 'has_other_devices': other_devices.exists(),
         'other_devices_list': list(other_devices[:3]),
         'push_request_sent': push_request_sent,
     })
- 
- 
 
 # ── API: Thiết bị đang online lấy request chờ ────────────
 @login_required
@@ -1487,18 +1462,79 @@ def admin_dashboard(request):
 
 
 
-@login_required
-def admin_users(request):
-    from accounts.models import UserProfile
 
-    profiles = UserProfile.objects.select_related('user').all()
-    fields = [f.name for f in UserProfile._meta.fields]
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def admin_users(request):
+    users = User.objects.prefetch_related('profile', 'groups').all().order_by('-date_joined')
+
+    search      = request.GET.get('search', '').strip()
+    status      = request.GET.get('status', '')
+    twofa       = request.GET.get('2fa', '')
+    date_filter = request.GET.get('date_joined', '')
+
+    # 1. Tìm kiếm
+    if search:
+        users = users.filter(
+            Q(username__icontains=search) |
+            Q(email__icontains=search) |
+            Q(first_name__icontains=search) |
+            Q(last_name__icontains=search)
+        )
+
+    # 2. Trạng thái
+    if status == 'active':
+        users = users.filter(is_active=True)
+    elif status == 'inactive':
+        users = users.filter(is_active=False)
+
+    # 3. Lọc 2FA
+    if twofa == 'enabled':
+        users = users.filter(Q(profile__has_app_otp=True) | Q(profile__has_email_otp=True))
+    elif twofa == 'disabled':
+        users = users.filter(profile__has_app_otp=False, profile__has_email_otp=False)
+    elif twofa == 'forced_off':
+        users = users.filter(profile__force_disable_2fa=True)
+
+    # 4. Lọc ngày tham gia
+    now_dt = timezone.now()
+    if date_filter == 'today':
+        users = users.filter(date_joined__date=now_dt.date())
+    elif date_filter == '7days':
+        users = users.filter(date_joined__gte=now_dt - timedelta(days=7))
+    elif date_filter == '30days':
+        users = users.filter(date_joined__gte=now_dt - timedelta(days=30))
+
+    # 5. Serialize sang JSON cho JS
+    def get_twofa(u):
+        p = getattr(u, 'profile', None)
+        if p:
+            if getattr(p, 'force_disable_2fa', False):
+                return 'admin'
+            if getattr(p, 'has_app_otp', False) or getattr(p, 'has_email_otp', False):
+                return 'on'
+        return 'off'
+
+    users_data = []
+    for u in users:
+        users_data.append({
+            'id':          u.id,
+            'username':    u.username,
+            'email':       u.email or '',
+            'name':        u.get_full_name() or '',
+            'roles':       [g.name for g in u.groups.all()],
+            'twofa':       get_twofa(u),
+            'active':      u.is_active,
+            'is_superuser': u.is_superuser,
+            'last_login':  u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '',
+            'date_joined': u.date_joined.strftime('%d/%m/%Y'),
+        })
 
     return render(request, 'admin_dashboard/users.html', {
-        'profiles': profiles,
-        'fields': fields
+        'users':      users,
+        'users_json': json.dumps(users_data, ensure_ascii=False),
     })
-
 
 
 @login_required
