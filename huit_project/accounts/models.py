@@ -20,7 +20,8 @@ class UserProfile(models.Model):
     phone_number = models.CharField('Số điện thoại', max_length=15, blank=True, default='')
 
     # 2FA — App (Google Authenticator)
-    otp_secret   = models.CharField(max_length=32, default=pyotp.random_base32)
+    otp_secret = models.CharField(max_length=32, default=pyotp.random_base32, blank=True)
+
     has_app_otp  = models.BooleanField(default=False)
 
     # 2FA — Email OTP

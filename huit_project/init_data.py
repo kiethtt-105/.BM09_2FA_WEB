@@ -2,110 +2,142 @@ import os
 import django
 import pyotp
 import random
+import unidecode
 from django.utils import timezone
 from django.db import transaction
 
-# Setup môi trường Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'huit_project.settings')
 django.setup()
 
 from django.contrib.auth.models import User
 from accounts.models import UserProfile, User2FA, ActivityLog
 
-def generate_random_ip():
-    return ".".join(map(str, (random.randint(0, 255) for _ in range(4))))
 
+# ================= HELPERS =================
+def generate_random_ip():
+    return ".".join(str(random.randint(1, 255)) for _ in range(4))
+
+
+def generate_phone():
+    prefix = random.choice(["03", "07", "08", "09"])
+    return prefix + str(random.randint(10000000, 99999999))
+
+
+def generate_username(ho, ten):
+    base = unidecode.unidecode(ten).lower() + unidecode.unidecode(ho[0]).lower()
+    username = base
+    i = 1
+    while User.objects.filter(username=username).exists():
+        username = f"{base}{i}"
+        i += 1
+    return username
+
+
+# ================= MAIN =================
 def run():
-    try:
-        num_users = int(input("Nhập số lượng user mẫu muốn tạo thêm: "))
-    except ValueError:
-        print("Vui lòng nhập một số nguyên!")
+    print("\n===== DEMO DATA SECURITY SEEDER =====")
+
+    print("\n1. Reset sạch + tạo mới")
+    print("2. Giữ dữ liệu + tạo thêm")
+    print("3. Thoát")
+
+    choice = input("👉 Chọn (1/2/3): ").strip()
+
+    if choice == "3":
+        print("❌ Thoát")
         return
 
-    ho_list = ["Phan", "Nguyen", "Tran", "Le", "Pham", "Hoang", "Vu", "Dang", "Bui", "Do", "Ngo", "Duong", "Ly", "Truong", "Trinh"]
-    ten_list = ["Khoi", "An", "Binh", "Cuong", "Dung", "Em", "Giang", "Hai", "Khanh", "Linh", "Minh", "Nam", "Oanh", "Phuc", "Quang", "Son", "Thanh", "Uyen", "Viet", "Yen"]
-    
-    stats = {"EMAIL_ONLY": 0, "APP_ONLY": 0, "FULL_2FA": 0, "BASIC": 0}
+    if choice == "1":
+        print("⚠️ Đang xóa user cũ...")
+        User.objects.exclude(is_superuser=True).exclude(username='admin').delete()
 
-    print(f"\n--- Đang khởi tạo {num_users} User mẫu (Bản fix Unique) ---")
+    elif choice == "2":
+        print("➕ Giữ dữ liệu cũ")
+
+    else:
+        print("❌ Lựa chọn sai")
+        return
+
+    # ===== INPUT =====
+    try:
+        num_users = int(input("👉 Nhập số lượng user: "))
+    except:
+        print("❌ Số không hợp lệ")
+        return
+
+    # ===== DATA NAME =====
+    ho_array = ["Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Phan", "Vũ", "Đặng"]
+    dem_array = ["Văn", "Thị", "Minh", "Anh", "Đức", "Quang", "Ngọc"]
+    ten_array = ["An", "Bình", "Cường", "Dũng", "Hải", "Linh", "Nam", "Phúc", "Tuấn", "Kiệt"]
+
+    print(f"\n--- Đang tạo {num_users} user ---\n")
 
     for i in range(num_users):
         try:
             with transaction.atomic():
-                ho = random.choice(ho_list)
-                ten = random.choice(ten_list)
-                
-                # Tạo Username: tên + chữ đầu của họ
-                base_username = f"{ten.lower()}{ho[0].lower()}"
-                username = base_username
-                suffix = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}{suffix}"
-                    suffix += 1
 
-                # 1. Tạo User mới
-                user = User.objects.create(
+                # ===== NAME =====
+                ho = random.choice(ho_array)
+                dem = random.choice(dem_array)
+                ten = random.choice(ten_array)
+
+                username = generate_username(ho, ten)
+
+                # ===== CREATE USER =====
+                user = User.objects.create_user(
                     username=username,
                     email=f"tuankiet5274+{username}@gmail.com",
-                    first_name=ho,
+                    password="Aa@123456",
+                    first_name=f"{ho} {dem}",
                     last_name=ten,
                     is_active=True
                 )
-                user.set_password('Aa@123456')
-                user.save()
 
-                # Phân loại bảo mật ngẫu nhiên
-                choice = random.choice(["EMAIL", "APP", "BOTH", "NONE"])
-                has_email = choice in ["EMAIL", "BOTH"]
-                has_app = choice in ["APP", "BOTH"]
-                is_req = choice != "NONE"
-                stats[{"EMAIL":"EMAIL_ONLY","APP":"APP_ONLY","BOTH":"FULL_2FA","NONE":"BASIC"}[choice]] += 1
+                # ===== 2FA MODE =====
+                mode = random.choice(["NONE", "EMAIL", "APP", "BOTH"])
 
-                # 2. Tạo UserProfile - Dùng update_or_create để không bao giờ lỗi Unique
-                UserProfile.objects.update_or_create(
-                    user=user,
-                    defaults={
-                        'middle_name': '',
-                        'phone_number': f"09{random.randint(10, 99)}{random.randint(100000, 999999)}",
-                        'has_email_otp': has_email,
-                        'has_app_otp': has_app,
-                        'otp_secret': pyotp.random_base32() if has_email else "",
-                        'has_fido2': False
-                    }
-                )
+                has_email = mode in ["EMAIL", "BOTH"]
+                has_app = mode in ["APP", "BOTH"]
 
-                # 3. Tạo User2FA
+                # ===== PROFILE (FIX UNIQUE + NULL) =====
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+
+                profile.phone_number = generate_phone()
+                profile.has_email_otp = has_email
+                profile.has_app_otp = has_app
+
+                profile.otp_secret = pyotp.random_base32()
+                profile.save()
+
+                # ===== USER2FA =====
                 User2FA.objects.update_or_create(
                     user=user,
                     defaults={
-                        'google_auth_enabled': has_app,
-                        'email_otp_enabled': has_email,
-                        'google_secret': pyotp.random_base32() if has_app else None,
-                        'is_required': is_req,
-                        'force_disable_2fa': False
+                        "google_auth_enabled": has_app,
+                        "email_otp_enabled": has_email,
+                        "google_secret": pyotp.random_base32() if has_app else None,
+                        "is_required": (mode != "NONE"),
+                        "force_disable_2fa": False
                     }
                 )
 
-                # 4. Ghi log với IP ngẫu nhiên
-                random_ip = generate_random_ip()
+                # ===== LOG =====
                 ActivityLog.objects.create(
                     user=user,
-                    action='batch_init_pro',
-                    ip_address=random_ip,
+                    action="demo_seed",
+                    ip_address=generate_random_ip(),
                     username_attempt=username,
-                    user_agent=f'Sec:{choice}|IP:{random_ip}',
+                    user_agent=f"Mode/{mode}",
                     timestamp=timezone.now()
                 )
-                print(f"OK: {username} | Pass: Aa@123456 | IP: {random_ip}")
+
+                print(f"✔ {username} | {mode}")
 
         except Exception as e:
-            print(f"Lỗi tại user {i+1}: {e}")
+            print(f"❌ Lỗi user {i}: {e}")
 
-    print("\n" + "="*50)
-    print(f" HOÀN TẤT: ĐÃ TẠO {num_users} USER")
-    print(f" 📧 Email: {stats['EMAIL_ONLY']} | 📱 App: {stats['APP_ONLY']}")
-    print(f" 🔐 Cả hai: {stats['FULL_2FA']} | 🔓 Cơ bản: {stats['BASIC']}")
-    print("="*50)
+    print("\n===== DONE =====")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     run()

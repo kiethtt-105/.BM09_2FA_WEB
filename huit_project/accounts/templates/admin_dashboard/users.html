@@ -3,9 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HUIT Admin – Quản lý Người dùng</title>
+    <title>HUIT · Quản lý Người dùng</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .table-row { transition: all 0.2s ease; }
+        .table-row:hover { background-color: #27272a !important; }
+        .av {
+            width: 34px; height: 34px; border-radius: 9999px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 13px; flex-shrink: 0;
+        }
+    </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 
@@ -16,137 +25,257 @@
             <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center text-3xl font-bold text-white">H</div>
             <h1 class="text-3xl font-bold">HUIT</h1>
         </div>
+
         <nav class="space-y-1">
-            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">👥 Quản lý Người dùng</a>
-            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">🔑 Lịch sử OTP</a>
-            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">📋 Hoạt động Đăng nhập</a>
-        
+            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">
+                👥 Quản lý Người dùng
+            </a>
+            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
+                🔑 Lịch sử OTP
+            </a>
+            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
+                📋 Hoạt động Đăng nhập
+            </a>
         </nav>
     </div>
 
     <!-- Main Content -->
     <div class="flex-1 ml-72 p-10">
         <div class="flex justify-between items-center mb-8">
-            <h1 class="text-4xl font-bold">Quản lý Người dùng</h1>
-            <div class="flex gap-3">
+            <div class="flex items-center gap-4">
+                <i class="fas fa-users text-4xl text-violet-500"></i>
+                <div>
+                    <h1 class="text-3xl font-bold">Quản lý Người dùng</h1>
+                    <p class="text-zinc-400">Quản lý tài khoản, phân quyền và bảo mật 2FA</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
                 <a href="{% url 'export_users_excel' %}" 
-                   class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-2xl flex items-center gap-2">
+                   class="bg-violet-600 hover:bg-violet-700 px-6 py-3 rounded-2xl font-medium flex items-center gap-2">
                     <i class="fas fa-file-excel"></i> Xuất Excel
                 </a>
-                <a href="/admin/auth/user/add/" 
-                    target="_blank"
-                    class="bg-violet-600 hover:bg-violet-700 px-6 py-3 rounded-2xl font-medium flex items-center gap-2 transition-all shadow-lg shadow-violet-500/30">
-                        <i class="fas fa-plus"></i> 
-                        Thêm người dùng mới
-                    </a>
+                <a href="/admin/auth/user/add/" target="_blank"
+                   class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-2xl font-medium flex items-center gap-2">
+                    <i class="fas fa-plus"></i> Thêm người dùng
+                </a>
             </div>
         </div>
 
-        <!-- Stat Cards -->
-        <div class="grid grid-cols-4 gap-4 mb-8">
-            <div class="bg-zinc-900 rounded-3xl p-6">
-                <div class="text-zinc-400 text-sm">Tổng người dùng</div>
-                <div class="text-4xl font-bold mt-2">{{ total_users|default:0 }}</div>
+        <!-- Stats -->
+        <div class="grid grid-cols-4 gap-6 mb-10">
+            <div class="bg-zinc-900 rounded-3xl p-6 border border-zinc-800">
+                <div class="text-zinc-400 text-sm mb-1">TỔNG NGƯỜI DÙNG</div>
+                <div class="text-4xl font-bold" id="s1">—</div>
             </div>
-            <div class="bg-zinc-900 rounded-3xl p-6">
-                <div class="text-zinc-400 text-sm">Đang hoạt động</div>
-                <div class="text-4xl font-bold mt-2 text-emerald-400">{{ active_users|default:0 }}</div>
+            <div class="bg-zinc-900 rounded-3xl p-6 border border-emerald-500/20">
+                <div class="flex items-center gap-2 text-emerald-400 text-sm mb-1"><i class="fas fa-circle-check"></i> ĐANG HOẠT ĐỘNG</div>
+                <div class="text-4xl font-bold text-emerald-400" id="s2">—</div>
             </div>
-            <div class="bg-zinc-900 rounded-3xl p-6">
-                <div class="text-zinc-400 text-sm">Đã bật 2FA</div>
-                <div class="text-4xl font-bold mt-2 text-violet-400">{{ twofa_users|default:0 }}</div>
+            <div class="bg-zinc-900 rounded-3xl p-6 border border-violet-500/20">
+                <div class="flex items-center gap-2 text-violet-400 text-sm mb-1"><i class="fas fa-shield-halved"></i> ĐÃ BẬT 2FA</div>
+                <div class="text-4xl font-bold text-violet-400" id="s3">—</div>
             </div>
-            <div class="bg-zinc-900 rounded-3xl p-6">
-                <div class="text-zinc-400 text-sm">Bị khóa</div>
-                <div class="text-4xl font-bold mt-2 text-red-400">{{ locked_users|default:0 }}</div>
+            <div class="bg-zinc-900 rounded-3xl p-6 border border-red-500/20">
+                <div class="flex items-center gap-2 text-red-400 text-sm mb-1"><i class="fas fa-ban"></i> BỊ KHÓA</div>
+                <div class="text-4xl font-bold text-red-400" id="s4">—</div>
             </div>
         </div>
 
         <!-- Filter -->
-        <form method="GET" class="bg-zinc-900 rounded-3xl p-6 mb-6">
-            <div class="flex gap-4">
-                <input type="text" name="search" value="{{ request.GET.search }}" 
-                       class="flex-1 bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3"
-                       placeholder="Tìm Username, Email hoặc Họ tên...">
-                <button type="submit" class="bg-violet-600 hover:bg-violet-700 px-8 py-3 rounded-2xl">
-                    🔍 Tìm kiếm
-                </button>
-                <a href="/admin-dashboard/users/" class="bg-zinc-800 hover:bg-zinc-700 px-6 py-3 rounded-2xl">
-                    Xóa lọc
-                </a>
+        <div class="bg-zinc-900 rounded-3xl p-6 mb-10">
+            <div class="grid grid-cols-12 gap-4 items-end">
+                <div class="col-span-4">
+                    <label class="block text-xs text-zinc-400 mb-2">TÌM KIẾM</label>
+                    <div class="relative">
+                        <input type="text" id="fq" placeholder="Username, Email hoặc Họ tên..." 
+                               oninput="filt()" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 pl-11">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"></i>
+                    </div>
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs text-zinc-400 mb-2">TRẠNG THÁI</label>
+                    <select id="fs" onchange="filt()" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3">
+                        <option value="">Tất cả</option>
+                        <option value="active">✅ Hoạt động</option>
+                        <option value="inactive">🔒 Đã khóa</option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs text-zinc-400 mb-2">2FA</label>
+                    <select id="f2" onchange="filt()" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3">
+                        <option value="">Tất cả</option>
+                        <option value="on">✅ Đã bật</option>
+                        <option value="off">❌ Chưa bật</option>
+                        <option value="admin">🚫 Admin tắt</option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <button onclick="clrFilt()" class="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 py-3 rounded-2xl font-medium">
+                        ❌ Xóa lọc
+                    </button>
+                </div>
             </div>
-        </form>
+        </div>
 
         <!-- Table -->
         <div class="bg-zinc-900 rounded-3xl overflow-hidden">
+            <div class="px-8 py-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950">
+                <div class="flex items-center gap-4">
+                    <input type="checkbox" id="sa" onchange="togAll()" class="w-5 h-5 accent-violet-600">
+                    <select id="ba" class="bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-2 text-sm">
+                        <option value="">Hành động hàng loạt...</option>
+                        <option value="lock">🔒 Khóa</option>
+                        <option value="unlock">🔓 Mở khóa</option>
+                    </select>
+                    <button onclick="doBulk()" class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-2xl text-sm font-medium">
+                        Thực hiện
+                    </button>
+                </div>
+                <div class="text-sm text-zinc-400">
+                    Hiển thị <strong id="cn">0</strong> / <strong id="ct">0</strong> người dùng
+                </div>
+            </div>
+
             <table class="w-full">
-                <thead class="bg-zinc-800">
-                    <tr>
-                        <th class="p-5 text-left">Username</th>
-                        <th class="p-5 text-left">Email</th>
-                        <th class="p-5 text-left">Họ tên</th>
-                        <th class="p-5 text-left">Vai trò</th>
-                        <th class="p-5 text-center">2FA</th>
-                        <th class="p-5 text-center">Trạng thái</th>
-                        <th class="p-5 text-center">Last Login</th>
-                        <th class="p-5 text-center">Ngày tham gia</th>
-                        <th class="p-5 text-center">Hành động</th>
+                <thead>
+                    <tr class="border-b border-zinc-800 text-xs uppercase text-zinc-400">
+                        <th class="w-12 py-5 px-8"></th>
+                        <th class="text-left py-5 px-8">Người dùng</th>
+                        <th class="text-left py-5 px-8">Email</th>
+                        <th class="text-left py-5 px-8">Vai trò</th>
+                        <th class="text-center py-5 px-8">2FA</th>
+                        <th class="text-center py-5 px-8">Trạng thái</th>
+                        <th class="text-center py-5 px-8">Last Login</th>
+                        <th class="text-center py-5 px-8">Tham gia</th>
+                        <th class="text-center py-5 px-8">Thao tác</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-800">
-                    {% for user in users %}
-                    <tr class="hover:bg-zinc-800 transition">
-                        <td class="p-5 font-medium">{{ user.username }}</td>
-                        <td class="p-5">{{ user.email|default:"—" }}</td>
-                        <td class="p-5">{{ user.get_full_name|default:"—" }}</td>
-                        <td class="p-5">
-                            {% if user.is_superuser %}<span class="bg-red-900 text-red-300 px-3 py-1 rounded-full text-xs">Super Admin</span>{% endif %}
-                            {% if user.is_staff and not user.is_superuser %}<span class="bg-blue-900 text-blue-300 px-3 py-1 rounded-full text-xs">Admin</span>{% endif %}
-                        </td>
-                        <td class="p-5 text-center">
-                            {% if user.profile %}
-                                {% if user.profile.has_app_otp or user.profile.has_email_otp or user.profile.has_fido2 %}
-                                    <span class="text-emerald-400 font-bold">✅ Đã bật</span>
-                                {% else %}
-                                    <span class="text-amber-400">❌ Chưa bật</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="text-amber-400">❌ Chưa bật</span>
-                            {% endif %}
-                        </td>
-                        <td class="p-5 text-center">
-                            {% if user.is_active %}
-                                <span class="text-emerald-400">Hoạt động</span>
-                            {% else %}
-                                <span class="text-red-400">Đã khóa</span>
-                            {% endif %}
-                        </td>
-                        <td class="p-5 text-center text-zinc-400">
-                            {{ user.last_login|date:"d/m/Y H:i"|default:"Chưa đăng nhập" }}
-                        </td>
-                        <td class="p-5 text-center text-zinc-400">
-                            {{ user.date_joined|date:"d/m/Y" }}
-                        </td>
-                        <td class="p-5 text-center">
-                            <a href="{% url 'admin:auth_user_change' user.id %}" 
-                            target="_blank"
-                            class="text-blue-400 hover:text-blue-300 mx-2" 
-                            title="Chỉnh sửa (Mở tab mới)">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="9" class="p-12 text-center text-zinc-500">
-                            Không tìm thấy người dùng nào
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <tbody id="tb"></tbody>
             </table>
         </div>
     </div>
 </div>
+
+{{ users_json|json_script:"users-data" }}
+{% csrf_token %}
+
+<script>
+// ==================== DEBUG & FIXED ====================
+
+const ALL = JSON.parse(document.getElementById('users-data').textContent || '[]');
+
+
+console.log("🔥 Total users loaded:", ALL.length);
+if (ALL.length > 0) console.log("Sample user:", ALL[0]);
+
+
+function stats() {
+    document.getElementById('s1').textContent = ALL.length;
+    document.getElementById('s2').textContent = ALL.filter(u => u.active).length;
+    document.getElementById('s3').textContent = ALL.filter(u => u.twofa === 'on').length;
+    document.getElementById('s4').textContent = ALL.filter(u => !u.active).length;
+}
+
+function getFilteredData() {
+    const q = document.getElementById('fq').value.toLowerCase().trim();
+    const status = document.getElementById('fs').value;
+    const twofaFilter = document.getElementById('f2').value;
+
+    return ALL.filter(u => {
+        // Lọc theo tìm kiếm
+        const matchSearch = !q || 
+            u.username.toLowerCase().includes(q) || 
+            (u.email || '').toLowerCase().includes(q) ||
+            (u.name || '').toLowerCase().includes(q);
+
+        if (!matchSearch) return false;
+
+        // Lọc theo trạng thái
+        if (status === 'active' && !u.active) return false;
+        if (status === 'inactive' && u.active) return false;
+
+        // Lọc theo 2FA
+        if (twofaFilter === 'on' && u.twofa !== 'on') return false;
+        if (twofaFilter === 'off' && u.twofa !== 'off') return false;
+        if (twofaFilter === 'admin' && u.twofa !== 'admin') return false;
+
+        return true;
+    });
+}
+
+function render(data) {
+    const tb = document.getElementById('tb');
+    document.getElementById('cn').textContent = data.length;
+    document.getElementById('ct').textContent = ALL.length;
+
+    if (!data.length) {
+        tb.innerHTML = `<tr><td colspan="9" class="py-20 text-center text-zinc-400">Không tìm thấy người dùng</td></tr>`;
+        return;
+    }
+
+    tb.innerHTML = data.map(u => {
+        const ini = (u.name || u.username).substring(0, 2).toUpperCase();
+        return `
+        <tr class="table-row border-b border-zinc-800 last:border-none">
+            <td class="py-5 px-8"><input type="checkbox" class="ucb w-4 h-4 accent-violet-600" value="${u.id}"></td>
+            <td class="py-5 px-8">
+                <div class="flex items-center gap-4">
+                    <div class="av bg-violet-600 text-white">${ini}</div>
+                    <div>
+                        <div class="font-semibold">${u.username}</div>
+                        <div class="text-xs text-zinc-500">${u.name || ''}</div>
+                    </div>
+                </div>
+            </td>
+            <td class="py-5 px-8 text-zinc-400">${u.email || '—'}</td>
+            <td class="py-5 px-8">${u.is_superuser ? '👑 Superuser' : u.roles && u.roles.length ? u.roles.join(', ') : '—'}</td>
+            <td class="py-5 px-8 text-center">
+                ${u.twofa === 'on' ? '✅ Đã bật' : u.twofa === 'admin' ? '🚫 Tắt bởi Admin' : '❌ Chưa bật'}
+            </td>
+            <td class="py-5 px-8 text-center">
+                ${u.active ? 
+                    '<span class="px-4 py-1 text-xs bg-emerald-500/10 text-emerald-400 rounded-full">Hoạt động</span>' : 
+                    '<span class="px-4 py-1 text-xs bg-red-500/10 text-red-400 rounded-full">Đã khóa</span>'}
+            </td>
+            <td class="py-5 px-8 text-center text-xs text-zinc-400">${u.last_login || '—'}</td>
+            <td class="py-5 px-8 text-center text-xs text-zinc-400">${u.date_joined}</td>
+            <td class="py-5 px-8 text-center">
+                <a href="/admin/auth/user/${u.id}/change/" target="_blank" class="text-violet-400 hover:text-white">
+                    <i class="fas fa-edit"></i>
+                </a>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function filt() {
+    const filtered = getFilteredData();
+    render(filtered);
+}
+
+function clrFilt() {
+    document.getElementById('fq').value = '';
+    document.getElementById('fs').value = '';
+    document.getElementById('f2').value = '';
+    render(ALL);
+}
+
+function togAll() {
+    document.querySelectorAll('.ucb').forEach(cb => cb.checked = document.getElementById('sa').checked);
+}
+
+function doBulk() {
+    alert("Chức năng đang phát triển!");
+}
+
+// Khởi chạy
+document.addEventListener('DOMContentLoaded', () => {
+    stats();
+    render(ALL);
+    console.log('%c✅ Users Page Loaded - ' + ALL.length + ' users', 'color:#a78bfa; font-weight:bold');
+});
+
+
+</script>
 </body>
 </html>

@@ -445,7 +445,6 @@ HUIT System""",
         if not confirm_disable:
             return redirect('dashboard')
     
-    urrent_session = request.session.session_key
     current_session = request.session.session_key
     device = TrustedDevice.objects.filter(
         user=request.user, 
@@ -713,6 +712,8 @@ def respond_auth_request(request, req_id):
 def check_auth_status(request):
     from .models import RemoteAuthRequest
     session_key = request.session.session_key
+    ip = get_client_ip(request)
+    user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
     req = RemoteAuthRequest.objects.filter(
         session_key=session_key
     ).order_by('-created_at').first()
@@ -1068,7 +1069,7 @@ def export_users_excel(request):
                    u.date_joined.strftime("%d/%m/%Y"), status])
     response = HttpResponse(content_type='application/ms-excel')
     #response['Content-Disposition'] = 'attachment; filename = f"Huit_Auth_User_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"'
-    response['Content-Disposition'] = f'attachment; filename="Huit_Auth_User_Log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="Huit_Auth_User_Log_{  timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
     wb.save(response)
     return response
 
@@ -1409,21 +1410,13 @@ def admin_dashboard(request):
     }
     return render(request, 'admin_dashboard/dashboard.html', context)
 
-
-
-
-
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_users(request):
     users = User.objects.prefetch_related('profile', 'groups').all().order_by('-date_joined')
 
-    search      = request.GET.get('search', '').strip()
-    status      = request.GET.get('status', '')
-    twofa       = request.GET.get('2fa', '')
-    date_filter = request.GET.get('date_joined', '')
-
-    # 1. Tìm kiếm
+    # Lọc server-side (nếu có search từ URL)
+    search = request.GET.get('search', '').strip()
     if search:
         users = users.filter(
             Q(username__icontains=search) |
@@ -1432,60 +1425,39 @@ def admin_users(request):
             Q(last_name__icontains=search)
         )
 
-    # 2. Trạng thái
-    if status == 'active':
-        users = users.filter(is_active=True)
-    elif status == 'inactive':
-        users = users.filter(is_active=False)
-
-    # 3. Lọc 2FA
-    if twofa == 'enabled':
-        users = users.filter(Q(profile__has_app_otp=True) | Q(profile__has_email_otp=True))
-    elif twofa == 'disabled':
-        users = users.filter(profile__has_app_otp=False, profile__has_email_otp=False)
-    elif twofa == 'forced_off':
-        users = users.filter(profile__force_disable_2fa=True)
-
-    # 4. Lọc ngày tham gia
-    now_dt = timezone.now()
-    if date_filter == 'today':
-        users = users.filter(date_joined__date=now_dt.date())
-    elif date_filter == '7days':
-        users = users.filter(date_joined__gte=now_dt - timedelta(days=7))
-    elif date_filter == '30days':
-        users = users.filter(date_joined__gte=now_dt - timedelta(days=30))
-
-    # 5. Serialize sang JSON cho JS
     def get_twofa(u):
-        p = getattr(u, 'profile', None)
-        if p:
+        try:
+            p = getattr(u, 'profile', None)
+            if not p:
+                return 'off'
             if getattr(p, 'force_disable_2fa', False):
                 return 'admin'
             if getattr(p, 'has_app_otp', False) or getattr(p, 'has_email_otp', False):
                 return 'on'
-        return 'off'
+            return 'off'
+        except:
+            return 'off'
 
     users_data = []
     for u in users:
         users_data.append({
-            'id':          u.id,
-            'username':    u.username,
-            'email':       u.email or '',
-            'name':        u.get_full_name() or '',
-            'roles':       [g.name for g in u.groups.all()],
-            'twofa':       get_twofa(u),
-            'active':      u.is_active,
+            'id': u.id,
+            'username': u.username,
+            'email': u.email or '',
+            'name': u.get_full_name() or '',
+            'roles': [g.name for g in u.groups.all()],
+            'twofa': get_twofa(u),
+            'active': u.is_active,
             'is_superuser': u.is_superuser,
-            'last_login':  u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '',
+            'last_login': u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—',
             'date_joined': u.date_joined.strftime('%d/%m/%Y'),
         })
 
     return render(request, 'admin_dashboard/users.html', {
-        'users':      users,
         'users_json': json.dumps(users_data, ensure_ascii=False),
     })
-
-
+    
+    
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_otp_history(request):
@@ -1578,81 +1550,37 @@ def user_list(request):
     return render(request, 'admin/users.html', context)
 
 
+# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+# THAY THẾ HOÀN TOÀN hàm user_list_view() trong views.py
+# Tìm def user_list_view(request): → xóa hết → paste cái này vào
+# ═══════════════════════════════════════════════════════════════
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def user_list_view(request):
-    users = User.objects.select_related('profile').prefetch_related('groups').all().order_by('-date_joined')
-
-    search      = request.GET.get('search', '').strip()
-    status      = request.GET.get('status')
-    twofa       = request.GET.get('2fa')
-    date_filter = request.GET.get('date_joined')
-
-    # 1. Tìm kiếm
-    if search:
-        users = users.filter(
-            Q(username__icontains=search) |
-            Q(email__icontains=search) |
-            Q(first_name__icontains=search) |
-            Q(last_name__icontains=search)
-        )
-
-    # 2. Trạng thái
-    if status == 'active':
-        users = users.filter(is_active=True)
-    elif status == 'inactive':
-        users = users.filter(is_active=False)
-
-    # 3. Lọc 2FA
-    if twofa == 'enabled':
-        users = users.filter(Q(profile__has_app_otp=True) | Q(profile__has_email_otp=True))
-    elif twofa == 'disabled':
-        users = users.filter(profile__has_app_otp=False, profile__has_email_otp=False)
-    elif twofa == 'forced_off':
-        users = users.filter(profile__force_disable_2fa=True)  # nếu có trường này
-
-    # 4. Ngày tham gia
-    now_dt = timezone.now()
-    if date_filter == 'today':
-        users = users.filter(date_joined__date=now_dt.date())
-    elif date_filter == '7days':
-        users = users.filter(date_joined__gte=now_dt - timedelta(days=7))
-    elif date_filter == '30days':
-        users = users.filter(date_joined__gte=now_dt - timedelta(days=30))
-
-    # 5. Serialize sang JSON để JS dùng trực tiếp
-    def get_twofa(u):
-        p = getattr(u, 'profile', None)
-        if p:
-            if getattr(p, 'force_disable_2fa', False):
-                return 'admin'
-            if getattr(p, 'has_app_otp', False) or getattr(p, 'has_email_otp', False):
-                return 'on'
-        return 'off'
-
-    users_data = [
-        {
-            'id':         u.id,
-            'username':   u.username,
-            'email':      u.email or '',
-            'name':       u.get_full_name() or '',
-            'roles':      [g.name for g in u.groups.all()],
-            'twofa':      get_twofa(u),
-            'active':     u.is_active,
+    from django.contrib.auth.models import User
+    import json
+    
+    users_data = []
+    for u in User.objects.all():
+        users_data.append({
+            'id': u.id,
+            'username': u.username,
+            'email': u.email or '',
+            'name': u.get_full_name() or '',
+            'roles': [],
+            'twofa': 'off',
+            'active': u.is_active,
+            'is_superuser': u.is_superuser,
+            'is_staff': u.is_staff,
             'last_login': u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '',
             'date_joined': u.date_joined.strftime('%d/%m/%Y'),
-        }
-        for u in users
-    ]
-
-    context = {
-        'users':      users,        # vẫn giữ để các tag Django template khác dùng nếu cần
+        })
+    
+    print(f"[TEST] count={len(users_data)}")
+    return render(request, 'admin_dashboard/users.html', {
         'users_json': json.dumps(users_data, ensure_ascii=False),
-    }
-    #return render(request, 'accounts/user_management.html', context)
-    return render(request, 'admin_dashboard/users.html', context)
-
-
+    })
 # 4. TRANG QUẢN LÝ USER (Dành cho admin)@login_required
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
@@ -1933,3 +1861,4 @@ def export_otp_excel(request):
 
     wb.save(response)
     return response
+
