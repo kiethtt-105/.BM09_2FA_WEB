@@ -1413,51 +1413,11 @@ def admin_dashboard(request):
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_users(request):
-    users = User.objects.prefetch_related('profile', 'groups').all().order_by('-date_joined')
+    users = User.objects.select_related('profile').prefetch_related('groups').all().order_by('-date_joined')
+    return render(request, 'admin_dashboard/users.html', {'users': users})
 
-    # Lọc server-side (nếu có search từ URL)
-    search = request.GET.get('search', '').strip()
-    if search:
-        users = users.filter(
-            Q(username__icontains=search) |
-            Q(email__icontains=search) |
-            Q(first_name__icontains=search) |
-            Q(last_name__icontains=search)
-        )
 
-    def get_twofa(u):
-        try:
-            p = getattr(u, 'profile', None)
-            if not p:
-                return 'off'
-            if getattr(p, 'force_disable_2fa', False):
-                return 'admin'
-            if getattr(p, 'has_app_otp', False) or getattr(p, 'has_email_otp', False):
-                return 'on'
-            return 'off'
-        except:
-            return 'off'
 
-    users_data = []
-    for u in users:
-        users_data.append({
-            'id': u.id,
-            'username': u.username,
-            'email': u.email or '',
-            'name': u.get_full_name() or '',
-            'roles': [g.name for g in u.groups.all()],
-            'twofa': get_twofa(u),
-            'active': u.is_active,
-            'is_superuser': u.is_superuser,
-            'last_login': u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—',
-            'date_joined': u.date_joined.strftime('%d/%m/%Y'),
-        })
-
-    return render(request, 'admin_dashboard/users.html', {
-        'users_json': json.dumps(users_data, ensure_ascii=False),
-    })
-    
-    
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_otp_history(request):
@@ -1549,78 +1509,51 @@ def user_list(request):
     context = {'users': users}
     return render(request, 'admin/users.html', context)
 
-
-# ═══════════════════════════════════════════════════════════════
-# ═══════════════════════════════════════════════════════════════
-# THAY THẾ HOÀN TOÀN hàm user_list_view() trong views.py
-# Tìm def user_list_view(request): → xóa hết → paste cái này vào
-# ═══════════════════════════════════════════════════════════════
-@login_required
-@user_passes_test(lambda u: u.is_staff or u.is_superuser)
-def user_list_view(request):
-    from django.contrib.auth.models import User
-    import json
-    
-    users_data = []
-    for u in User.objects.all():
-        users_data.append({
-            'id': u.id,
-            'username': u.username,
-            'email': u.email or '',
-            'name': u.get_full_name() or '',
-            'roles': [],
-            'twofa': 'off',
-            'active': u.is_active,
-            'is_superuser': u.is_superuser,
-            'is_staff': u.is_staff,
-            'last_login': u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '',
-            'date_joined': u.date_joined.strftime('%d/%m/%Y'),
-        })
-    
-    print(f"[TEST] count={len(users_data)}")
-    return render(request, 'admin_dashboard/users.html', {
-        'users_json': json.dumps(users_data, ensure_ascii=False),
-    })
-# 4. TRANG QUẢN LÝ USER (Dành cho admin)@login_required
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def user_management(request):
-    # Lấy danh sách user
+    # 1. Query dữ liệu: Dùng select_related để gộp bảng Profile giúp load nhanh
     users = User.objects.select_related('profile').prefetch_related('groups').order_by('-date_joined')
 
-    # Tìm kiếm
+    # 2. Nhận tham số từ bộ lọc (Filter) trên giao diện
     search = request.GET.get('search', '').strip()
+    status_filter = request.GET.get('status', '')
+    twofa_filter = request.GET.get('2fa', '')
+
+    # 3. Thực hiện lọc dữ liệu
     if search:
         users = users.filter(
-            Q(username__icontains=search) |
-            Q(email__icontains=search) |
-            Q(first_name__icontains=search) |
-            Q(last_name__icontains=search)
+            Q(username__icontains=search) | Q(email__icontains=search) |
+            Q(first_name__icontains=search) | Q(last_name__icontains=search)
         )
+    
+    if status_filter == 'active':
+        users = users.filter(is_active=True)
+    elif status_filter == 'locked':
+        users = users.filter(is_active=False)
 
-    # ==================== TÍNH TOÁN STAT CARDS ====================
-    total_users = users.count()
-    active_users = users.filter(is_active=True).count()
-    locked_users = total_users - active_users
+    if twofa_filter == 'on':
+        users = users.filter(Q(profile__has_app_otp=True) | Q(profile__has_email_otp=True))
+    elif twofa_filter == 'off':
+        users = users.filter(profile__has_app_otp=False, profile__has_email_otp=False)
 
-    # Đếm user có bật 2FA
-    twofa_users = users.filter(
-        Q(profile__has_app_otp=True) | 
-        Q(profile__has_email_otp=True) | 
-        Q(profile__has_fido2=True)
-    ).distinct().count()
+    # 4. Tính toán số liệu cho các thẻ thống kê (Stat Cards)[cite: 2]
+    total_users = User.objects.count()
+    active_count = User.objects.filter(is_active=True).count()
+    twofa_on_count = UserProfile.objects.filter(Q(has_app_otp=True) | Q(has_email_otp=True)).count()
 
     context = {
         'users': users,
         'total_users': total_users,
-        'active_users': active_users,
-        'locked_users': locked_users,
-        'twofa_users': twofa_users,
+        'active_users': active_count,
+        'locked_users': total_users - active_count,
+        'twofa_users': twofa_on_count,
+        # Trả lại các giá trị lọc để giữ trạng thái trên thanh input[cite: 2]
+        'search_val': search,
+        'status_val': status_filter,
+        'twofa_val': twofa_filter,
     }
-
-    #return render(request, 'accounts/users.html', context)
     return render(request, 'admin_dashboard/users.html', context)
-
 def is_admin(user):
     return user.is_superuser
 
@@ -1862,3 +1795,22 @@ def export_otp_excel(request):
     wb.save(response)
     return response
 
+
+@user_passes_test(lambda u: u.is_superuser)
+def admin_toggle_status(request, user_id):
+    # Lấy user cần thao tác, nếu không thấy trả về 404
+    target_user = get_object_or_404(User, id=user_id)
+    
+    # Không cho phép khóa chính mình hoặc các Admin khác để đảm bảo an toàn
+    if target_user.is_superuser:
+        messages.error(request, "Không thể thao tác trên tài khoản Quản trị viên.")
+    else:
+        # Đảo ngược trạng thái is_active[cite: 2]
+        target_user.is_active = not target_user.is_active
+        target_user.save()
+        
+        status_text = "mở khóa" if target_user.is_active else "khóa"
+        messages.success(request, f"Đã {status_text} tài khoản {target_user.username} thành công.")
+    
+    # Quay lại trang quản lý người dùng[cite: 2]
+    return redirect('admin_users')

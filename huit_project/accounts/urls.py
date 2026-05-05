@@ -50,10 +50,11 @@ urlpatterns = [
     path('export-excel/', views.export_otp_excel, name='export_otp_excel'),
     # SSO Endpoint  
     path('sso/send/', views.sso_send, name='sso_send'),
-    path('admin-dashboard/users/', views.user_list_view, name='user_management'),
 
+    path('admin-dashboard/users/', views.user_management, name='admin_users'),
 
     path('admin-dashboard/export-users-excel/', views.export_users_excel, name='export_users_excel'),
+    path('admin-dashboard/users/toggle/<int:user_id>/', views.admin_toggle_status, name='admin_toggle_status'),
     
     
     
