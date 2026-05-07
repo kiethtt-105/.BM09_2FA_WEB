@@ -13,8 +13,6 @@ import hashlib
 from cryptography.fernet import Fernet
 from django.conf import settings
 
-
-# Mở rộng User mặc định bằng UserProfile để lưu thêm thông tin cá nhân và cấu hình 2FA
 class UserProfile(models.Model):
     user         = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     middle_name  = models.CharField('Chữ đệm', max_length=50, blank=True, default='')
@@ -62,7 +60,7 @@ class UserProfile(models.Model):
         parts = [self.user.first_name, self.middle_name, self.user.last_name]
         return ' '.join(p for p in parts if p)
 
-# Model lưu tạm dữ liệu đăng ký trước khi xác thực OTP
+
 class PendingRegistration(models.Model):
     """
     Lưu tạm dữ liệu đăng ký trước khi xác thực OTP.
@@ -85,7 +83,7 @@ class PendingRegistration(models.Model):
     def __str__(self):
         return f"PendingReg({self.email})"
 
-# Model lưu OTP ngắn hạn cho email (dùng cho 2FA login)
+
 class EmailOTP(models.Model):
     user       = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     otp_code   = models.CharField(max_length=6)
@@ -100,7 +98,7 @@ class EmailOTP(models.Model):
             self.otp_hash = hashlib.sha256(self.otp_code.encode()).hexdigest()
         super().save(*args, **kwargs)
 
-#   Model lưu lịch sử hoạt động quan trọng của user (đăng nhập, đăng xuất, OTP, 2FA...)
+
 class ActivityLog(models.Model):
     ACTION_CHOICES = [
         ('login', 'Đăng nhập'),
@@ -133,30 +131,18 @@ class ActivityLog(models.Model):
     def __str__(self):
         username = self.user.username if self.user else self.username_attempt
         return f"{username} - {self.get_action_display()} - {self.timestamp.strftime('%d/%m/%Y %H:%M')}"
-# Model lưu OTP tạm thời cho các mục đích khác (ví dụ: xác thực 2FA login, reset mật khẩu...)
-class OTP(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    code = models.CharField(max_length=6)
-    created_at = models.DateTimeField(auto_now_add=True)
-    # Trường này để phân biệt mục đích của OTP (ví dụ: '2fa_login', 'password_reset', v.v.)
-    def is_expired(self):
-        # Thiết lập thời gian hết hạn là 2 phút
-        return timezone.now() > self.created_at + datetime.timedelta(minutes=2)
-  
-# Tự động tạo UserProfile khi tạo User mới  
-@receiver(post_save, sender=User) # Khi User được lưu (tạo mới hoặc cập nhật)
-# Nếu là tạo mới (created=True) → tự động tạo UserProfile liên kết với User đó
+
+
+@receiver(post_save, sender=User) 
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.get_or_create(user=instance)
 
-# Tự động lưu UserProfile khi User được lưu (đảm bảo đồng bộ)
-@receiver(post_save, sender=User) # Khi User được lưu → tự động lưu UserProfile liên quan (đảm bảo đồng bộ)
-# Lưu ý: Thực tế có thể không cần thiết nếu chỉ tạo UserProfile khi tạo User, nhưng để đảm bảo mọi thay đổi đều được lưu
+
+@receiver(post_save, sender=User) 
 def save_user_profile(sender, instance, **kwargs):
     instance.profile.save()
     
-   # Model lưu thiết bị tin cậy (trusted device) để bỏ qua 2FA cho những lần đăng nhập sau từ thiết bị đó 
 class TrustedDevice(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
 
@@ -175,7 +161,7 @@ class TrustedDevice(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.name}"
     
-# Model lưu cấu hình 2FA của user (bật/tắt từng phương thức, khóa bí mật cho Google Authenticator, v.v.)
+
 class User2FA(models.Model):
     user = models.OneToOneField(
         User, 
@@ -208,13 +194,11 @@ class User2FA(models.Model):
             return False
         return self.email_otp_enabled or self.google_auth_enabled
 
-# Model để admin có thể kiểm soát phiên đăng nhập của user (ví dụ: bắt buộc đăng xuất, xem lịch sử đăng nhập, v.v.) 
 class UserSessionControl(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE) # Liên kết 1-1 với User để lưu thông tin về phiên đăng nhập và kiểm soát
     force_logout = models.BooleanField(default=False)# Trường này để admin có thể bắt buộc user phải đăng xuất (khi admin bật lên thì user sẽ bị đăng xuất ở lần tương tác tiếp theo và phải đăng nhập lại)
-# Model lưu lịch sử đăng nhập của user (thời gian, IP, thiết bị, trạng thái thành công/thất bại)  
 
-# Model lưu lịch sử đăng nhập của user (thời gian, IP, thiết bị, trạng thái thành công/thất bại)
+
 class LoginHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     ip = models.GenericIPAddressField()
@@ -222,7 +206,7 @@ class LoginHistory(models.Model):
     time = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=50)  # success / failed
     
-# Tự động ghi lại lịch sử đăng nhập mỗi khi user đăng nhập thành công
+
 @receiver(user_logged_in)
 def log_login(sender, request, user, **kwargs):
     LoginHistory.objects.create(

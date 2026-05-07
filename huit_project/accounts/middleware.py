@@ -105,42 +105,6 @@ class UpdateDeviceMiddleware:
             )
 
         return self.get_response(request)
-class UpdateDeviceMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-
-        if request.user.is_authenticated:
-            ua_string = request.META.get('HTTP_USER_AGENT', '')
-            ip = request.META.get('REMOTE_ADDR')
-
-            user_agent = parse(ua_string)
-
-            # Detect device
-            if user_agent.is_mobile:
-                device_type = "📱 Mobile"
-            elif user_agent.is_tablet:
-                device_type = "📟 Tablet"
-            else:
-                device_type = "💻 Desktop"
-
-            device_name = f"{device_type} - {user_agent.browser.family} ({user_agent.os.family})"
-            if not request.session.session_key:
-                request.session.create()
-            # Lưu hoặc update
-            TrustedDevice.objects.update_or_create(
-                user=request.user,
-                session_key=request.session.session_key,
-                defaults={
-                    'name': device_name,
-                    'user_agent': ua_string,
-                    'ip_address': ip,
-                    'is_active': True
-                }
-            )
-
-        return self.get_response(request)
 
 # accounts/middleware.py
 # Middleware để kiểm tra nếu thiết bị mới thì hiển thị popup cảnh báo

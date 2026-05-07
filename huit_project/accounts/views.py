@@ -33,14 +33,13 @@ from django.core.paginator import Paginator
 from django.contrib.sessions.models import Session
 from django.core.serializers.json import DjangoJSONEncoder
 from django import forms
-# Import từ local app
+
 from .models import (
     LoginHistory, RemoteAuthRequest, TrustedDevice, 
     EmailOTP, UserProfile, PendingRegistration, 
-    OTP, ActivityLog, UserPasskey
+    ActivityLog, UserPasskey
 )
 from .utils import get_totp_token, generate_qr_base64, get_client_ip
-# Thư viện FIDO2/WebAuthn
 from fido2.server import Fido2Server
 from fido2.webauthn import (
     PublicKeyCredentialRpEntity, PublicKeyCredentialUserEntity,
