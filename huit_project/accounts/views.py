@@ -6,11 +6,12 @@ import pyotp
 import io
 import base64
 import json
+import datetime
+from datetime import timedelta
 import pickle
 import openpyxl
 from datetime import timedelta
 from urllib import request
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
@@ -31,7 +32,6 @@ from django.core.paginator import Paginator
 from django.contrib.sessions.models import Session
 from django.core.serializers.json import DjangoJSONEncoder
 from django import forms
-
 # Import từ local app
 from .models import (
     LoginHistory, RemoteAuthRequest, TrustedDevice, 
@@ -39,7 +39,6 @@ from .models import (
     OTP, ActivityLog, UserPasskey
 )
 from .utils import get_totp_token, generate_qr_base64, get_client_ip
-
 # Thư viện FIDO2/WebAuthn
 from fido2.server import Fido2Server
 from fido2.webauthn import (
@@ -50,17 +49,16 @@ from fido2.webauthn import (
 from fido2.utils import websafe_encode, websafe_decode
 from fido2.features import webauthn_json_mapping
 from fido2.cbor import decode as cbor_decode
-
 # Thư viện Excel
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment, PatternFill
-
 try:
     webauthn_json_mapping.enabled = True
 except ValueError:
     pass
 
+#
 class RegisterForm(UserCreationForm):
     first_name = forms.CharField(
         max_length=50, required=True, label='Họ',
@@ -101,18 +99,11 @@ class RegisterForm(UserCreationForm):
         return email
 
 
-# ══════════════════════════════════════════════════════════
-#  1. TRANG CHỦ
-# ══════════════════════════════════════════════════════════
 def home(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
     return render(request, 'accounts/home.html')
 
-
-# ══════════════════════════════════════════════════════════
-#  2. ĐĂNG KÝ — Bước 1: Nhận form → gửi OTP
-# ══════════════════════════════════════════════════════════
 def register(request):
     if request.method == 'POST':
         form = RegisterForm(request.POST)
@@ -144,17 +135,22 @@ def register(request):
                     subject='🔐 Mã OTP Kích hoạt tài khoản - HUIT',
                     message=f"""Xin chào {form.cleaned_data['first_name']} {form.cleaned_data['last_name']},
 
-Mã OTP để kích hoạt tài khoản của bạn là:
+                    Mã OTP để kích hoạt tài khoản của bạn là:
 
-    ► {otp_code}
+                        ► {otp_code}
 
-Mã có hiệu lực trong 10 phút. Không chia sẻ mã này với bất kỳ ai.
+                    Mã có hiệu lực trong 10 phút. Không chia sẻ mã này với bất kỳ ai.
 
-Trân trọng,
-HUIT System""",
+                    Trân trọng,
+                    HUIT System""",
                     from_email=None,
                     recipient_list=[email],
                     fail_silently=False,
+                )
+                EmailOTP.objects.create(
+                    user=None, 
+                    otp_code=otp_code,
+                    is_used=False
                 )
             except Exception as e:
                 messages.error(request, f'Lỗi gửi email: {str(e)}')
@@ -163,21 +159,25 @@ HUIT System""",
             request.session['pending_register_email'] = email
             messages.success(request, f'Mã OTP đã gửi tới {email}. Kiểm tra hộp thư!')
             return redirect('verify_register_otp')
+            
     else:
         form = RegisterForm()
 
     return render(request, 'accounts/register.html', {'form': form})
 
 
-# ══════════════════════════════════════════════════════════
-#  3. ĐĂNG KÝ — Bước 2: Xác nhận OTP → tạo tài khoản
-# ══════════════════════════════════════════════════════════
 def verify_register_otp(request):
     email = request.session.get('pending_register_email')
     if not email:
         messages.error(request, 'Phiên đã hết hạn. Vui lòng đăng ký lại.')
         return redirect('register')
 
+    pending = PendingRegistration.objects.filter(email=email).first()
+    if not pending:
+        return redirect('register')
+    
+    username = pending.temp_data.get('username')
+    
     if request.method == 'POST':
         action = request.POST.get('action')
 
@@ -186,6 +186,7 @@ def verify_register_otp(request):
             pending = PendingRegistration.objects.filter(email=email).first()
             if pending:
                 new_otp = str(random.randint(100000, 999999))
+                old_data = pending.temp_data 
                 PendingRegistration.objects.filter(email=email).delete()
                 PendingRegistration.objects.create(
                     email     = email,
@@ -195,10 +196,16 @@ def verify_register_otp(request):
                 try:
                     send_mail(
                         subject='🔐 Mã OTP mới - HUIT',
-                        message=f'Mã OTP mới của bạn: {new_otp}\n\nHiệu lực 10 phút.\n\nHUIT System',
+                        message=f'Mã OTP mới của bạn: {new_otp}\n\nHiệu lực 5 phút.\n\nHUIT System',
                         from_email=None,
                         recipient_list=[email],
                         fail_silently=False,
+                    )
+
+                    EmailOTP.objects.create(
+                        user=None, 
+                        otp_code=new_otp,
+                        is_used=False
                     )
                     messages.success(request, 'Đã gửi lại mã OTP mới.')
                 except Exception as e:
@@ -230,6 +237,8 @@ def verify_register_otp(request):
             is_active  = True,
         )
         
+        EmailOTP.objects.filter(otp_code=otp_entered, user__isnull=True).update(user=user, is_used=True)
+
         UserProfile.objects.get_or_create(
             user=user,
             defaults={
@@ -246,12 +255,12 @@ def verify_register_otp(request):
         messages.success(request, f'🎉 Chào mừng {user.first_name} {user.last_name}! Tài khoản đã kích hoạt. Hãy đăng nhập.')
         return redirect('login')
 
-    return render(request, 'accounts/verify_register_otp.html', {'email': email})
+    return render(request, 'accounts/verify_register_otp.html', {   
+        'email': email,
+        'username': username
+        })
 
 
-# ══════════════════════════════════════════════════════════
-#  4. ĐĂNG XUẤT
-# ══════════════════════════════════════════════════════════
 def logout_view(request):
     from .models import TrustedDevice
 
@@ -261,8 +270,7 @@ def logout_view(request):
 
     logout(request)
     return redirect('home')
-#  6. DASHBOARD
-# ══════════════════════════════════════════════════════════
+
 
 @login_required
 def dashboard(request):
@@ -286,34 +294,37 @@ def dashboard(request):
 
             old_email = request.user.email
 
-            # FIX NỘI DUNG MAIL TẠI ĐÂY
+         
             if not old_email or not profile.has_email_otp:
                 otp = str(random.randint(100000, 999999))
                 profile.email_otp  = otp
-                profile.otp_expiry = timezone.now() + timedelta(minutes=5)
+                profile.otp_expiry = timezone.now() + timedelta(minutes=3)
                 profile.save()
                 try:
                     send_mail(
                         subject='🔐 Xác nhận cập nhật thông tin - HUIT',
                         message=f"""Xin chào {new_first_name} {new_last_name},
 
-Bạn vừa yêu cầu cập nhật thông tin tài khoản trên hệ thống HUIT.
-Mã OTP xác nhận của bạn là:
+                        Bạn vừa yêu cầu cập nhật thông tin tài khoản trên hệ thống HUIT.
+                        Mã OTP xác nhận của bạn là:
 
-    ► {otp}
+                            ► {otp}
 
-Thông tin đang chờ cập nhật:
-- Chữ đệm: {new_middle_name}
-- Số điện thoại: {new_phone}
-- Email liên kết: {new_email}
+                        Thông tin đang chờ cập nhật:
+                        - Chữ đệm: {new_middle_name}
+                        - Số điện thoại: {new_phone}
+                        - Email liên kết: {new_email}
 
-Mã có hiệu lực trong 5 phút. Vui lòng không cung cấp mã này cho người khác.
+                        Mã có hiệu lực trong 5 phút. Vui lòng không cung cấp mã này cho người khác.
 
-Trân trọng,
-HUIT System""",
+                        Trân trọng,
+                        HUIT System""",
                         from_email=None, recipient_list=[new_email], fail_silently=False,
                     )
+                    
+                    EmailOTP.objects.create(user=request.user, otp_code=otp, is_used=False)
                     messages.success(request, f'Mã OTP đã gửi tới {new_email}')
+
                 except Exception as e:
                     messages.error(request, f'Lỗi gửi email: {str(e)}')
 
@@ -330,27 +341,28 @@ HUIT System""",
                 profile.save()
                 otp = str(random.randint(100000, 999999))
                 profile.email_otp  = otp
-                profile.otp_expiry = timezone.now() + timedelta(minutes=5)
+                profile.otp_expiry = timezone.now() + timedelta(minutes=3)
                 profile.save()
                 try:
                     send_mail(
                         subject='🔐 Xác nhận thay đổi Email - HUIT',
                         message=f"""Xin chào {request.user.first_name} {request.user.last_name},
 
-Mã OTP xác nhận thay đổi thông tin và Email của bạn là:
+                        Mã OTP xác nhận thay đổi thông tin và Email của bạn là:
 
-    ► {otp}
+                            ► {otp}
 
-Thông tin cập nhật:
-- Họ và tên mới: {new_first_name} {new_middle_name} {new_last_name}
-- Số điện thoại mới: {new_phone}
-- Email mới: {new_email}
+                        Thông tin cập nhật:
+                        - Họ và tên mới: {new_first_name} {new_middle_name} {new_last_name}
+                        - Số điện thoại mới: {new_phone}
+                        - Email mới: {new_email}
 
-Mã có hiệu lực trong 5 phút.
+                        Mã có hiệu lực trong 5 phút.
 
-HUIT System""",
+                        HUIT System""",     
                         from_email=None, recipient_list=[old_email], fail_silently=False,
                     )
+                    EmailOTP.objects.create(user=request.user, otp_code=otp, is_used=False)
                 except Exception as e:
                     print(f'EMAIL ERROR: {e}')
 
@@ -367,6 +379,7 @@ HUIT System""",
                 profile.middle_name     = new_middle_name
                 profile.phone_number    = new_phone
                 request.user.save()
+                EmailOTP.objects.filter(user=request.user, otp_code=otp_input, is_used=False).update(is_used=True)
                 profile.save()
                 messages.success(request, 'Đã cập nhật thông tin thành công!')
                 return redirect('dashboard')
@@ -382,9 +395,11 @@ HUIT System""",
                 request.session.pop('pending_update', None)
                 return redirect('dashboard')
             if otp_input != profile.email_otp:
+                EmailOTP.objects.filter(user=request.user, otp_code=otp_input, is_used=False).update(is_used=True)
+                request.session.pop('pending_update', None)
                 messages.error(request, 'Mã OTP không đúng!')
                 return redirect('dashboard')
-
+            EmailOTP.objects.filter(user=request.user, otp_code=otp_input, is_used=False).update(is_used=True)
             request.user.first_name = pending['first_name']
             request.user.last_name  = pending['last_name']
             request.user.email      = pending['new_email']
@@ -404,7 +419,7 @@ HUIT System""",
             if action == 'disable_email':
                 otp = str(random.randint(100000, 999999))
                 profile.email_otp  = otp
-                profile.otp_expiry = timezone.now() + timedelta(minutes=5)
+                profile.otp_expiry = timezone.now() + timedelta(minutes=3)
                 profile.save()
                 try:
                     send_mail(
@@ -429,6 +444,7 @@ HUIT System""",
                     valid = True
 
                 if valid:
+                    EmailOTP.objects.filter(user=request.user, otp_code=code, is_used=False).update(is_used=True)
                     if target == 'disable_email':
                         profile.has_email_otp = False
                     else:
@@ -464,9 +480,6 @@ HUIT System""",
     })
 
 
-# ══════════════════════════════════════════════════════════
-#  7. SETUP 2FA  
-# ══════════════════════════════════════════════════════════
 @login_required
 def setup_2fa(request):
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
@@ -488,7 +501,7 @@ def setup_2fa(request):
                     return redirect('dashboard')
                 otp = str(random.randint(100000, 999999))
                 profile.email_otp  = otp
-                profile.otp_expiry = timezone.now() + timedelta(minutes=5)
+                profile.otp_expiry = timezone.now() + timedelta(minutes=3)
                 profile.save()
                 try:
                     send_mail(
@@ -547,9 +560,6 @@ def setup_2fa(request):
     return render(request, 'accounts/setup_2fa.html', context)
 
 
-# ══════════════════════════════════════════════════════════
-#  8. VERIFY 2FA  
-# ══════════════════════════════════════════════════════════
 def verify_2fa(request):
     uid = request.session.get('pre_2fa_user_id')
     if not uid:
@@ -613,7 +623,7 @@ def verify_2fa(request):
         if action == 'send_email_code' and profile.has_email_otp:
             otp = str(random.randint(100000, 999999))
             profile.email_otp  = otp
-            profile.otp_expiry = timezone.now() + timedelta(minutes=5)
+            profile.otp_expiry = timezone.now() + timedelta(minutes=3)
             profile.save()
             send_mail(
                 'Mã xác thực đăng nhập - HUIT',
@@ -645,7 +655,7 @@ def verify_2fa(request):
             if method == 'email':
                 profile.email_otp = None
                 profile.save()
-                # ✅ ĐÁNH DẤU ĐÃ DÙNG
+                EmailOTP.objects.filter(user=user, otp_code=code, is_used=False).update(is_used=True)
                 EmailOTP.objects.filter(
                     user=user, is_used=False
                 ).order_by('-created_at').first() and \
@@ -1436,9 +1446,9 @@ def admin_otp_history(request):
         if status_query == 'used':
             email_otp_queryset = email_otp_queryset.filter(is_used=True)
         elif status_query == 'pending':
-            email_otp_queryset = email_otp_queryset.filter(is_used=False, created_at__gt=timezone.now() - timezone.timedelta(minutes=5))
+            email_otp_queryset = email_otp_queryset.filter(is_used=False, created_at__gt=timezone.now() - timezone.timedelta(minutes=3))
         elif status_query == 'expired':
-            email_otp_queryset = email_otp_queryset.filter(is_used=False, created_at__lt=timezone.now() - timezone.timedelta(minutes=5))
+            email_otp_queryset = email_otp_queryset.filter(is_used=False, created_at__lt=timezone.now() - timezone.timedelta(minutes=3))
 
     if date_query:
         email_otp_queryset = email_otp_queryset.filter(created_at__date=date_query)
@@ -1651,69 +1661,61 @@ def admin_force_logout(request, username):
         
     return redirect('admin_login_history')
 
-# 7. ADMIN EXPORT LỊCH SỬ OTP RA FILE TXT (Dành cho admin)
-
-
 @user_passes_test(lambda u: u.is_superuser)
 def export_otp_excel(request):
-    # Lấy dữ liệu
-    logs = ActivityLog.objects.filter(
-        Q(action='login') | Q(action='login_failed'),
-        user_agent__icontains="OTP"
-    ).order_by('-timestamp')
+    # 1. Sửa lại: Lấy dữ liệu từ bảng EmailOTP thay vì ActivityLog
+    logs = EmailOTP.objects.select_related('user').order_by('-created_at') #
 
-    # Tạo workbook Excel
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Lich Su OTP"
+    ws.title = "Lich_Su_OTP"
 
-    # Tiêu đề file
-    ws['A1'] = "LOG_OTP SECURITY"
-    ws.merge_cells('A1:E1')
+    ws['A1'] = "HUIT OTP REAL-TIME LOG"
+    ws.merge_cells('A1:F1')
     ws['A1'].font = Font(size=14, bold=True)
     ws['A1'].alignment = Alignment(horizontal="center")
 
-    ws['A2'] = f"Ngày xuất: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    # Dùng timezone.now() để tránh lỗi AttributeError datetime
+    ws['A2'] = f"Ngày xuất: {timezone.now().strftime('%d/%m/%Y %H:%M:%S')}" 
     ws['A2'].font = Font(bold=True)
 
-    # Header
-    headers = ["STT", "THỜI GIAN", "USERNAME", "TRẠNG THÁI", "IP ADDRESS", "USER AGENT"]
-    for col, header in enumerate(headers, start=1):
+    # Header khớp với Dashboard
+    headers = ["STT", "THỜI GIAN", "USERNAME", "MÃ OTP", "TRẠNG THÁI", "LOẠI"]
+    for col, header in enumerate(headers, 1):
         cell = ws.cell(row=4, column=col, value=header)
         cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        cell.fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
         cell.alignment = Alignment(horizontal="center")
 
-    # Ghi dữ liệu
+    # 2. Sửa vòng lặp để đọc dữ liệu từ model EmailOTP
     for idx, log in enumerate(logs, start=1):
         row = idx + 4
-        status = "THÀNH CÔNG" if log.action == 'login' else "THẤT BẠI"
+        # Logic trạng thái giống Dashboard: check is_used và thời gian hết hạn (3 phút)
+        if log.is_used:
+            status = "ĐÃ SỬ DỤNG"
+        elif log.created_at > timezone.now() - timedelta(minutes=3):
+            status = "ĐANG HIỆU LỰC"
+        else:
+            status = "HẾT HẠN"
         
         ws.cell(row=row, column=1, value=idx)
-        ws.cell(row=row, column=2, value=log.timestamp.strftime('%d/%m/%Y %H:%M:%S'))
-        ws.cell(row=row, column=3, value=log.username_attempt or "")
-        ws.cell(row=row, column=4, value=status)
-        ws.cell(row=row, column=5, value=log.ip_address or "")
-        ws.cell(row=row, column=6, value=log.user_agent or "")
+        ws.cell(row=row, column=2, value=log.created_at.strftime('%d/%m/%Y %H:%M:%S'))
+        ws.cell(row=row, column=3, value=log.user.username if log.user else "Chưa xác thực")
+        ws.cell(row=row, column=4, value=log.otp_code) # Hiện mã OTP
+        ws.cell(row=row, column=5, value=status)
+        ws.cell(row=row, column=6, value="Email OTP")
 
-    # Điều chỉnh độ rộng cột
-    column_widths = [6, 20, 18, 15, 18, 50]
-    for i, width in enumerate(column_widths, start=1):
+    for i, width in enumerate([6, 22, 20, 15, 20, 15], start=1):
         ws.column_dimensions[get_column_letter(i)].width = width
 
-    # Tạo response
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    filename = f"Huit_Auth_OTP_LOG__History_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    filename = f"Huit_Auth_OTP_Realtime_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
     wb.save(response)
     return response
-# ══════════════════════════════════════════════════════════
-#  SSO — Tạo JWT token và redirect sang web mới
-# ═════════════════════════════════════════════════════════
-# accounts/views.py (App A)
+    wb.save(response)
+    return response
 @login_required
 def sso_send(request):
     user = request.user
@@ -1738,63 +1740,6 @@ def sso_send(request):
     
     # ĐẢM BẢO dòng return này nằm riêng biệt, không dính với def sso_send[cite: 3]
     return redirect(f"{settings.WEB_SSO_CALLBACK_URL}?token={token}")
-
-# 8. ADMIN EXPORT LỊCH SỬ OTP RA FILE EXCEL (Dành cho admin)
-@user_passes_test(lambda u: u.is_superuser)
-def export_otp_excel(request):
-    # Lấy dữ liệu
-    logs = ActivityLog.objects.filter(
-        Q(action__in=['login', 'login_failed'])
-    ).order_by('-timestamp')
-
-    # Tạo Excel
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Lich_Su_OTP"
-
-    # Tiêu đề
-    ws['A1'] = "LOG_OTP"
-    ws.merge_cells('A1:F1')
-    ws['A1'].font = Font(size=14, bold=True)
-    ws['A1'].alignment = Alignment(horizontal="center")
-
-    ws['A2'] = f"Ngày xuất: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-    ws['A2'].font = Font(bold=True)
-
-    # Header
-    headers = ["STT", "THỜI GIAN", "USERNAME", "TRẠNG THÁI", "IP ADDRESS", "USER AGENT"]
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=4, column=col, value=header)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
-        cell.alignment = Alignment(horizontal="center")
-
-    # Dữ liệu
-    for idx, log in enumerate(logs, start=1):
-        row = idx + 4
-        status = "THÀNH CÔNG" if log.action == 'login' else "THẤT BẠI"
-        
-        ws.cell(row=row, column=1, value=idx)
-        ws.cell(row=row, column=2, value=log.timestamp.strftime('%d/%m/%Y %H:%M:%S'))
-        ws.cell(row=row, column=3, value=str(log.username_attempt or ""))
-        ws.cell(row=row, column=4, value=status)
-        ws.cell(row=row, column=5, value=str(log.ip_address or ""))
-        ws.cell(row=row, column=6, value=str(log.user_agent or "")[:100])
-
-    # Điều chỉnh độ rộng cột
-    for i, width in enumerate([6, 22, 20, 15, 18, 60], start=1):
-        ws.column_dimensions[get_column_letter(i)].width = width
-
-    # Response
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    filename = f"Huit_Auth_OTP_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-    wb.save(response)
-    return response
-
 
 @user_passes_test(lambda u: u.is_superuser)
 def admin_toggle_status(request, user_id):

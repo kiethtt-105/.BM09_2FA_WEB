@@ -70,7 +70,7 @@ class PendingRegistration(models.Model):
 # Model lưu OTP ngắn hạn cho email (dùng cho 2FA login)
 class EmailOTP(models.Model):
     """OTP ngắn hạn gắn với một User (dùng cho 2FA login)."""
-    user       = models.ForeignKey(User, on_delete=models.CASCADE)
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     otp_code   = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
     is_used    = models.BooleanField(default=False)

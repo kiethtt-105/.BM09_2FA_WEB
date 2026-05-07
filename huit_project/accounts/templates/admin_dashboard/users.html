@@ -30,17 +30,25 @@
             <h1 class="text-3xl font-bold">HUIT</h1>
         </div>
 
-        <nav class="space-y-1">
-            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
-                👥 Quản lý Người dùng
-            </a>
-            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">
-                🔑 Lịch sử OTP
-            </a>
-            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
-                📋 Hoạt động Đăng nhập
-            </a>
-        </nav>
+       <nav class="space-y-1">
+    <a href="/admin-dashboard/users/" 
+       class="flex items-center gap-3 px-5 py-4 rounded-2xl transition-all
+       {% if '/admin-dashboard/users/' in request.path %} bg-violet-600/10 text-violet-400 font-bold border border-violet-600/20 {% else %} hover:bg-zinc-800 text-zinc-300 {% endif %}">
+        👥 Quản lý Người dùng
+    </a>
+
+    <a href="/admin-dashboard/otp-history/" 
+       class="flex items-center gap-3 px-5 py-4 rounded-2xl transition-all
+       {% if '/admin-dashboard/otp-history/' in request.path %} bg-violet-600/10 text-violet-400 font-bold border border-violet-600/20 {% else %} hover:bg-zinc-800 text-zinc-300 {% endif %}">
+        🔑 Lịch sử OTP
+    </a>
+
+    <a href="/admin-dashboard/login-history/" 
+       class="flex items-center gap-3 px-5 py-4 rounded-2xl transition-all
+       {% if '/admin-dashboard/login-history/' in request.path %} bg-violet-600/10 text-violet-400 font-bold border border-violet-600/20 {% else %} hover:bg-zinc-800 text-zinc-300 {% endif %}">
+        📋 Hoạt động Đăng nhập
+    </a>
+</nav>
     </div>
 
     <!-- Main Content -->
