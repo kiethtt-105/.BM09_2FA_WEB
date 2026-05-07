@@ -9,6 +9,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 import uuid
 from django.contrib.auth.signals import user_logged_in
+import hashlib
+
+
 
 # Mở rộng User mặc định bằng UserProfile để lưu thêm thông tin cá nhân và cấu hình 2FA
 class UserProfile(models.Model):
@@ -69,13 +72,18 @@ class PendingRegistration(models.Model):
 
 # Model lưu OTP ngắn hạn cho email (dùng cho 2FA login)
 class EmailOTP(models.Model):
-    """OTP ngắn hạn gắn với một User (dùng cho 2FA login)."""
     user       = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     otp_code   = models.CharField(max_length=6)
+    otp_hash = models.CharField(max_length=64, blank=True, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
     is_used    = models.BooleanField(default=False)
     def is_valid(self):
-        return not self.is_used and timezone.now() < self.created_at + datetime.timedelta(minutes=5)
+        return not self.is_used and timezone.now() < self.created_at + datetime.timedelta(minutes=3)
+    def save(self, *args, **kwargs):
+        if self.otp_code and not self.otp_hash:
+            # Tự động băm SHA-256 từ otp_code trước khi ghi vào DB
+            self.otp_hash = hashlib.sha256(self.otp_code.encode()).hexdigest()
+        super().save(*args, **kwargs)
 
 #   Model lưu lịch sử hoạt động quan trọng của user (đăng nhập, đăng xuất, OTP, 2FA...)
 class ActivityLog(models.Model):

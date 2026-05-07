@@ -123,6 +123,7 @@
                         <tr class="border-b border-zinc-800 text-xs uppercase text-zinc-400">
                             <th class="text-left py-5 px-8">USERNAME</th>
                             <th class="text-left py-5 px-8">MÃ OTP</th>
+                            <th class="text-center">Dữ liệu mã hóa (SHA-256)</th>
                             <th class="text-left py-5 px-8">TRẠNG THÁI</th>
                             <th class="text-left py-5 px-8">THỜI GIAN</th>
                         </tr>
@@ -142,6 +143,11 @@
                                         <i id="eye-{{ otp.id }}" class="fas fa-eye text-xl"></i>
                                     </button>
                                 </div>
+                            </td>
+                            <td class="text-center">
+                                <code class="text-muted" title="{{ otp.otp_hash }}">
+                                    {{ otp.otp_hash|truncatechars:15 }}
+                                </code>
                             </td>
                             <td class="py-5 px-8">
                                 {% if otp.is_used %}
