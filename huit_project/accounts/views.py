@@ -1,6 +1,5 @@
 import jwt
 import time
-import datetime
 import random
 import hashlib
 import pyotp
@@ -9,6 +8,7 @@ import base64
 import json
 import datetime
 from datetime import timedelta
+from cryptography.fernet import Fernet     
 import pickle
 import openpyxl
 from datetime import timedelta
@@ -662,7 +662,8 @@ def verify_2fa(request):
         # ── Xác thực OTP ─────────────────────────────────
         valid = False
         if method == 'app' and profile.has_app_otp:
-            if code == get_totp_token(profile.otp_secret):
+            raw_secret = profile.decrypt_secret()
+            if code == get_totp_token(raw_secret):
                 valid = True
         elif method == 'email' and profile.has_email_otp:
             input_hash = hashlib.sha256(code.encode()).hexdigest()
@@ -1483,22 +1484,23 @@ def admin_otp_history(request):
     # ====================== GOOGLE AUTHENTICATOR ======================
     google_auths = []
     for profile in UserProfile.objects.filter(has_app_otp=True).select_related('user'):
-        secret = profile.otp_secret
-        masked = secret[:4] + "****" + secret[-4:] if len(secret) > 8 else "********"
+        raw_secret = profile.decrypt_secret() 
+        
+        masked = raw_secret[:8] + "****" + raw_secret[-4:] if raw_secret and len(raw_secret) > 8 else "********"
         
         google_auths.append({
             'username': profile.user.username,
             'masked_secret': masked,
-            'full_secret': secret,
-            'current_totp': get_totp_token(secret),   # real-time TOTP
+            'full_secret': raw_secret,
+            'current_totp': get_totp_token(raw_secret), # Dùng key đã giải mã để tính mã 6 số
         })
 
     # Tổng số
     total_otp = email_otp_queryset.count() + len(google_auths)
 
     context = {
-        'email_otps': email_otps,           # dùng trong template cho bảng Email OTP
-        'google_auths': google_auths,       # dùng cho bảng Google Auth
+        'email_otps': email_otps,           
+        'google_auths': google_auths,       
         'total_otp': total_otp,
         'paginator': paginator,
         'page_obj': email_otps,

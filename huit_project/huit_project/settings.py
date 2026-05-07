@@ -229,3 +229,6 @@ SSO_TOKEN_EXPIRY = 300  # 5 phút
 
 WEB_SSO_CALLBACK_URL = 'http://localhost:8001/sso/callback/'
 #WEB_SSO_CALLBACK_URL = os.environ.get('WEB_SSO_CALLBACK_URL', 'http://localhost:8001/sso/callback/')
+
+
+ENCRYPTION_KEY = '5mqSVG8piYSGJfPnvoMNSr7L75FlhtJdh1FqgkwebII='

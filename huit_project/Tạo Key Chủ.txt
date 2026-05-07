@@ -1,0 +1,7 @@
+1. Tạo Key chủ
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+5mqSVG8piYSGJfPnvoMNSr7L75FlhtJdh1FqgkwebII=
+
+#setting.py
+ENCRYPTION_KEY = '5mqSVG8piYSGJfPnvoMNSr7L75FlhtJdh1FqgkwebII='

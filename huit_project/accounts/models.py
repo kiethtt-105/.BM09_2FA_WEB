@@ -10,32 +10,47 @@ from django.dispatch import receiver
 import uuid
 from django.contrib.auth.signals import user_logged_in
 import hashlib
-
+from cryptography.fernet import Fernet
+from django.conf import settings
 
 
 # Mở rộng User mặc định bằng UserProfile để lưu thêm thông tin cá nhân và cấu hình 2FA
 class UserProfile(models.Model):
-    """Mở rộng User mặc định: thêm chữ đệm, SĐT, và cấu hình 2FA."""
     user         = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-
-    # Thông tin cá nhân bổ sung
     middle_name  = models.CharField('Chữ đệm', max_length=50, blank=True, default='')
     phone_number = models.CharField('Số điện thoại', max_length=15, blank=True, default='')
-
-    # 2FA — App (Google Authenticator)
-    otp_secret = models.CharField(max_length=32, default=pyotp.random_base32, blank=True)
-
+    #otp_secret = models.CharField(max_length=32, default=pyotp.random_base32, blank=True)
+    otp_secret = models.CharField(max_length=255, blank=True, null=True)
     has_app_otp  = models.BooleanField(default=False)
-
-    # 2FA — Email OTP
     has_email_otp = models.BooleanField(default=False)
     email_otp     = models.CharField(max_length=6, blank=True, null=True)
     otp_expiry    = models.DateTimeField(blank=True, null=True)
-
-    # ==================== FIDO2 / PASSKEY  ====================
     has_fido2         = models.BooleanField(default=False, verbose_name="Đã bật FIDO2")
     fido2_credential  = models.JSONField(null=True, blank=True)   # Lưu credentialId + publicKey (demo)
+    def encrypt_secret(self, raw_secret):
+        """Mã hóa Secret Key trước khi lưu"""
+        if not raw_secret: return None
+        f = Fernet(settings.ENCRYPTION_KEY.encode())
+        return f.encrypt(raw_secret.encode()).decode()
 
+    def decrypt_secret(self):
+        """Giải mã Secret Key để tính OTP hoặc hiển thị"""
+        if not self.otp_secret: return None
+        f = Fernet(settings.ENCRYPTION_KEY.encode())
+        try:
+            # Nếu bắt đầu bằng gAAAA thì là hàng đã mã hóa
+            if self.otp_secret.startswith('gAAAA'):
+                return f.decrypt(self.otp_secret.encode()).decode()
+            return self.otp_secret # Hàng cũ chưa mã hóa thì trả về luôn
+        except:
+            return self.otp_secret
+
+    def save(self, *args, **kwargs):
+        # Tự động mã hóa otp_secret nếu nó đang ở dạng thô
+        if self.otp_secret and not self.otp_secret.startswith('gAAAA'):
+            self.otp_secret = self.encrypt_secret(self.otp_secret)
+        super().save(*args, **kwargs)
+        
     def __str__(self):
         return f"Profile({self.user.username})"
     @property
