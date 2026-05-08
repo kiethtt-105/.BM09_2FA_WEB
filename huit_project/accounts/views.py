@@ -33,7 +33,7 @@ from django.core.paginator import Paginator
 from django.contrib.sessions.models import Session
 from django.core.serializers.json import DjangoJSONEncoder
 from django import forms
-
+import sqlite3
 from .models import (
     LoginHistory, RemoteAuthRequest, TrustedDevice, 
     EmailOTP, UserProfile, PendingRegistration, 
@@ -131,31 +131,25 @@ def register(request):
 
             # Gửi OTP
             try:
-                send_mail(
+                ip = get_client_ip(request)
+                first = form.cleaned_data['first_name']
+                last  = form.cleaned_data['last_name']
+                generate_and_send_email_otp(
+                    user=None,
+                    email=email,
+                    action='register',
+                    ip=ip,
                     subject='🔐 Mã OTP Kích hoạt tài khoản - HUIT',
-                    message=f"""Xin chào {form.cleaned_data['first_name']} {form.cleaned_data['last_name']},
-
-                    Mã OTP để kích hoạt tài khoản của bạn là:
-
-                        ► {otp_code}
-
-                    Mã có hiệu lực trong 10 phút. Không chia sẻ mã này với bất kỳ ai.
-
-                    Trân trọng,
-                    HUIT System""",
-                    from_email=None,
-                    recipient_list=[email],
-                    fail_silently=False,
-                )
-                EmailOTP.objects.create(
-                    user=None, 
-                    otp_code=otp_code,
-                    is_used=False
+                    body=(
+                        f"Xin chào {first} {last},\\n\\n"
+                        f"Mã OTP kích hoạt tài khoản của bạn là: {otp_code}\\n\\n"
+                        f"Mã có hiệu lực trong 10 phút. Không chia sẻ mã này.\\n\\n"
+                        f"Trân trọng,\\nHUIT System"
+                    ),
                 )
             except Exception as e:
                 messages.error(request, f'Lỗi gửi email: {str(e)}')
                 return render(request, 'accounts/register.html', {'form': form})
-
             request.session['pending_register_email'] = email
             messages.success(request, f'Mã OTP đã gửi tới {email}. Kiểm tra hộp thư!')
             return redirect('verify_register_otp')
@@ -203,9 +197,13 @@ def verify_register_otp(request):
                     )
 
                     EmailOTP.objects.create(
-                        user=None, 
+                        user=None,
                         otp_code=new_otp,
-                        is_used=False
+                        action='register',
+                        ip_address=get_client_ip(request),
+                        email_sent=email,
+                        is_used=False,
+                        is_active=True,
                     )
                     messages.success(request, 'Đã gửi lại mã OTP mới.')
                 except Exception as e:
@@ -322,7 +320,15 @@ def dashboard(request):
                         from_email=None, recipient_list=[new_email], fail_silently=False,
                     )
                     
-                    EmailOTP.objects.create(user=request.user, otp_code=otp, is_used=False)
+                    EmailOTP.objects.create(
+                        user=request.user,
+                        otp_code=otp,
+                        action='update_info',
+                        ip_address=get_client_ip(request),
+                        email_sent=new_email,
+                        is_used=False,
+                        is_active=True,
+                    )
                     messages.success(request, f'Mã OTP đã gửi tới {new_email}')
 
                 except Exception as e:
@@ -362,7 +368,15 @@ def dashboard(request):
                         HUIT System""",     
                         from_email=None, recipient_list=[old_email], fail_silently=False,
                     )
-                    EmailOTP.objects.create(user=request.user, otp_code=otp, is_used=False)
+                    EmailOTP.objects.create(
+                        user=request.user,
+                        otp_code=otp,
+                        action='update_info',
+                        ip_address=get_client_ip(request),
+                        email_sent=old_email,
+                        is_used=False,
+                        is_active=True,
+                    )
                 except Exception as e:
                     print(f'EMAIL ERROR: {e}')
 
@@ -388,46 +402,36 @@ def dashboard(request):
             otp_input = request.POST.get('otp_code', '').strip()
             pending   = request.session.get('pending_update')
             
-            # 1. Thực hiện băm mã người dùng vừa nhập để so khớp
             input_hash = hashlib.sha256(otp_input.encode()).hexdigest()
 
             if not pending:
                 messages.error(request, 'Không có yêu cầu cập nhật.')
                 return redirect('dashboard')
 
-            # 2. Kiểm tra hết hạn (Dùng 3 phút như ông đã yêu cầu trước đó)
             if not profile.email_otp or profile.otp_expiry < timezone.now():
                 messages.error(request, 'Mã OTP đã hết hạn.')
                 request.session.pop('pending_update', None)
                 return redirect('dashboard')
 
-            # 3. So khớp bằng mã Hash (Bảo mật cao)
-            # Lưu ý: profile.email_otp lúc này nên lưu chuỗi băm để so sánh
             if otp_input != profile.email_otp:
-                # Nếu sai, đánh dấu mã này đã hỏng/đã dùng trong log để Dashboard hiện màu xanh (đã dùng) hoặc đỏ (hết hạn)
                 EmailOTP.objects.filter(user=request.user, otp_code=otp_input, is_used=False).update(is_used=True)
                 request.session.pop('pending_update', None)
                 messages.error(request, 'Mã OTP không đúng!')
                 return redirect('dashboard')
 
-            # 4. Nếu đúng -> Cập nhật trạng thái log và lưu thông tin mới
-            # Dùng dấu = cho filter, không dùng dấu -
             EmailOTP.objects.filter(user=request.user, otp_code=otp_input, is_used=False).update(is_used=True)
             
-            # Cập nhật dữ liệu từ session vào User model
             request.user.first_name = pending['first_name']
             request.user.last_name  = pending['last_name']
             request.user.email      = pending['new_email']
             request.user.save()
 
-            # Cập nhật dữ liệu vào Profile model
             profile.middle_name  = pending.get('middle_name', '')
             profile.phone_number = pending.get('phone_number', '')
             profile.email_otp    = None
             profile.otp_expiry   = None
             profile.save()
 
-            # Xóa session tạm sau khi thành công
             request.session.pop('pending_update', None)
             messages.success(request, 'Đã cập nhật thông tin thành công!')
             return redirect('dashboard')
@@ -446,6 +450,16 @@ def dashboard(request):
                         message=f'Mã OTP xác nhận tắt 2FA email: {otp}\n\nHiệu lực 5 phút.\n\nHUIT System',
                         from_email=None, recipient_list=[request.user.email], fail_silently=False,
                     )
+                    EmailOTP.objects.create(
+                        user=request.user,
+                        otp_code=otp,
+                        action='disable_2fa',
+                        ip_address=get_client_ip(request),
+                        email_sent=request.user.email,
+                        is_used=False,
+                        is_active=True,
+                    )
+
                     confirm_disable = 'disable_email'
                 except Exception as e:
                     messages.error(request, 'Lỗi gửi mail xác nhận tắt.')
@@ -490,7 +504,6 @@ def dashboard(request):
     if device and not device.is_active:
         show_alert = True
 
-    # Chỉ dùng 1 return render duy nhất cuối cùng để đóng gói tất cả biến
     return render(request, 'accounts/user_dashboard.html', {
         'profile':         profile,
         'confirm_disable': confirm_disable,
@@ -530,11 +543,14 @@ def setup_2fa(request):
                         recipient_list=[request.user.email],
                         fail_silently=False,
                     )
-                    # ✅ GHI LOG EmailOTP
                     EmailOTP.objects.create(
                         user=request.user,
                         otp_code=otp,
+                        action='setup_2fa',
+                        ip_address=get_client_ip(request),
+                        email_sent=request.user.email,
                         is_used=False,
+                        is_active=True,
                     )
                     messages.success(request, '✅ Mã OTP đã gửi đến email của bạn!')
                 except Exception as e:
@@ -649,11 +665,14 @@ def verify_2fa(request):
                 f'Mã OTP của bạn là: {otp}\n\nHiệu lực 5 phút.',
                 None, [user.email], fail_silently=True
             )
-            # ✅ GHI LOG EmailOTP
             EmailOTP.objects.create(
                 user=user,
                 otp_code=otp,
+                action='login_2fa',
+                ip_address=get_client_ip(request),
+                email_sent=user.email,
                 is_used=False,
+                is_active=True,
             )
             messages.success(request, 'Đã gửi mã OTP mới vào Email.')
             return redirect(f'{request.path}?method=email')
@@ -1769,3 +1788,154 @@ def admin_toggle_status(request, user_id):
     
     # Quay lại trang quản lý người dùng[cite: 2]
     return redirect('admin_users')
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def admin_disable_otp(request, otp_id):
+    """
+    Admin vô hiệu hoá một OTP cụ thể.
+    Gọi bằng POST để tránh CSRF qua link GET.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    otp_obj = get_object_or_404(EmailOTP, id=otp_id)
+
+    if not otp_obj.is_active:
+        return JsonResponse({'status': 'already_disabled', 'message': 'OTP đã bị vô hiệu trước đó.'})
+
+    otp_obj.disable()  # is_active = False
+
+    # Ghi log hành động admin
+    ActivityLog.objects.create(
+        user=request.user,
+        username_attempt=request.user.username,
+        action='2fa_disable',
+        ip_address=get_client_ip(request),
+        user_agent=f"Admin vô hiệu OTP #{otp_id} của {otp_obj.user.username if otp_obj.user else 'pending'}",
+    )
+
+    return JsonResponse({
+        'status': 'disabled',
+        'message': f'Đã vô hiệu hoá OTP #{otp_id}.',
+        'otp_id': otp_id,
+    })
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def dtb_admin_view(request):
+    db_path = settings.DATABASES['default']['NAME']
+    selected_table = request.GET.get('table', '')
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Lấy danh sách tất cả tables
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name NOT LIKE 'sqlite_%' 
+            ORDER BY name
+        """)
+        all_tables = [row[0] for row in cursor.fetchall()]
+        
+        table_data = {}
+        
+        if selected_table and selected_table in all_tables:
+            # Chỉ lấy dữ liệu của bảng được chọn
+            tables_to_load = [selected_table]
+        else:
+            # Load tất cả (hoặc giới hạn nếu muốn)
+            tables_to_load = all_tables[:15]   # Giới hạn 15 bảng nếu không chọn
+        
+        for table in tables_to_load:
+            try:
+                cursor.execute(f"PRAGMA table_info([{table}]);")
+                columns = [col[1] for col in cursor.fetchall()]
+                
+                cursor.execute(f"SELECT * FROM [{table}] LIMIT 200;")
+                rows = cursor.fetchall()
+                
+                cursor.execute(f"SELECT COUNT(*) FROM [{table}];")
+                total_rows = cursor.fetchone()[0]
+                
+                table_data[table] = {
+                    'columns': columns,
+                    'rows': rows,
+                    'total_rows': total_rows
+                }
+            except:
+                continue
+        
+        conn.close()
+        
+    except Exception as e:
+        table_data = {}
+        all_tables = []
+        error = str(e)
+
+    context = {
+        'title': 'DTB Admin',
+        'tables': table_data,
+        'all_tables': all_tables,
+        'selected_table': selected_table,
+        'db_path': db_path,
+        'error': locals().get('error')
+    }
+    
+    return render(request, 'admin_dashboard/dtb_admin.html', context)
+
+@user_passes_test(lambda u: u.is_superuser)
+def export_dtb(request):
+    db_path = settings.DATABASES['default']['NAME']
+    table_name = request.GET.get('table')  # Nếu có tham số table thì xuất 1 bảng
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        wb = Workbook()
+        
+        if table_name:
+            # Xuất 1 bảng
+            cursor.execute(f"SELECT * FROM [{table_name}]")
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            
+            ws = wb.active
+            ws.title = table_name[:31]
+            ws.append(columns)
+            for row in rows:
+                ws.append(row)
+            
+            filename = f"{table_name}_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            
+        else:
+            # Xuất toàn bộ database (nhiều sheet)
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+            tables = [row[0] for row in cursor.fetchall()]
+            
+            wb.remove(wb.active)  # Xóa sheet mặc định
+            
+            for table in tables:
+                cursor.execute(f"PRAGMA table_info([{table}])")
+                columns = [col[1] for col in cursor.fetchall()]
+                
+                cursor.execute(f"SELECT * FROM [{table}]")
+                rows = cursor.fetchall()
+                
+                ws = wb.create_sheet(title=table[:31])
+                ws.append(columns)
+                for row in rows:
+                    ws.append(row)
+            
+            filename = f"FULL_DATABASE_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        wb.save(response)
+        conn.close()
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Lỗi xuất file: {str(e)}", status=400)

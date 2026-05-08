@@ -56,7 +56,10 @@ urlpatterns = [
     path('admin-dashboard/export-users-excel/', views.export_users_excel, name='export_users_excel'),
     path('admin-dashboard/users/toggle/<int:user_id>/', views.admin_toggle_status, name='admin_toggle_status'),
     
-    
-    
-    
+    path('admin/otp/disable/<int:otp_id>/', views.admin_disable_otp, name='admin_disable_otp'),
+
+ 
+    path('dtb-admin/', views.dtb_admin_view, name='dtb_admin'),
+    path('admin-dashboard/dtb_admin/', views.dtb_admin_view, name='dtb_admin'),      
+    path('admin-dashboard/export-dtb/', views.export_dtb, name='export_dtb'),
 ]
