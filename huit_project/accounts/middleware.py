@@ -32,10 +32,11 @@ class ForceDisable2FAMiddleware:
                     profile.has_app_otp = False
                     profile.otp_secret = ""
 
-                    profile.save()
+                    profile.save() 
 
                     user_2fa.force_disable_2fa = False
                     user_2fa.save()
+
 
             except Exception as e:
                 print("2FA middleware error:", e)

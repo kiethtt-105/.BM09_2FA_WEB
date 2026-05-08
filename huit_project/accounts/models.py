@@ -41,7 +41,8 @@ class UserProfile(models.Model):
                 return f.decrypt(self.otp_secret.encode()).decode()
             return self.otp_secret # Hàng cũ chưa mã hóa thì trả về luôn
         except:
-            return self.otp_secret
+            return self.otp_secret 
+        
 
     def save(self, *args, **kwargs):
         # Tự động mã hóa otp_secret nếu nó đang ở dạng thô
