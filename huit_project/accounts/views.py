@@ -34,6 +34,7 @@ import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment, PatternFill
+from django.contrib.auth.hashers import make_password
 
 from .models import (
     LoginHistory, RemoteAuthRequest, TrustedDevice,
@@ -153,7 +154,7 @@ def register(request):
                     'last_name':    form.cleaned_data['last_name'],
                     'email':        email,
                     'phone_number': form.cleaned_data.get('phone_number', ''),
-                    'password':     form.cleaned_data['password1'],
+                    'password': make_password(form.cleaned_data['password1']),
                 },
             )
 
@@ -259,10 +260,10 @@ def verify_register_otp(request):
         user = User.objects.create_user(
             username   = data['username'],
             email      = data['email'],
-            password   = data['password'],
+            password = data['password'],
+            is_active = True,
             first_name = data['first_name'],
             last_name  = data['last_name'],
-            is_active  = True,
         )
 
         # Liên kết bản ghi OTP đăng ký với user vừa tạo
@@ -571,7 +572,9 @@ def dashboard(request):
             if otp_input != profile.email_otp:
                 EmailOTP.objects.filter(
                     user=request.user, otp_code=otp_input, is_used=False
-                ).update(is_used=True)
+                ).first()
+                if otp_log:
+                    otp_log.mark_used()
                 request.session.pop('pending_update', None)
                 messages.error(request, 'Mã OTP không đúng!')
                 return redirect('dashboard')
@@ -579,7 +582,9 @@ def dashboard(request):
             # OTP đúng → cập nhật thông tin
             EmailOTP.objects.filter(
                 user=request.user, otp_code=otp_input, is_used=False
-            ).update(is_used=True)
+            ).first()
+            if otp_log:
+                otp_log.mark_used()
 
             request.user.first_name = pending['first_name']
             request.user.last_name  = pending['last_name']
@@ -643,7 +648,9 @@ def dashboard(request):
                 if valid:
                     EmailOTP.objects.filter(
                         user=request.user, otp_code=code, is_used=False
-                    ).update(is_used=True)
+                    ).first()
+                    if otp_log:
+                        otp_log.mark_used()
                     if target == 'disable_email':
                         profile.has_email_otp = False
                     else:
@@ -736,7 +743,9 @@ def setup_2fa(request):
                     profile.save()
                     EmailOTP.objects.filter(
                         user=request.user, otp_code=code, is_used=False
-                    ).update(is_used=True)
+                    ).first()
+                    if otp_log:
+                        otp_log.mark_used()
                     messages.success(request, '🎉 Đã kích hoạt Email OTP thành công!')
                     return redirect('dashboard')
                 else:
@@ -875,7 +884,9 @@ def verify_2fa(request):
                 # Chỉ đánh dấu đúng bản ghi OTP vừa dùng
                 EmailOTP.objects.filter(
                     user=user, otp_code=code, is_used=False
-                ).update(is_used=True)
+                ).first()
+                if otp_log:
+                    otp_log.mark_used()
 
             ActivityLog.objects.create(
                 user             = user,

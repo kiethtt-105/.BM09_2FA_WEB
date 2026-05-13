@@ -7,6 +7,8 @@ from .models import UserProfile
 import requests
 from django.shortcuts import redirect
 from django.conf import settings 
+import hashlib
+from django.contrib.auth.hashers import make_password
 
 # ══════════════════════════════════════════════════════
 #  HOME

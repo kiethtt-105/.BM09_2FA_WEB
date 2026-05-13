@@ -109,7 +109,7 @@ def generate_and_send_email_otp(
     final_subject = subject or 'Mã xác thực 2FA của bạn - HUIT'
     final_body    = body or (
         f'Mã OTP của bạn là: {otp_code}\n\n'
-        f'Mã có hiệu lực trong 5 phút. Không chia sẻ mã này với ai.\n\n'
+        f'Mã có hiệu lực trong 3 phút. Không chia sẻ mã này với ai.\n\n'
         f'Trân trọng,\nHUIT System'
     )
 
