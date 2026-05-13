@@ -171,27 +171,24 @@
                             </td>
 
                             <!-- SHA-256 HASH (thực tế) -->
-                            <td class="py-4 px-5 max-w-xs">
-                                <div class="flex items-center gap-2">
-                                    <span id="hash-{{ otp.id }}"
-                                          class="hash-text truncate w-36 block"
-                                          data-full="{{ otp.otp_hash }}"
-                                          title="{{ otp.otp_hash }}">
-                                        {{ otp.otp_hashed|slice:":16" }}…
+                            <td class="py-4 px-5">
+                                <div class="flex items-center gap-2 group">
+                                    <span id="hash-{{ otp.id }}" 
+                                        class="hash-text text-[13px] break-all font-mono leading-tight max-w-[380px] block"
+                                        data-full="{{ otp.otp_hash }}"
+                                        title="{{ otp.otp_hash }}">
+                                        {{ otp.otp_hash|slice:":40" }}...
                                     </span>
-                                    <button onclick="toggleHashVisibility({{ otp.id }})"
-                                            title="Xem hash đầy đủ"
-                                            class="reveal-btn text-violet-400 hover:text-violet-300 transition-transform flex-shrink-0">
-                                        <i id="eye-hash-{{ otp.id }}" class="fas fa-eye text-sm"></i>
-                                    </button>
-                                    <button onclick="copyHash('{{ otp.otp_hash }}', this)"
-                                            title="Copy hash"
-                                            class="text-zinc-500 hover:text-zinc-300 flex-shrink-0">
-                                        <i class="fas fa-copy text-sm"></i>
-                                    </button>
+                                    <div class="flex gap-1 opacity-70 group-hover:opacity-100">
+                                        <button onclick="toggleHashVisibility({{ otp.id }})" class="reveal-btn text-violet-400 hover:text-violet-300">
+                                            <i id="eye-hash-{{ otp.id }}" class="fas fa-eye text-sm"></i>
+                                        </button>
+                                        <button onclick="copyHash('{{ otp.otp_hash }}', this)" class="text-zinc-400 hover:text-white">
+                                            <i class="fas fa-copy text-sm"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </td>
-
                             <!-- TRẠNG THÁI -->
                             <td class="py-4 px-5" id="status-{{ otp.id }}">
                                 {% if not otp.is_active %}
