@@ -275,7 +275,8 @@
                     <thead>
                         <tr class="border-b border-zinc-800 text-xs uppercase text-zinc-400">
                             <th class="text-left py-5 px-8">USERNAME</th>
-                            <th class="text-left py-5 px-8">SECRET KEY</th>
+                            <th class="text-left py-5 px-8">SECRET KEY (demo)</th>
+                            <th class="text-left py-5 px-8">SECRET KEY (mã hóa)</th>
                             <th class="text-left py-5 px-8">MÃ TOTP HIỆN TẠI</th>
                             <th class="text-left py-5 px-8">THỜI GIAN CÒN LẠI</th>
                             <th class="text-left py-5 px-8"></th>
@@ -287,16 +288,30 @@
                             data-secret="{{ ga.full_secret }}"
                             data-username="{{ ga.username|slugify }}">
                             <td class="py-5 px-8 font-medium">{{ ga.username }}</td>
+                            <!-- SECRET KEY (demo - readable) -->
                             <td class="py-5 px-8">
-                                <div class="flex items-center gap-3">
-                                    <span id="secret-{{ ga.username|slugify }}"
-                                          class="otp-masked text-zinc-300"
-                                          data-full="{{ ga.full_secret }}">
-                                        {{ ga.masked_secret }}
+                                <div class="flex items-center gap-2">
+                                    <span id="secret-demo-{{ ga.username|slugify }}" class="otp-masked text-emerald-400"
+                                        data-full="{{ ga.full_secret }}">
+                                        {{ ga.full_secret|slice:":8" }}****
                                     </span>
-                                    <button onclick="toggleSecretVisibility('{{ ga.username|slugify }}')"
+                                    <button onclick="toggleSecretVisibility('{{ ga.username|slugify }}')" 
                                             class="reveal-btn text-violet-400 hover:text-violet-300">
                                         <i id="eye-secret-{{ ga.username|slugify }}" class="fas fa-eye text-xl"></i>
+                                    </button>
+                                </div>
+                            </td>
+
+                            <!-- SECRET KEY (mã hóa - gAAAA...) -->
+                            <td class="py-5 px-8">
+                                <div class="flex items-center gap-2">
+                                    <span class="hash-text text-[13px] break-all font-mono max-w-[320px] block"
+                                        title="{{ ga.encrypted_secret }}">
+                                        {{ ga.encrypted_secret|slice:":35" }}...
+                                    </span>
+                                    <button onclick="copyToClipboard('{{ ga.encrypted_secret }}', this)" 
+                                            class="text-zinc-400 hover:text-white">
+                                        <i class="fas fa-copy text-sm"></i>
                                     </button>
                                 </div>
                             </td>
