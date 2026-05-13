@@ -14,18 +14,6 @@ Danh sách model:
   10. RemoteAuthRequest   — Yêu cầu xác thực từ thiết bị lạ (push auth)
   11. UserPasskey         — Passkey / FIDO2 credential
 
-LỖI ĐÃ SỬA:
-  [BUG-M1] import hashlib và import pyotp bị trùng lặp không cần thiết → dọn dẹp.
-  [BUG-M2] OTP model (cũ) lưu code plaintext, không hash, không có is_used
-           → Giữ nguyên cấu trúc nhưng thêm comment DEPRECATED rõ ràng.
-  [BUG-M3] save_user_profile signal gọi instance.profile.save() vô điều kiện
-           → Nếu profile chưa tồn tại (race condition) → RelatedObjectDoesNotExist.
-           → Sửa: dùng get_or_create an toàn.
-  [BUG-M4] LoginHistory.log_login dùng REMOTE_ADDR thô, không qua get_client_ip
-           → Không lấy được IP đúng khi có proxy. Thêm comment cảnh báo.
-  [BUG-M5] UserProfile.decrypt_secret trả về plaintext nếu không bắt đầu 'gAAAA'
-           → Dữ liệu cũ chưa mã hóa sẽ bị lộ nếu hacker đọc được giá trị exception.
-           → Thêm comment cảnh báo rõ ràng cho hội đồng.
 """
 
 from django.db import models
@@ -99,9 +87,6 @@ class UserProfile(models.Model):
           - Chuỗi bắt đầu 'gAAAA' → token Fernet → giải mã
           - Ngược lại → dữ liệu cũ chưa mã hóa → trả thẳng
 
-        [BUG-M5] CẢNH BÁO: nhánh "return self.otp_secret" (dữ liệu cũ)
-                 trả về plaintext. Trong production, cần migrate toàn bộ
-                 sang Fernet và xóa nhánh này.
         """
         if not self.otp_secret:
             return None
@@ -109,11 +94,10 @@ class UserProfile(models.Model):
             if self.otp_secret.startswith('gAAAA'):
                 f = Fernet(settings.ENCRYPTION_KEY.encode())
                 return f.decrypt(self.otp_secret.encode()).decode()
-            # [BUG-M5] Dữ liệu cũ — trả plaintext, chỉ chấp nhận ở môi trường DEMO
             return self.otp_secret
         except Exception:
             # Nếu giải mã thất bại → trả None thay vì trả plaintext
-            # [FIX-M5] tránh lộ dữ liệu khi key sai
+            # tránh lộ dữ liệu khi key sai
             return None
 
     def save(self, *args, **kwargs):
@@ -452,9 +436,6 @@ class LoginHistory(models.Model):
     """
     Ghi lịch sử đăng nhập thành công qua Django signal user_logged_in.
 
-    [BUG-M4] CẢNH BÁO: signal log_login bên dưới dùng REMOTE_ADDR thô.
-             Khi có Nginx/proxy phía trước, IP ghi được là IP của proxy (127.0.0.1).
-             Cần thay bằng get_client_ip(request) từ utils.py.
     """
     user   = models.ForeignKey(User, on_delete=models.CASCADE)
     ip     = models.GenericIPAddressField()
@@ -540,9 +521,7 @@ def create_user_profile(sender, instance, created, **kwargs):
 def save_user_profile(sender, instance, **kwargs):
     """
     Đồng bộ lưu UserProfile khi User được save.
-
-    [BUG-M3] Phiên bản cũ: instance.profile.save() → crash nếu profile chưa tồn tại.
-    [FIX-M3] Dùng get_or_create để an toàn trong mọi trường hợp.
+    Dùng get_or_create để an toàn trong mọi trường hợp.
     """
     profile, _ = UserProfile.objects.get_or_create(user=instance)
     # Chỉ save nếu cần (tránh vòng lặp signal nếu UserProfile tự save)
@@ -554,13 +533,11 @@ def log_login(sender, request, user, **kwargs):
     """
     Ghi lịch sử đăng nhập thành công.
 
-    [BUG-M4] Dùng REMOTE_ADDR thô — không lấy đúng IP khi có reverse proxy.
-             Cần import và dùng get_client_ip(request) từ utils.py.
-             Giữ nguyên để tránh circular import (utils import models).
+    
     """
     LoginHistory.objects.create(
         user   = user,
-        ip     = request.META.get('REMOTE_ADDR', '0.0.0.0'),  # [BUG-M4] xem comment
+        ip     = request.META.get('REMOTE_ADDR', '0.0.0.0'),  
         device = request.META.get('HTTP_USER_AGENT', 'Unknown')[:255],
         status = "success"
     )

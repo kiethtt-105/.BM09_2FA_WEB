@@ -130,8 +130,7 @@ from .models import (
     EmailOTP, UserProfile, PendingRegistration,
     ActivityLog, UserPasskey
 )
-from .utils import get_totp_token, generate_qr_base64, get_client_ip, generate_and_send_email_otp
-
+from . import utils
 # FIDO2
 from fido2.server import Fido2Server
 from fido2.webauthn import (

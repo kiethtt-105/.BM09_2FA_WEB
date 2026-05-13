@@ -13,93 +13,21 @@ Cấu trúc:
   H. EXPORT               — export_users_excel, export_otp_excel, export_dtb
   I. SSO                  — sso_send
 
-LỖI ĐÃ SỬA:
-  [BUG-V1]  register(): dùng random.randint để sinh OTP → không đủ entropy.
-            Sửa: dùng secrets.randbelow(10) qua generate_and_send_email_otp().
-
-  [BUG-V2]  register(): lưu password plaintext vào PendingRegistration.temp_data.
-            Nguy cơ lộ password nếu DB bị đọc. Cần hash trước.
-            (Giữ nguyên cấu trúc, thêm comment cảnh báo cho hội đồng.)
-
-  [BUG-V3]  verify_register_otp() resend: dùng pending.temp_data sau khi đã xóa pending.
-            → Dòng 188: PendingRegistration.objects.filter(email=email).delete()
-              Dòng 189: PendingRegistration.objects.create(temp_data=pending.temp_data)
-            pending.temp_data vẫn dùng được vì object Python còn trong bộ nhớ, nhưng
-            biến old_data (dòng 183) tạo ra không được dùng → dead code. Đã xóa.
-
-  [BUG-V4]  verify_register_otp() xác nhận OTP: truy vấn DB bằng otp_code plaintext
-            thay vì hash. Phù hợp với thiết kế DEMO (có ghi chú).
-
-  [BUG-V5]  dashboard() cập nhật thông tin: dòng 396 dùng biến `otp` chưa được định nghĩa
-            trong nhánh else (email không đổi):
-              EmailOTP.objects.filter(..., otp_code=otp, ...) → NameError
-            Sửa: dùng get đúng OTP đã lưu trong profile.
-
-  [BUG-V6]  dashboard() confirm_update: hashlib.sha256(otp_input) tính nhưng không dùng
-            (input_hash tạo ra rồi bỏ) — dead code. Xóa.
-
-  [BUG-V7]  verify_2fa(): logic đánh dấu EmailOTP đã dùng sau khi login thành công
-            dùng AND chập hai query lạ (dòng 700-705) → có thể mark_used cả OTP khác.
-            Sửa: chỉ update đúng OTP vừa dùng.
-
-  [BUG-V8]  check_auth_status(): biến `user` có thể không được gán nếu uid không có
-            trong session, nhưng dòng 797 dùng user.username → UnboundLocalError.
-            Sửa: dùng giá trị fallback an toàn.
-
-  [BUG-V9]  ban_user(): không có @login_required và @user_passes_test → bất kỳ ai
-            cũng có thể gọi GET /ban/<id>/ để khóa tài khoản.
-            Sửa: thêm decorator bảo vệ.
-
-  [BUG-V10] sso_send(): dùng profile.phone (không tồn tại) thay vì profile.phone_number.
-            Sửa: đổi thành profile.phone_number.
-
-  [BUG-V11] login_view(): comment-out `user=user` trong ActivityLog.objects.create()
-            của nhánh admin (dòng 993) → log admin đăng nhập không liên kết với user.
-            Sửa: bổ sung user=user.
-
-  [BUG-V12] admin_login_history() bị định nghĩa 2 lần (dòng 1530 và 1616).
-            Định nghĩa thứ hai ghi đè định nghĩa thứ nhất (stub rỗng).
-            Sửa: xóa stub rỗng (dòng 1530-1533).
-
-  [BUG-V13] login_history() bị định nghĩa 2 lần (dòng 1162 và 1214).
-            Dòng 1162 dùng ActivityLog, dòng 1214 dùng LoginHistory — hai nguồn khác nhau.
-            Sửa: giữ lại bản dùng ActivityLog (đầy đủ hơn), xóa bản trùng.
-
-  [BUG-V14] export_otp_excel(): hàm không có return response → hàm câm, trả về None.
-            Sửa: thêm return HttpResponse.
-
-  [BUG-V15] dtb_admin_view() và export_dtb(): truy vấn SQL thô f-string với table_name
-            từ GET param. Mặc dù đã bọc trong dấu [ ], nguy cơ SQL injection vẫn hiện diện
-            trong một số trường hợp edge case. Thêm whitelist validation.
-
-  [BUG-V16] fido2_auth_complete(): dùng pickle.loads(websafe_decode(state_encoded))
-            → pickle.loads với dữ liệu từ session là nguy cơ RCE nếu session bị tamper.
-            Thêm comment cảnh báo.
-
-  [BUG-V17] disable_2fa_request(): gọi send_email_otp(request.user) — hàm này không tồn tại
-            trong file (không được định nghĩa hoặc import). → NameError khi chạy.
-            Sửa: gọi generate_and_send_email_otp() đúng.
-
-  [BUG-V18] Import trùng lặp: 'from datetime import timedelta' và 'import openpyxl' xuất hiện
-            hai lần. 'from urllib import request' shadow tên 'request' của Django HttpRequest.
-            Sửa: dọn dẹp import.
 """
 
 # ─── IMPORTS ──────────────────────────────────────────────────────────────────
 import jwt
 import time
-import random          # Còn dùng trong một vài nơi — nên thay bằng secrets toàn bộ
+import random          
 import hashlib
 import pyotp
 import io
 import base64
 import json
 import datetime
-import pickle          # [BUG-V16] nguy cơ RCE nếu session bị tamper — xem comment fido2_auth_complete
+import pickle          
 import sqlite3
 from datetime import timedelta
-# [FIX-V18] Xóa: 'from urllib import request' vì nó shadow tên 'request' của Django
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
@@ -119,7 +47,6 @@ from django.contrib.sessions.models import Session
 from django import forms
 import secrets
 
-# openpyxl — [FIX-V18] chỉ import một lần
 import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
@@ -130,7 +57,6 @@ from .models import (
     EmailOTP, UserProfile, PendingRegistration,
     ActivityLog, UserPasskey
 )
-from .utils import get_totp_token, generate_qr_base64, get_client_ip, generate_and_send_email_otp
 
 # FIDO2
 from fido2.server import Fido2Server
@@ -224,13 +150,12 @@ def register(request):
     """
     Đăng ký tài khoản mới (bước 1/2).
 
-    Luồng:
+    Luồng: 
       1. Validate form → tạo PendingRegistration → gửi OTP email.
       2. Redirect sang verify_register_otp để người dùng nhập OTP.
 
-    [BUG-V1] OTP sinh bằng random.randint → kém entropy.
-             Đã sửa: gọi generate_and_send_email_otp() dùng secrets.randbelow().
-    [BUG-V2] temp_data lưu password plaintext. Chấp nhận ở DEMO, cần hash ở production.
+    Gọi generate_and_send_email_otp() dùng secrets.randbelow().
+    temp_data lưu password plaintext. Chấp nhận ở DEMO, cần hash ở production.
     """
     if request.method == 'POST':
         form = RegisterForm(request.POST)
@@ -240,10 +165,8 @@ def register(request):
             # Xóa bản ghi pending cũ của email này (nếu user đăng ký lại)
             PendingRegistration.objects.filter(email=email).delete()
 
-            # [FIX-V1] Dùng secrets để sinh OTP an toàn qua generate_and_send_email_otp
             otp_code = ''.join(str(secrets.randbelow(10)) for _ in range(6))
 
-            # [BUG-V2] Lưu password plaintext — chỉ chấp nhận ở DEMO
             PendingRegistration.objects.create(
                 email     = email,
                 otp_code  = otp_code,
@@ -254,7 +177,7 @@ def register(request):
                     'last_name':    form.cleaned_data['last_name'],
                     'email':        email,
                     'phone_number': form.cleaned_data.get('phone_number', ''),
-                    'password':     form.cleaned_data['password1'],  # [BUG-V2] plaintext
+                    'password':     form.cleaned_data['password1'],  
                 },
             )
 
@@ -297,7 +220,6 @@ def verify_register_otp(request):
       - 'resend': gửi lại OTP mới, tạo lại PendingRegistration.
       - (default): kiểm tra OTP → tạo User thật.
 
-    [BUG-V3] Biến `old_data` (dòng cũ 183) tạo ra nhưng không dùng → dead code. Đã xóa.
     """
     email = request.session.get('pending_register_email')
     if not email:
@@ -324,7 +246,7 @@ def verify_register_otp(request):
                 PendingRegistration.objects.create(
                     email     = email,
                     otp_code  = new_otp,
-                    temp_data = temp_data,  # [FIX-V3] dùng biến đã lưu, không phải pending.temp_data sau delete
+                    temp_data = temp_data,  
                 )
                 try:
                     send_mail(
@@ -422,7 +344,6 @@ def login_view(request):
       2. User có 2FA → lưu user_id vào session, redirect verify_2fa.
       3. User không có 2FA → đăng nhập thẳng.
 
-    [BUG-V11] Nhánh admin thiếu user=user trong ActivityLog.create() → đã sửa.
     """
     if request.user.is_authenticated:
         next_url = request.GET.get('next')
@@ -450,7 +371,7 @@ def login_view(request):
             if user.is_superuser:
                 login(request, user)
                 ActivityLog.objects.create(
-                    user             = user,            # [FIX-V11] thêm user=user
+                    user             = user,            
                     username_attempt = username_input,
                     action           = 'login',
                     ip_address       = ip,
@@ -566,9 +487,6 @@ def dashboard(request):
     """
     Dashboard người dùng — hiển thị và cập nhật thông tin, bật/tắt 2FA.
 
-    [BUG-V5] Nhánh "email không đổi" dùng biến `otp` chưa được gán → NameError.
-             Sửa: xóa dòng dùng `otp` không tồn tại trong nhánh đó.
-    [BUG-V6] input_hash tính xong nhưng không dùng → dead code. Đã xóa.
     """
     if request.user.is_superuser:
         return redirect('admin_dashboard')
@@ -678,7 +596,6 @@ def dashboard(request):
                 profile.phone_number    = new_phone
                 request.user.save()
                 profile.save()
-                # [FIX-V5] Không dùng biến `otp` vì không có OTP nào được sinh ở nhánh này
                 messages.success(request, 'Đã cập nhật thông tin thành công!')
                 return redirect('dashboard')
 
@@ -686,7 +603,6 @@ def dashboard(request):
         elif 'confirm_update' in request.POST:
             otp_input = request.POST.get('otp_code', '').strip()
             pending   = request.session.get('pending_update')
-            # [FIX-V6] Xóa dead code: input_hash không dùng đến
 
             if not pending:
                 messages.error(request, 'Không có yêu cầu cập nhật.')
@@ -910,9 +826,6 @@ def verify_2fa(request):
 
     Hỗ trợ các phương thức: app (TOTP), email OTP, fido2 (Passkey), push (thiết bị khác).
 
-    [BUG-V7] Logic đánh dấu EmailOTP sau login:
-             Code cũ (dòng 700-705) dùng AND chập 2 query lạ → có thể mark_used OTP khác.
-             Sửa: chỉ update đúng bản ghi OTP vừa dùng.
     """
     uid = request.session.get('pre_2fa_user_id')
     if not uid:
@@ -1015,7 +928,6 @@ def verify_2fa(request):
                 profile.email_otp  = None
                 profile.otp_expiry = None
                 profile.save()
-                # [FIX-V7] Chỉ update đúng OTP vừa dùng, không query thêm
                 EmailOTP.objects.filter(
                     user=user, otp_code=code, is_used=False
                 ).update(is_used=True)
@@ -1084,9 +996,7 @@ def check_auth_status(request):
     """
     API: Thiết bị mới polling trạng thái yêu cầu xác thực.
 
-    [BUG-V8] Biến `user` có thể chưa được gán nếu uid không có trong session.
-             Dòng cũ: username_attempt=user.username → UnboundLocalError.
-             Sửa: dùng giá trị fallback "Unknown".
+    
     """
     session_key = request.session.session_key
     ip          = get_client_ip(request)
@@ -1112,7 +1022,7 @@ def check_auth_status(request):
         req.delete()
         ActivityLog.objects.create(
             user             = user,
-            username_attempt = user.username if user else "Unknown",  # [FIX-V8]
+            username_attempt = user.username if user else "Unknown",  
             action           = 'login',
             ip_address       = ip,
             user_agent       = user_agent,
@@ -1120,10 +1030,9 @@ def check_auth_status(request):
         return JsonResponse({'status': 'approved'})
 
     elif req.status == 'denied':
-        # [FIX-V8] `user` chưa được gán ở nhánh denied — dùng fallback
         req.delete()
         ActivityLog.objects.create(
-            username_attempt = "Unknown",  # [FIX-V8]
+            username_attempt = "Unknown",  
             action           = 'login_failed',
             ip_address       = ip,
             user_agent       = user_agent,
@@ -1157,8 +1066,8 @@ def fido2_reg_begin(request):
     Bắt đầu đăng ký Passkey — trả về options JSON cho browser gọi WebAuthn API.
 
     Lưu ý: fido2_state lưu vào session dạng pickle + base64url.
-    [BUG-V16] Xem cảnh báo pickle tại fido2_auth_complete.
-    """
+
+        """
     try:
         user          = request.user
         rp_id         = request.get_host().split(':')[0]
@@ -1297,11 +1206,6 @@ def fido2_auth_complete(request):
     """
     Hoàn tất xác thực Passkey.
 
-    [BUG-V16] CẢNH BÁO BẢO MẬT: dùng pickle.loads() để deserialize state từ session.
-              Nếu session backend bị compromise (ví dụ SECRET_KEY bị lộ), kẻ tấn công
-              có thể tạo session giả với payload pickle độc hại → Remote Code Execution.
-              Giải pháp production: dùng json + fido2 state serializer, hoặc lưu state
-              trong DB (không dùng pickle).
     """
     ip         = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
@@ -1323,7 +1227,6 @@ def fido2_auth_complete(request):
         if not state_encoded:
             return JsonResponse({'status': 'error', 'message': 'Hết hạn phiên xác thực'}, status=400)
 
-        # [BUG-V16] pickle.loads — xem cảnh báo bên trên
         state = pickle.loads(websafe_decode(state_encoded))
 
         credential_id = data.get('id')
@@ -1463,9 +1366,6 @@ def confirm_device(request):
 def disable_2fa_request(request):
     """
     Khởi động luồng tắt 2FA — xác định phương thức và redirect đúng trang.
-
-    [BUG-V17] Code cũ gọi send_email_otp(request.user) — hàm không tồn tại → NameError.
-              Sửa: gọi generate_and_send_email_otp() đúng.
     """
     profile = request.user.profile
 
@@ -1481,7 +1381,6 @@ def disable_2fa_request(request):
     request.session['disable_2fa_method']  = method
 
     if method == 'email':
-        # [FIX-V17] Gọi đúng hàm generate_and_send_email_otp
         try:
             generate_and_send_email_otp(
                 user   = request.user,
@@ -1499,7 +1398,6 @@ def disable_2fa_request(request):
 def login_history(request):
     """
     Lịch sử đăng nhập của user hiện tại.
-    [FIX-V13] Dùng ActivityLog (đầy đủ hơn LoginHistory) — xóa bản trùng.
     """
     logs = ActivityLog.objects.filter(user=request.user).order_by('-timestamp')
     return render(request, 'accounts/login_history.html', {'logs': logs})
@@ -1665,7 +1563,6 @@ def admin_otp_history(request):
 def admin_login_history(request):
     """
     Lịch sử đăng nhập với tìm kiếm, lọc action, date range, user-agent.
-    [FIX-V12] Xóa stub định nghĩa lần đầu (rỗng) — giữ định nghĩa đầy đủ này.
     """
     logs_list = ActivityLog.objects.all().order_by('-timestamp')
 
@@ -1781,8 +1678,6 @@ def admin_toggle_status(request, user_id):
 def ban_user(request, user_id):
     """
     Khóa tài khoản user (is_active=False).
-    [FIX-V9] Thêm decorator @login_required và @user_passes_test.
-    Code cũ không có decorator → bất kỳ ai gọi GET /ban/<id>/ được.
     """
     user = get_object_or_404(User, id=user_id)
     if not user.is_superuser:
@@ -1826,8 +1721,6 @@ def dtb_admin_view(request):
     """
     Xem nội dung database trực tiếp (SQLite).
 
-    [BUG-V15] table_name lấy từ GET param → có nguy cơ SQL injection dù đã bọc [].
-              Sửa: validate table_name nằm trong whitelist all_tables.
     """
     db_path        = settings.DATABASES['default']['NAME']
     selected_table = request.GET.get('table', '')
@@ -1845,7 +1738,6 @@ def dtb_admin_view(request):
 
         table_data = {}
 
-        # [FIX-V15] Validate selected_table phải nằm trong all_tables
         if selected_table and selected_table in all_tables:
             tables_to_load = [selected_table]
         else:
@@ -1930,8 +1822,6 @@ def export_otp_excel(request):
     """
     Export lịch sử Email OTP ra file Excel.
 
-    [FIX-V14] Code cũ thiếu return response → hàm trả về None → HTTP 500.
-              Sửa: thêm HttpResponse và wb.save(response).
     """
     logs = EmailOTP.objects.select_related('user').order_by('-created_at')
 
@@ -1965,7 +1855,6 @@ def export_otp_excel(request):
     for i, width in enumerate([6, 22, 20, 15, 40, 20], start=1):
         ws.column_dimensions[get_column_letter(i)].width = width
 
-    # [FIX-V14] Thêm return response (code cũ thiếu phần này)
     response = HttpResponse(
         content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
@@ -1981,8 +1870,6 @@ def export_dtb(request):
     """
     Export database ra Excel: 1 bảng hoặc toàn bộ (nhiều sheet).
 
-    [BUG-V15] table_name lấy từ GET param, dùng f-string trực tiếp vào SQL.
-              Sửa: validate table_name nằm trong whitelist.
     """
     db_path    = settings.DATABASES['default']['NAME']
     table_name = request.GET.get('table')
@@ -1991,7 +1878,6 @@ def export_dtb(request):
         conn   = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        # [FIX-V15] Lấy whitelist table trước khi dùng table_name
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
         )
@@ -2000,7 +1886,7 @@ def export_dtb(request):
         wb = Workbook()
 
         if table_name:
-            if table_name not in all_tables:  # [FIX-V15] Whitelist check
+            if table_name not in all_tables:  
                 return HttpResponse("Bảng không hợp lệ.", status=400)
 
             cursor.execute(f"SELECT * FROM [{table_name}]")
@@ -2051,9 +1937,6 @@ def sso_send(request):
     """
     Sinh JWT token SSO và redirect về callback URL của ứng dụng ngoài.
 
-    [BUG-V10] Code cũ dùng profile.phone → AttributeError (trường đúng là phone_number).
-              Sửa: đổi thành profile.phone_number.
-
     Cấu hình cần có trong settings.py:
       - SSO_SECRET_KEY: khóa ký JWT
       - SSO_TOKEN_EXPIRY: thời gian hết hạn (giây)
@@ -2061,7 +1944,6 @@ def sso_send(request):
     """
     user    = request.user
     profile = getattr(user, 'profile', None)
-    # [FIX-V10] Dùng phone_number thay vì phone (không tồn tại)
     phone_number = profile.phone_number if profile else ""
 
     payload = {
