@@ -450,15 +450,20 @@ function copyHash(hash, btn) {
 // ═══════════════════════════════════════════════════════
 //  Toggle secret GA
 // ═══════════════════════════════════════════════════════
+// Toggle Secret Key (Demo)
 function toggleSecretVisibility(username) {
-    const span = document.getElementById('secret-'+username);
-    const eye  = document.getElementById('eye-secret-'+username);
-    if (span.textContent.includes('*')) {
+    const span = document.getElementById('secret-demo-' + username);
+    const eye  = document.getElementById('eye-secret-' + username);
+    if (!span) return;
+
+    if (span.textContent.includes('*') || span.textContent.includes('••••')) {
+        // Hiện full
         span.textContent = span.dataset.full;
         eye.classList.replace('fa-eye','fa-eye-slash');
     } else {
+        // Ẩn lại
         const f = span.dataset.full;
-        span.textContent = f.slice(0,4)+'****'+f.slice(-4);
+        span.textContent = f.slice(0,8) + '****' + f.slice(-6);
         eye.classList.replace('fa-eye-slash','fa-eye');
     }
 }
