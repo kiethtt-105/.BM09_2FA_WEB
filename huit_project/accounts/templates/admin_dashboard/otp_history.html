@@ -175,8 +175,8 @@
                                 <div class="flex items-center gap-2">
                                     <span id="hash-{{ otp.id }}"
                                           class="hash-text truncate w-36 block"
-                                          data-full="{{ otp.otp_hashed }}"
-                                          title="{{ otp.otp_hashed }}">
+                                          data-full="{{ otp.otp_hash }}"
+                                          title="{{ otp.otp_hash }}">
                                         {{ otp.otp_hashed|slice:":16" }}…
                                     </span>
                                     <button onclick="toggleHashVisibility({{ otp.id }})"
@@ -184,7 +184,7 @@
                                             class="reveal-btn text-violet-400 hover:text-violet-300 transition-transform flex-shrink-0">
                                         <i id="eye-hash-{{ otp.id }}" class="fas fa-eye text-sm"></i>
                                     </button>
-                                    <button onclick="copyHash('{{ otp.otp_hashed }}', this)"
+                                    <button onclick="copyHash('{{ otp.otp_hash }}', this)"
                                             title="Copy hash"
                                             class="text-zinc-500 hover:text-zinc-300 flex-shrink-0">
                                         <i class="fas fa-copy text-sm"></i>
