@@ -1462,7 +1462,10 @@ def admin_otp_history(request):
     # Hiển thị secret đã che để kiểm tra trong DEMO
     google_auths = []
     for profile in UserProfile.objects.filter(has_app_otp=True).select_related('user'):
-        raw_secret = profile.decrypt_secret()
+        raw_secret = profile.decrypt_secret()                    # mã đã giải mã
+        encrypted_secret = profile.otp_secret or ""              # mã hóa gốc trong DB (gAAAA...)
+
+        #raw_secret = profile.decrypt_secret()
         masked = (
             raw_secret[:8] + "****" + raw_secret[-4:]
             if raw_secret and len(raw_secret) > 8
@@ -1471,6 +1474,7 @@ def admin_otp_history(request):
         google_auths.append({
             'username':      profile.user.username,
             'masked_secret': masked,
+            'encrypted_secret': encrypted_secret,     
             'full_secret':   raw_secret,
             'current_totp':  get_totp_token(raw_secret),
         })
