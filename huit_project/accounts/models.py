@@ -79,6 +79,7 @@ class UserProfile(models.Model):
 
     class Meta:
         verbose_name = "Hồ sơ người dùng"
+        verbose_name_plural = "Hồ sơ người dùng"
 
     # ── Mã hóa / Giải mã Fernet ──────────────────────────────────────────
     def encrypt_secret(self, raw_secret: str) -> str:
@@ -165,6 +166,7 @@ class PendingRegistration(models.Model):
 
     class Meta:
         verbose_name = "Đăng ký tạm chờ xác thực"
+        verbose_name_plural = "Đăng ký tạm chờ xác thực"
 
     def is_valid(self) -> bool:
         """
@@ -247,7 +249,8 @@ class EmailOTP(models.Model):
 
     class Meta:
         ordering     = ['-created_at']
-        verbose_name = "Email OTP Log"
+        verbose_name = "Email OTP Log "
+        verbose_name_plural = "Email OTP Logs "
 
     def save(self, *args, **kwargs):
         """Tự động tính SHA-256 hash khi tạo mới (chỉ khi chưa có hash)."""
@@ -332,6 +335,7 @@ class ActivityLog(models.Model):
     class Meta:
         ordering     = ['-timestamp']
         verbose_name = "Nhật ký hoạt động"
+        verbose_name_plural = "Nhật ký hoạt động"
 
     def __str__(self):
         username = self.user.username if self.user else self.username_attempt
@@ -359,6 +363,8 @@ class OTP(models.Model):
 
     class Meta:
         verbose_name = "[DEPRECATED] OTP cũ"
+        verbose_name_plural = "[DEPRECATED] OTP cũ"
+
 
     def is_expired(self) -> bool:
         """OTP hết hạn sau 2 phút."""
@@ -388,6 +394,7 @@ class TrustedDevice(models.Model):
 
     class Meta:
         verbose_name = "Thiết bị tin cậy"
+        verbose_name_plural = "Thiết bị tin cậy"
 
     def __str__(self):
         return f"{self.user.username} - {self.name}"
@@ -414,7 +421,8 @@ class User2FA(models.Model):
     is_required         = models.BooleanField(default=False, verbose_name="Bắt buộc xác thực 2FA")
 
     class Meta:
-        verbose_name = "Cấu hình 2FA (Admin)"
+        verbose_name = "Cấu hình 2FA (Admin) "
+        verbose_name_plural = "Cấu hình 2FA (Admin) "
 
     def __str__(self):
         return self.user.username
@@ -443,6 +451,8 @@ class UserSessionControl(models.Model):
 
     class Meta:
         verbose_name = "Kiểm soát phiên người dùng"
+        verbose_name_plural = "Kiểm soát phiên người dùng"
+
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -495,7 +505,8 @@ class RemoteAuthRequest(models.Model):
     created_at  = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Yêu cầu xác thực từ xa"
+        verbose_name = "Yêu cầu xác thực từ xa "
+        verbose_name_plural = "Yêu cầu xác thực từ xa "
 
     def __str__(self):
         return f"RemoteAuth({self.user.username} | {self.status})"
@@ -520,6 +531,7 @@ class UserPasskey(models.Model):
 
     class Meta:
         verbose_name = "Passkey (FIDO2)"
+        verbose_name_plural = "Passkeys (FIDO2)"
 
     def __str__(self):
         return f"Passkey của {self.user.username}"
