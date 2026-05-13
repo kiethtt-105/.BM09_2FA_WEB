@@ -7,4 +7,5 @@ urlpatterns = [
     path('logout/',         views.logout_view,    name='logout'),
     path('sso/callback/',   views.sso_callback,   name='sso_callback'),
     path('sso/link/',       views.link_huit_account, name='link_huit'),
+    path('link-huit/', views.link_huit_account, name='link_huit_account'),
 ]

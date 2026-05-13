@@ -4,6 +4,9 @@ from django.contrib.auth.models import User
 from django.contrib import messages
 import jwt
 from .models import UserProfile
+import requests
+from django.shortcuts import redirect
+from django.conf import settings 
 
 # ══════════════════════════════════════════════════════
 #  HOME
@@ -18,6 +21,7 @@ def portal_home(request):
     return render(request, 'portal/home.html', {
         'user': request.user,
         'profile': profile,
+        'huit_sso_url': settings.HUIT_SSO_URL
     })
 
 # ══════════════════════════════════════════════════════
@@ -38,7 +42,7 @@ def sso_callback(request):
     try:
         # Bước 2: Giải mã Token JWT bằng Secret Key chung
         # Lưu ý: Tuyệt đối không để dính các ký tự lạ như cite vào đây
-        payload = jwt.decode(token, 'huit-sso-secret-2024-change-this', algorithms=['HS256'])
+        payload = jwt.decode(token, '1669a995c7053fbf22cb9bd6babd28db27fab99e8f58f04d38a683aa125054d9', algorithms=['HS256'])
         
         # Bước 3: Lấy các thông tin cá nhân được App A gửi sang
         huit_username = payload.get('username')
@@ -114,8 +118,10 @@ def sso_callback(request):
 
 # ══════════════════════════════════════════════════════
 def link_huit_account(request):
-    """Nút liên kết  sang App A lấy Token"""
-    return redirect('https://spellable-sciuroid-maybell.ngrok-free.dev/sso/send/')
+    """Nút liên kết sang App A lấy Token"""
+    # Dùng settings thay vì hardcode
+    sso_url = f"{settings.HUIT_SSO_URL}/sso/send/"
+    return redirect(sso_url)
 
 def logout_view(request):
     request.session.flush()
@@ -158,4 +164,4 @@ def portal_login(request):
                 messages.success(request, f'Chào mừng {u} đã đăng ký thành công!')
                 return redirect('portal_home')
 
-    return render(request, 'portal/login.html')
+    return render(request, 'portal/login.html', {'huit_sso_url': settings.HUIT_SSO_URL})

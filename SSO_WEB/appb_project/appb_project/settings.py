@@ -6,8 +6,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # PHẢI GIỐNG HỆT SECRET_KEY  huit_project
 SECRET_KEY = 'django-insecure-0x=ef3hz-1)yv+-c#*^pkzsqejmg!x)nf*d%fdz!_xjhfu-!@d'
 DEBUG = True
-#ALLOWED_HOSTS = ['*']
-ALLOWED_HOSTS = ['spellable-sciuroid-maybell.ngrok-free.dev', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['*']
+#ALLOWED_HOSTS = ['spellable-sciuroid-maybell.ngrok-free.dev', '127.0.0.1', 'localhost','anguished-such-omnivore.ngrok-free.dev/dashboard/']
+# URL của App A (huit_project) — mỗi máy đổi link ngrok này
+HUIT_SSO_URL = 'https://anguished-such-omnivore.ngrok-free.dev'
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -67,7 +69,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': 'huit-sso-secret-2024-change-this',
+    'SIGNING_KEY': '1669a995c7053fbf22cb9bd6babd28db27fab99e8f58f04d38a683aa125054d9',
     'USER_ID_FIELD': 'id',        # Trường ID trong Model User của App B
     'USER_ID_CLAIM': 'user_id',   # Trường ID tương ứng trong Token Payload
 }
