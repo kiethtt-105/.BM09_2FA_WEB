@@ -1,12 +1,6 @@
-"""
-Django settings for huit_project.
-Đã bảo mật: tất cả thông tin nhạy cảm chuyển sang file .env
-"""
-
 from pathlib import Path
 from decouple import config
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -25,14 +19,13 @@ CSRF_TRUSTED_ORIGINS = config(
     default='http://localhost:8000'
 ).split(',')
 
-# Bật khi deploy HTTPS thật (đặt True trong .env production)
-CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
+# Bật khi deploy HTTPS thật
+CSRF_COOKIE_SECURE   = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
 
-# Thêm bảo vệ HTTP headers
-SECURE_BROWSER_XSS_FILTER = True
+SECURE_BROWSER_XSS_FILTER   = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+X_FRAME_OPTIONS              = 'DENY'
 
 
 # ===========================================================
@@ -50,7 +43,6 @@ INSTALLED_APPS = [
     'accounts',
 ]
 
-# Giao diện tùy chỉnh cho Jazzmin
 JAZZMIN_UI_CONFIG = {
     "navbar_small_text": False,
     "footer_small_text": False,
@@ -118,27 +110,26 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'huit_project.wsgi.application'
-ASGI_APPLICATION = 'huit_project.asgi.application'
+ASGI_APPLICATION  = 'huit_project.asgi.application'
 
 
 # ===========================================================
-# DATABASE — PostgreSQL (thay thế SQLite)
+# DATABASE — PostgreSQL
 # ===========================================================
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
+        'ENGINE':   'django.db.backends.postgresql',
+        'NAME':     config('DB_NAME'),
+        'USER':     config('DB_USER'),
         'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
+        'HOST':     config('DB_HOST', default='localhost'),
+        'PORT':     config('DB_PORT', default='5432'),
         'OPTIONS': {
-            # Bỏ 'require' khi chạy local không có SSL,
-            # đổi lại 'require' khi deploy production
+            # 'prefer' cho local; đổi thành 'require' khi deploy production
             'sslmode': config('DB_SSL_MODE', default='prefer'),
         },
-        'CONN_MAX_AGE': 60,  # giữ kết nối tối đa 60s để tối ưu hiệu năng
+        'CONN_MAX_AGE': 60,  # Giữ kết nối tối đa 60s
     }
 }
 
@@ -162,19 +153,19 @@ AUTH_PASSWORD_VALIDATORS = [
 # ===========================================================
 
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Ho_Chi_Minh'
-USE_I18N = True
-USE_TZ = True
+TIME_ZONE     = 'Asia/Ho_Chi_Minh'
+USE_I18N      = True
+USE_TZ        = True
 
 
 # ===========================================================
 # FILE TĨNH & MEDIA
 # ===========================================================
 
-STATIC_URL = 'static/'
+STATIC_URL  = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-MEDIA_URL = '/media/'
+MEDIA_URL  = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 
@@ -188,16 +179,16 @@ LOGIN_URL = 'login'
 
 
 # ===========================================================
-# CẤU HÌNH EMAIL — Gmail (Drive015)
+# EMAIL — Gmail SMTP
 # ===========================================================
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='kiethtt@drive015.com')
+EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST          = 'smtp.gmail.com'
+EMAIL_PORT          = 587
+EMAIL_USE_TLS       = True
+EMAIL_HOST_USER     = config('EMAIL_HOST_USER', default='kiethtt@drive015.com')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = config('EMAIL_HOST_USER', default='kiethtt@drive015.com')
+DEFAULT_FROM_EMAIL  = config('EMAIL_HOST_USER', default='kiethtt@drive015.com')
 
 
 # ===========================================================
@@ -211,7 +202,7 @@ SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 # SSO — Single Sign-On
 # ===========================================================
 
-SSO_SECRET_KEY = config('SSO_SECRET_KEY')
+SSO_SECRET_KEY   = config('SSO_SECRET_KEY')
 SSO_TOKEN_EXPIRY = 300  # 5 phút
 
 WEB_SSO_CALLBACK_URL = config(
