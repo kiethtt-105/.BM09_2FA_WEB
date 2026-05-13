@@ -257,11 +257,11 @@ def verify_register_otp(request):
             return render(request, 'accounts/verify_register_otp.html', {'email': email})
 
         data = pending.temp_data
-        user = User.objects.create_user(
+        user = User.objects.create(
             username   = data['username'],
             email      = data['email'],
-            password = data['password'],
-            is_active = True,
+            password   = data['password'],
+            is_active  = True,
             first_name = data['first_name'],
             last_name  = data['last_name'],
         )
@@ -570,7 +570,7 @@ def dashboard(request):
                 return redirect('dashboard')
 
             if otp_input != profile.email_otp:
-                EmailOTP.objects.filter(
+                otp_log = EmailOTP.objects.filter(
                     user=request.user, otp_code=otp_input, is_used=False
                 ).first()
                 if otp_log:
@@ -580,7 +580,7 @@ def dashboard(request):
                 return redirect('dashboard')
 
             # OTP đúng → cập nhật thông tin
-            EmailOTP.objects.filter(
+            otp_log = EmailOTP.objects.filter(
                 user=request.user, otp_code=otp_input, is_used=False
             ).first()
             if otp_log:
@@ -646,7 +646,7 @@ def dashboard(request):
                         valid = True
 
                 if valid:
-                    EmailOTP.objects.filter(
+                    otp_log = EmailOTP.objects.filter(
                         user=request.user, otp_code=code, is_used=False
                     ).first()
                     if otp_log:
@@ -741,7 +741,7 @@ def setup_2fa(request):
                     profile.email_otp     = None
                     profile.otp_expiry    = None
                     profile.save()
-                    EmailOTP.objects.filter(
+                    otp_log = EmailOTP.objects.filter(
                         user=request.user, otp_code=code, is_used=False
                     ).first()
                     if otp_log:
@@ -882,7 +882,7 @@ def verify_2fa(request):
                 profile.otp_expiry = None
                 profile.save()
                 # Chỉ đánh dấu đúng bản ghi OTP vừa dùng
-                EmailOTP.objects.filter(
+                otp_log = EmailOTP.objects.filter(
                     user=user, otp_code=code, is_used=False
                 ).first()
                 if otp_log:
@@ -1485,7 +1485,7 @@ def admin_otp_history(request):
         google_auths.append({
             'username':      profile.user.username,
             'masked_secret': masked,
-            'encrypted_secret': encrypted_secret,     
+            'encrypted_secret': encrypted_secret,
             'full_secret':   raw_secret,
             'current_totp':  get_totp_token(raw_secret),
         })
