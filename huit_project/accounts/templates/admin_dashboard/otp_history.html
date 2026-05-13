@@ -16,6 +16,31 @@
         .disabled-row { opacity: 0.45; }
         .badge { display: inline-flex; padding: 3px 12px; font-size: 0.7rem; font-weight: 600;
                  border-radius: 999px; white-space: nowrap; }
+
+        /* ── Email OTP table column widths ── */
+        .email-otp-table { table-layout: fixed; width: 100%; }
+        .email-otp-table th, .email-otp-table td {
+            vertical-align: middle;
+            overflow: hidden;
+        }
+        .col-username   { width: 110px; }
+        .col-type       { width: 130px; }
+        .col-otp        { width: 90px; }
+        .col-hash       { width: 280px; }
+        .col-status     { width: 120px; }
+        .col-ip         { width: 115px; }
+        .col-time       { width: 155px; }
+        .col-action     { width: 95px; }
+
+        /* ── Google Auth table column widths ── */
+        .ga-table { table-layout: fixed; width: 100%; }
+        .ga-table th, .ga-table td { vertical-align: middle; overflow: hidden; }
+        .col-ga-user    { width: 110px; }
+        .col-ga-secret  { width: 220px; word-break: break-all; white-space: normal; }
+        .col-ga-enc     { width: 230px; }
+        .col-ga-totp    { width: 140px; }
+        .col-ga-timer   { width: 160px; }
+        .col-ga-copy    { width: 110px; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
@@ -116,17 +141,17 @@
 
             {% if email_otps %}
             <div class="bg-zinc-900 rounded-3xl overflow-hidden">
-                <table class="w-full">
+                <table class="email-otp-table">
                     <thead>
                         <tr class="border-b border-zinc-800 text-xs uppercase text-zinc-400">
-                            <th class="text-left py-4 px-5">USERNAME</th>
-                            <th class="text-left py-4 px-5">LOẠI</th>
-                            <th class="text-left py-4 px-5">MÃ OTP <span class="text-amber-400 normal-case">(demo)</span></th>
-                            <th class="text-left py-4 px-5">SHA-256 HASH <span class="text-violet-400 normal-case">(thực tế)</span></th>
-                            <th class="text-left py-4 px-5">TRẠNG THÁI</th>
-                            <th class="text-left py-4 px-5">IP</th>
-                            <th class="text-left py-4 px-5">THỜI GIAN</th>
-                            <th class="text-left py-4 px-5">THAO TÁC</th>
+                            <th class="text-left py-4 px-4 col-username">USERNAME</th>
+                            <th class="text-left py-4 px-4 col-type">LOẠI</th>
+                            <th class="text-left py-4 px-4 col-otp">MÃ OTP <span class="text-amber-400 normal-case">(PLAINTEXT)</span></th>
+                            <th class="text-left py-4 px-4 col-hash">SHA-256 HASH <span class="text-violet-400 normal-case">(THỰC TẾ - DTB)</span></th>
+                            <th class="text-left py-4 px-4 col-status">TRẠNG THÁI</th>
+                            <th class="text-left py-4 px-4 col-ip">IP</th>
+                            <th class="text-left py-4 px-4 col-time">THỜI GIAN</th>
+                            <th class="text-left py-4 px-4 col-action">THAO TÁC</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -135,12 +160,12 @@
                             id="row-{{ otp.id }}">
 
                             <!-- USERNAME -->
-                            <td class="py-4 px-5 font-medium">
+                            <td class="py-4 px-4 col-username font-medium">
                                 {{ otp.user.username|default:"—" }}
                             </td>
 
                             <!-- LOẠI THAO TÁC -->
-                            <td class="py-4 px-5">
+                            <td class="py-4 px-4 col-type">
                                 {% if otp.action == 'register' %}
                                     <span class="badge bg-blue-500/10 text-blue-400">Đăng ký</span>
                                 {% elif otp.action == 'login_2fa' %}
@@ -157,40 +182,24 @@
                             </td>
 
                             <!-- MÃ OTP PLAINTEXT (demo) -->
-                            <td class="py-4 px-5">
-                                <div class="flex items-center gap-2">
-                                    <span id="otp-{{ otp.id }}" class="otp-masked text-zinc-300"
-                                          data-full="{{ otp.otp_code }}">
-                                        {{ otp.otp_code|slice:":3" }}***
-                                    </span>
-                                    <button onclick="toggleOtpVisibility({{ otp.id }})"
-                                            class="reveal-btn text-violet-400 hover:text-violet-300 transition-transform">
-                                        <i id="eye-{{ otp.id }}" class="fas fa-eye text-lg"></i>
-                                    </button>
-                                </div>
+                            <td class="py-4 px-4 col-otp">
+                                <span class="otp-masked text-zinc-300">{{ otp.otp_code }}</span>
                             </td>
 
                             <!-- SHA-256 HASH (thực tế) -->
-                            <td class="py-4 px-5">
-                                <div class="flex items-center gap-2 group">
-                                    <span id="hash-{{ otp.id }}" 
-                                        class="hash-text text-[13px] break-all font-mono leading-tight max-w-[380px] block"
-                                        data-full="{{ otp.otp_hash }}"
+                            <td class="py-4 px-4 col-hash">
+                                <div class="flex items-start gap-2">
+                                    <span class="hash-text text-[12px] break-all font-mono leading-snug block"
                                         title="{{ otp.otp_hash }}">
-                                        {{ otp.otp_hash|slice:":40" }}...
+                                        {{ otp.otp_hash }}
                                     </span>
-                                    <div class="flex gap-1 opacity-70 group-hover:opacity-100">
-                                        <button onclick="toggleHashVisibility({{ otp.id }})" class="reveal-btn text-violet-400 hover:text-violet-300">
-                                            <i id="eye-hash-{{ otp.id }}" class="fas fa-eye text-sm"></i>
-                                        </button>
-                                        <button onclick="copyHash('{{ otp.otp_hash }}', this)" class="text-zinc-400 hover:text-white">
-                                            <i class="fas fa-copy text-sm"></i>
-                                        </button>
-                                    </div>
+                                    <button onclick="copyHash('{{ otp.otp_hash }}', this)" class="text-zinc-400 hover:text-white flex-shrink-0 mt-0.5">
+                                        <i class="fas fa-copy text-sm"></i>
+                                    </button>
                                 </div>
                             </td>
                             <!-- TRẠNG THÁI -->
-                            <td class="py-4 px-5" id="status-{{ otp.id }}">
+                            <td class="py-4 px-4 col-status" id="status-{{ otp.id }}">
                                 {% if not otp.is_active %}
                                     <span class="badge bg-zinc-700/50 text-zinc-400">
                                         <i class="fas fa-ban mr-1"></i> Vô hiệu
@@ -205,12 +214,12 @@
                             </td>
 
                             <!-- IP ADDRESS -->
-                            <td class="py-4 px-5 text-xs text-zinc-400 font-mono">
+                            <td class="py-4 px-4 col-ip text-xs text-zinc-400 font-mono">
                                 {{ otp.ip_address|default:"—" }}
                             </td>
 
                             <!-- THỜI GIAN -->
-                            <td class="py-4 px-5 text-sm text-zinc-400 whitespace-nowrap">
+                            <td class="py-4 px-4 col-time text-sm text-zinc-400 whitespace-nowrap">
                                 {{ otp.created_at|date:"d/m/Y H:i:s" }}
                                 {% if otp.used_at %}
                                 <div class="text-xs text-emerald-500 mt-0.5">
@@ -220,7 +229,7 @@
                             </td>
 
                             <!-- THAO TÁC -->
-                            <td class="py-4 px-5">
+                            <td class="py-4 px-4 col-action">
                                 {% if otp.is_active and not otp.is_used %}
                                 <button onclick="disableOtp({{ otp.id }}, this)"
                                         id="btn-disable-{{ otp.id }}"
@@ -271,15 +280,15 @@
 
             {% if google_auths %}
             <div class="bg-zinc-900 rounded-3xl overflow-hidden">
-                <table class="w-full">
+                <table class="ga-table">
                     <thead>
                         <tr class="border-b border-zinc-800 text-xs uppercase text-zinc-400">
-                            <th class="text-left py-5 px-8">USERNAME</th>
-                            <th class="text-left py-5 px-8">SECRET KEY (demo)</th>
-                            <th class="text-left py-5 px-8">SECRET KEY (mã hóa)</th>
-                            <th class="text-left py-5 px-8">MÃ TOTP HIỆN TẠI</th>
-                            <th class="text-left py-5 px-8">THỜI GIAN CÒN LẠI</th>
-                            <th class="text-left py-5 px-8"></th>
+                            <th class="text-left py-5 px-5 col-ga-user">USERNAME</th>
+                            <th class="text-left py-5 px-5 col-ga-secret">SECRET KEY <span class="text-amber-400 normal-case">(PLAINTEXT)</span></th>
+                            <th class="text-left py-5 px-5 col-ga-enc">SECRET KEY <span class="text-violet-400 normal-case">(THỰC TẾ - DTB)</span></th>
+                            <th class="text-left py-5 px-5 col-ga-totp">MÃ TOTP HIỆN TẠI</th>
+                            <th class="text-left py-5 px-5 col-ga-timer">THỜI GIAN CÒN LẠI</th>
+                            <th class="text-left py-5 px-5 col-ga-copy"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -287,41 +296,32 @@
                         <tr class="table-row border-b border-zinc-800 last:border-none"
                             data-secret="{{ ga.full_secret }}"
                             data-username="{{ ga.username|slugify }}">
-                            <td class="py-5 px-8 font-medium">{{ ga.username }}</td>
+                            <td class="py-5 px-5 col-ga-user font-medium">{{ ga.username }}</td>
                             <!-- SECRET KEY (demo - readable) -->
-                            <td class="py-5 px-8">
-                                <div class="flex items-center gap-2">
-                                    <span id="secret-demo-{{ ga.username|slugify }}" class="otp-masked text-emerald-400"
-                                        data-full="{{ ga.full_secret }}">
-                                        {{ ga.full_secret|slice:":8" }}****
-                                    </span>
-                                    <button onclick="toggleSecretVisibility('{{ ga.username|slugify }}')" 
-                                            class="reveal-btn text-violet-400 hover:text-violet-300">
-                                        <i id="eye-secret-{{ ga.username|slugify }}" class="fas fa-eye text-xl"></i>
-                                    </button>
-                                </div>
+                            <td class="py-5 px-5 col-ga-secret">
+                                <span class="otp-masked text-emerald-400 font-mono" style="font-size:0.8rem;letter-spacing:1px;word-break:break-all;white-space:normal;">{{ ga.full_secret }}</span>
                             </td>
 
                             <!-- SECRET KEY (mã hóa - gAAAA...) -->
-                            <td class="py-5 px-8">
-                                <div class="flex items-center gap-2">
-                                    <span class="hash-text text-[13px] break-all font-mono max-w-[320px] block"
+                            <td class="py-5 px-5 col-ga-enc">
+                                <div class="flex items-start gap-2">
+                                    <span class="hash-text text-[12px] break-all font-mono leading-snug block"
                                         title="{{ ga.encrypted_secret }}">
                                         {{ ga.encrypted_secret|slice:":35" }}...
                                     </span>
                                     <button onclick="copyToClipboard('{{ ga.encrypted_secret }}', this)" 
-                                            class="text-zinc-400 hover:text-white">
+                                            class="text-zinc-400 hover:text-white flex-shrink-0 mt-0.5">
                                         <i class="fas fa-copy text-sm"></i>
                                     </button>
                                 </div>
                             </td>
-                            <td class="py-5 px-8">
+                            <td class="py-5 px-5 col-ga-totp">
                                 <span id="totp-{{ ga.username|slugify }}"
                                       class="text-3xl font-mono font-bold text-emerald-400 totp-code">
                                     {{ ga.current_totp }}
                                 </span>
                             </td>
-                            <td class="py-5 px-8">
+                            <td class="py-5 px-5 col-ga-timer">
                                 <div class="flex items-center gap-3">
                                     <div class="flex-1 bg-zinc-800 h-2.5 rounded-full overflow-hidden">
                                         <div id="progress-{{ ga.username|slugify }}"
@@ -329,10 +329,10 @@
                                              style="width:100%"></div>
                                     </div>
                                     <span id="countdown-{{ ga.username|slugify }}"
-                                          class="font-mono text-sm text-zinc-400 w-12 text-right">30s</span>
+                                          class="font-mono text-sm text-zinc-400 w-10 text-right">30s</span>
                                 </div>
                             </td>
-                            <td class="py-5 px-8">
+                            <td class="py-5 px-5 col-ga-copy">
                                 <button onclick="copyToClipboard('{{ ga.full_secret }}', this)"
                                         class="text-violet-400 hover:text-white flex items-center gap-2 text-sm">
                                     <i class="fas fa-copy"></i> Copy Secret
