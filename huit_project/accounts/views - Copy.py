@@ -34,7 +34,6 @@ import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment, PatternFill
-from django.contrib.auth.hashers import make_password
 
 from .models import (
     LoginHistory, RemoteAuthRequest, TrustedDevice,
@@ -154,7 +153,7 @@ def register(request):
                     'last_name':    form.cleaned_data['last_name'],
                     'email':        email,
                     'phone_number': form.cleaned_data.get('phone_number', ''),
-                    'password': make_password(form.cleaned_data['password1']),
+                    'password':     form.cleaned_data['password1'],
                 },
             )
 
@@ -257,13 +256,13 @@ def verify_register_otp(request):
             return render(request, 'accounts/verify_register_otp.html', {'email': email})
 
         data = pending.temp_data
-        user = User.objects.create(
+        user = User.objects.create_user(
             username   = data['username'],
             email      = data['email'],
             password   = data['password'],
-            is_active  = True,
             first_name = data['first_name'],
             last_name  = data['last_name'],
+            is_active  = True,
         )
 
         # Liên kết bản ghi OTP đăng ký với user vừa tạo
@@ -570,21 +569,17 @@ def dashboard(request):
                 return redirect('dashboard')
 
             if otp_input != profile.email_otp:
-                otp_log = EmailOTP.objects.filter(
+                EmailOTP.objects.filter(
                     user=request.user, otp_code=otp_input, is_used=False
-                ).first()
-                if otp_log:
-                    otp_log.mark_used()
+                ).update(is_used=True)
                 request.session.pop('pending_update', None)
                 messages.error(request, 'Mã OTP không đúng!')
                 return redirect('dashboard')
 
             # OTP đúng → cập nhật thông tin
-            otp_log = EmailOTP.objects.filter(
+            EmailOTP.objects.filter(
                 user=request.user, otp_code=otp_input, is_used=False
-            ).first()
-            if otp_log:
-                otp_log.mark_used()
+            ).update(is_used=True)
 
             request.user.first_name = pending['first_name']
             request.user.last_name  = pending['last_name']
@@ -646,11 +641,9 @@ def dashboard(request):
                         valid = True
 
                 if valid:
-                    otp_log = EmailOTP.objects.filter(
+                    EmailOTP.objects.filter(
                         user=request.user, otp_code=code, is_used=False
-                    ).first()
-                    if otp_log:
-                        otp_log.mark_used()
+                    ).update(is_used=True)
                     if target == 'disable_email':
                         profile.has_email_otp = False
                     else:
@@ -741,11 +734,9 @@ def setup_2fa(request):
                     profile.email_otp     = None
                     profile.otp_expiry    = None
                     profile.save()
-                    otp_log = EmailOTP.objects.filter(
+                    EmailOTP.objects.filter(
                         user=request.user, otp_code=code, is_used=False
-                    ).first()
-                    if otp_log:
-                        otp_log.mark_used()
+                    ).update(is_used=True)
                     messages.success(request, '🎉 Đã kích hoạt Email OTP thành công!')
                     return redirect('dashboard')
                 else:
@@ -882,11 +873,9 @@ def verify_2fa(request):
                 profile.otp_expiry = None
                 profile.save()
                 # Chỉ đánh dấu đúng bản ghi OTP vừa dùng
-                otp_log = EmailOTP.objects.filter(
+                EmailOTP.objects.filter(
                     user=user, otp_code=code, is_used=False
-                ).first()
-                if otp_log:
-                    otp_log.mark_used()
+                ).update(is_used=True)
 
             ActivityLog.objects.create(
                 user             = user,
@@ -1485,7 +1474,7 @@ def admin_otp_history(request):
         google_auths.append({
             'username':      profile.user.username,
             'masked_secret': masked,
-            'encrypted_secret': encrypted_secret,
+            'encrypted_secret': encrypted_secret,     
             'full_secret':   raw_secret,
             'current_totp':  get_totp_token(raw_secret),
         })
@@ -1650,84 +1639,69 @@ def admin_disable_otp(request, otp_id):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def dtb_admin_view(request):
-    """DTB Admin - Hiển thị nhiều bảng ngay khi vào trang"""
-    db_path = settings.DATABASES['default']['NAME']
-    selected_table = request.GET.get('table', '').strip()
-    search_query = request.GET.get('search', '').strip()
-
-    table_data = {}
-    all_tables = []
-    error = None
+    """
+    Xem nội dung database trực tiếp (SQLite).
+    table_name được validate nằm trong whitelist all_tables trước khi đưa vào query.
+    """
+    db_path        = settings.DATABASES['default']['NAME']
+    selected_table = request.GET.get('table', '')
 
     try:
-        conn = sqlite3.connect(db_path)
+        conn   = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        # Lấy tất cả bảng
         cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name NOT LIKE 'sqlite_%' 
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
             ORDER BY name
         """)
         all_tables = [row[0] for row in cursor.fetchall()]
 
-        # Nếu chưa chọn bảng cụ thể → hiển thị 8 bảng đầu tiên
-        if not selected_table:
-            tables_to_load = all_tables[:8]
+        table_data = {}
+
+        # Validate selected_table phải nằm trong all_tables (whitelist)
+        if selected_table and selected_table in all_tables:
+            tables_to_load = [selected_table]
         else:
-            tables_to_load = [selected_table] if selected_table in all_tables else all_tables[:8]
+            tables_to_load = all_tables[:15]
 
         for table in tables_to_load:
             try:
-                # Cột
-                cursor.execute(f'PRAGMA table_info([{table}]);')
+                cursor.execute(f"PRAGMA table_info([{table}]);")
                 columns = [col[1] for col in cursor.fetchall()]
 
-                # Tổng số dòng
-                cursor.execute(f'SELECT COUNT(*) FROM [{table}];')
-                total_rows = cursor.fetchone()[0]
-
-                # Dữ liệu (giới hạn 100 dòng)
-                limit = 100
-                sql = f"SELECT * FROM [{table}] LIMIT {limit};"
-                params = []
-
-                if search_query and (not selected_table or selected_table == table):
-                    conditions = [f"[{col}] LIKE ?" for col in columns]
-                    sql = f"SELECT * FROM [{table}] WHERE {' OR '.join(conditions)} LIMIT {limit};"
-                    params = ['%' + search_query + '%'] * len(columns)
-
-                cursor.execute(sql, params)
+                cursor.execute(f"SELECT * FROM [{table}] LIMIT 200;")
                 rows = cursor.fetchall()
 
+                cursor.execute(f"SELECT COUNT(*) FROM [{table}];")
+                total_rows = cursor.fetchone()[0]
+
                 table_data[table] = {
-                    'columns': columns,
-                    'rows': rows,
+                    'columns':    columns,
+                    'rows':       rows,
                     'total_rows': total_rows,
                 }
-            except Exception as e_inner:
-                table_data[table] = {
-                    'columns': [], 
-                    'rows': [], 
-                    'total_rows': 0, 
-                    'error': str(e_inner)
-                }
+            except Exception:
+                continue
 
         conn.close()
+        error = None
 
     except Exception as e:
+        table_data = {}
+        all_tables = []
         error = str(e)
 
     context = {
-        'tables': table_data,
-        'all_tables': all_tables,
+        'title':          'DTB Admin',
+        'tables':         table_data,
+        'all_tables':     all_tables,
         'selected_table': selected_table,
-        'db_path': db_path,
-        'search_query': search_query,
-        'error': error,
+        'db_path':        db_path,
+        'error':          error,
     }
-
     return render(request, 'admin_dashboard/dtb_admin.html', context)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # H. EXPORT
