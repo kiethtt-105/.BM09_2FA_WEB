@@ -1,130 +1,162 @@
-from django.shortcuts import redirect
+
+
 from django.contrib.auth import logout
-from django.utils.timezone import now
+from django.shortcuts import redirect
+
 from .models import TrustedDevice
-from user_agents import parse
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1. ROLE MIDDLEWARE
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class RoleMiddleware:
+    """Chặn user không phải staff truy cập /admin*."""
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith("/admin"):
-            if request.user.is_authenticated:
-                if not request.user.is_staff:
-                    return redirect("dashboard")
-
+        if request.path.startswith('/admin') and request.user.is_authenticated:
+            if not request.user.is_staff:
+                return redirect('dashboard')
         return self.get_response(request)
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. FORCE DISABLE 2FA MIDDLEWARE
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class ForceDisable2FAMiddleware:
+    """
+    Khi admin bật force_disable_2fa trên UserProfile:
+      - Tắt has_email_otp, has_app_otp, xóa otp_secret.
+      - Reset cờ về False sau khi thực hiện xong.
+    """
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         if request.user.is_authenticated:
             try:
-                user_2fa = request.user.user2fa
-                profile = request.user.profile
-
-                if user_2fa.force_disable_2fa:
-                    profile.has_email_otp = False
-                    profile.has_app_otp = False
-                    profile.otp_secret = ""
-
-                    profile.save() 
-
-                    user_2fa.force_disable_2fa = False
-                    user_2fa.save()
-
-
+                profile = request.user.profile  # FIX-1: bỏ request.user.user2fa
+                if profile.force_disable_2fa:
+                    profile.has_email_otp     = False
+                    profile.has_app_otp       = False
+                    profile.otp_secret        = None   # FIX-5: None, không phải ""
+                    profile.force_disable_2fa = False
+                    profile.save()
             except Exception as e:
-                print("2FA middleware error:", e)
+                pass  # profile chưa tạo — bỏ qua
 
         return self.get_response(request)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. FORCE LOGOUT MIDDLEWARE
+# ═══════════════════════════════════════════════════════════════════════════════
+
 class ForceLogoutMiddleware:
+    """
+    Khi admin bật force_logout trên UserProfile:
+      - Reset cờ về False trước khi logout (tránh loop logout).
+      - Gọi logout() để xóa session.
+
+    """
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         if request.user.is_authenticated:
             try:
-                control = request.user.usersessioncontrol
-                if control.force_logout:
-                    control.force_logout = False
-                    control.save()
+                profile = request.user.profile  # FIX-2: bỏ request.user.usersessioncontrol
+                if profile.force_logout:
+                    profile.force_logout = False
+                    profile.save(update_fields=['force_logout'])
                     logout(request)
-            except:
+            except Exception:
                 pass
 
         return self.get_response(request)
 
-from .models import TrustedDevice
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. UPDATE DEVICE MIDDLEWARE
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class UpdateDeviceMiddleware:
+    """
+    Cập nhật TrustedDevice mỗi request — giữ last_seen và thông tin thiết bị mới nhất.
+    Tạo mới nếu session_key chưa có bản ghi.
+    """
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         if request.user.is_authenticated:
+            if not request.session.session_key:
+                request.session.create()
             session_key = request.session.session_key
 
-            if not session_key:
-                request.session.create()
-                session_key = request.session.session_key
-
             user_agent = request.META.get('HTTP_USER_AGENT', '')
-            ip = request.META.get('REMOTE_ADDR')
+            ip         = request.META.get('REMOTE_ADDR')
 
-            # detect đơn giản
-            if "Mobile" in user_agent:
-                device_type = "📱 Mobile"
+            device_type = '📱 Mobile' if 'Mobile' in user_agent else '💻 Desktop'
+            if 'Edg' in user_agent:
+                browser = 'Edge'
+            elif 'Chrome' in user_agent:
+                browser = 'Chrome'
+            elif 'Firefox' in user_agent:
+                browser = 'Firefox'
             else:
-                device_type = "💻 Desktop"
+                browser = 'Unknown'
 
-            browser = "Unknown"
-            if "Chrome" in user_agent:
-                browser = "Chrome"
-            elif "Edg" in user_agent:
-                browser = "Edge"
-            elif "Firefox" in user_agent:
-                browser = "Firefox"
-
-            device_name = f"{device_type} - {browser}"
+            device_name = f'{device_type} - {browser}'
 
             TrustedDevice.objects.update_or_create(
-                session_key=session_key,
-                defaults={
-                    'user': request.user,
+                session_key = session_key,
+                defaults = {
+                    'user':       request.user,
                     'user_agent': user_agent,
                     'ip_address': ip,
-                    'name': device_name,
-                    'is_active': True
+                    'name':       device_name,
+                    'is_active':  True,
                 }
             )
 
         return self.get_response(request)
 
-# accounts/middleware.py
-# Middleware để kiểm tra nếu thiết bị mới thì hiển thị popup cảnh báo
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. DEVICE ALERT MIDDLEWARE
+# ═══════════════════════════════════════════════════════════════════════════════
+
 class DeviceAlertMiddleware:
+    """
+    Đặt request.is_new_device = True nếu session hiện tại chưa có TrustedDevice is_active.
+    Template dùng flag này để hiển thị popup cảnh báo thiết bị mới.
+
+    FIX-3: is_recognized không tồn tại trong TrustedDevice
+           → dùng is_active=True (UpdateDeviceMiddleware sẽ tạo/cập nhật record,
+             nên nếu is_active=True tức thiết bị đã được ghi nhận).
+    """
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         if request.user.is_authenticated:
-            # Kiểm tra xem session hiện tại đã được đánh dấu là "đã biết" chưa
             session_key = request.session.session_key
-            is_trusted = TrustedDevice.objects.filter(
-                user=request.user, 
-                session_key=session_key,
-                is_recognized=True # Bạn nên thêm trường này vào model TrustedDevice
+            is_trusted  = TrustedDevice.objects.filter(
+                user        = request.user,
+                session_key = session_key,
+                is_active   = True,   # FIX-3: bỏ is_recognized
             ).exists()
-
-            # Nếu chưa trusted, gửi flag vào request để template hiển thị popup
             request.is_new_device = not is_trusted
-            
-        response = self.get_response(request)
-        return response
+        else:
+            request.is_new_device = False
+
+        return self.get_response(request)
