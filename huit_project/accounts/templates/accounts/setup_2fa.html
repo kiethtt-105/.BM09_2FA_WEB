@@ -246,7 +246,7 @@ body::after {
     </form>
     {% endif %}
 
-    {% if profile.email_otp %}
+    {% if otp_sent %}
     <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:14px;">
       Nhập mã 6 số từ email của bạn
     </p>
@@ -500,7 +500,7 @@ function resendOTP() {
   form.submit();
 }
 window.onload = function() {
-  {% if method == 'email' and profile.email_otp %}startCountdown();{% endif %}
+  {% if method == 'email' and otp_sent %}startCountdown();{% endif %}
   const firstBox = document.querySelector('.otp-box');
   if (firstBox) firstBox.focus();
 };

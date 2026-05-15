@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> HUIT Active_sessions</title>
+    <title>HUIT · LOGIN HISTORY</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -14,25 +14,30 @@
 <body class="bg-zinc-950 text-zinc-200">
 
 <div class="flex min-h-screen">
-    <!-- Sidebar cố định -->
+
+    <!-- Sidebar -->
     <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full overflow-y-auto">
         <div class="flex items-center gap-3 mb-10">
             <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center text-3xl font-bold text-white">H</div>
             <h1 class="text-3xl font-bold">HUIT</h1>
         </div>
-
         <nav class="space-y-1">
-            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
+            <a href="/admin-dashboard/users/"
+               class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
                 👥 Quản lý Người dùng
             </a>
-            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
+            <a href="/admin-dashboard/otp-history/"
+               class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
                 🔑 Lịch sử OTP
             </a>
-            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">
+            <a href="/admin-dashboard/login-history/"
+               class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">
                 📋 Hoạt động Đăng nhập
             </a>
-                        <a href="/admin-dashboard/dtb_admin/" class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">🗄️ DTB Admin</a>
-
+            <a href="/admin-dashboard/dtb_admin/"
+               class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">
+                🗄️ DTB Admin
+            </a>
         </nav>
     </div>
 
@@ -42,8 +47,8 @@
         <div class="flex justify-between items-center mb-8">
             <div>
                 <h1 class="text-4xl font-bold flex items-center gap-3">
-                    📋 Giám sát Nhật ký
-                    <span class="text-zinc-500 text-2xl">· Hoạt động Đăng nhập</span>
+                    📋 LOGIN HISTORY
+                    <span class="text-sm text-zinc-400 font-normal">({{ logs.paginator.count }} bản ghi)</span>
                 </h1>
             </div>
             <div class="text-right">
@@ -67,7 +72,7 @@
                 <div>
                     <label class="block text-xs text-zinc-400 mb-2">TÌM KIẾM NHANH</label>
                     <div class="relative">
-                        <input type="text" name="search" value="{{ query }}" 
+                        <input type="text" name="search" value="{{ query }}"
                                class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 focus:outline-none focus:border-violet-500"
                                placeholder="Username hoặc IP...">
                         <i class="fas fa-search absolute right-5 top-1/2 -translate-y-1/2 text-zinc-500"></i>
@@ -78,15 +83,15 @@
                     <label class="block text-xs text-zinc-400 mb-2">TRẠNG THÁI</label>
                     <select name="action" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 focus:outline-none focus:border-violet-500">
                         <option value="">Tất cả</option>
-                        <option value="login" {% if action_filter == 'login' %}selected{% endif %}>✅ THÀNH CÔNG</option>
-                        <option value="login_failed" {% if action_filter == 'login_failed' %}selected{% endif %}>❌ THẤT BẠI</option>
-                        <option value="force_logout" {% if action_filter == 'force_logout' %}selected{% endif %}>🚪 ĐÃ KICK</option>
+                        <option value="login"         {% if action_filter == 'login'         %}selected{% endif %}>✅ THÀNH CÔNG</option>
+                        <option value="login_failed"  {% if action_filter == 'login_failed'  %}selected{% endif %}>❌ THẤT BẠI</option>
+                        <option value="force_logout"  {% if action_filter == 'force_logout'  %}selected{% endif %}>🚪 ĐÃ KICK</option>
                     </select>
                 </div>
 
                 <div>
                     <label class="block text-xs text-zinc-400 mb-2">TỪ NGÀY</label>
-                    <input type="date" name="start_date" value="{{ start_date }}" 
+                    <input type="date" name="start_date" value="{{ start_date }}"
                            class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 focus:outline-none focus:border-violet-500">
                 </div>
 
@@ -96,16 +101,18 @@
                         <option value="">Tất cả</option>
                         <option value="Windows" {% if device_filter == 'Windows' %}selected{% endif %}>Windows</option>
                         <option value="Android" {% if device_filter == 'Android' %}selected{% endif %}>Android</option>
-                        <option value="iPhone" {% if device_filter == 'iPhone' %}selected{% endif %}>iPhone / Mac</option>
+                        <option value="iPhone"  {% if device_filter == 'iPhone'  %}selected{% endif %}>iPhone / Mac</option>
                     </select>
                 </div>
 
                 <div class="flex gap-3">
-                    <button type="submit" class="flex-1 bg-violet-600 hover:bg-violet-700 px-8 py-4 rounded-2xl font-medium flex items-center justify-center gap-2">
+                    <button type="submit"
+                            class="flex-1 bg-violet-600 hover:bg-violet-700 px-8 py-4 rounded-2xl font-medium flex items-center justify-center gap-2">
                         <i class="fas fa-filter"></i> ÁP DỤNG LỌC
                     </button>
-                    <a href="/admin-dashboard/login-history/" 
-                       class="bg-zinc-800 hover:bg-zinc-700 px-6 py-4 rounded-2xl flex items-center justify-center border border-zinc-700">
+                    <a href="/admin-dashboard/login-history/"
+                       class="bg-zinc-800 hover:bg-zinc-700 px-6 py-4 rounded-2xl flex items-center justify-center border border-zinc-700"
+                       title="Đặt lại bộ lọc">
                         <i class="fas fa-sync-alt"></i>
                     </a>
                 </div>
@@ -146,19 +153,27 @@
                         <td class="p-6 text-sm text-zinc-400">{{ log.user_agent|truncatechars:45 }}</td>
                         <td class="p-6 text-center">
                             {% if log.action == 'login' and log.username_attempt %}
-                                <a href="{% url 'admin_force_logout' log.username_attempt %}" 
-                                   onclick="return confirm('Buộc đăng xuất người dùng này?')"
-                                   class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-5 py-2 rounded-2xl">
-                                    <i class="fas fa-sign-out-alt"></i> LOGOUT
-                                </a>
+                                <form method="POST"
+                                      action="{% url 'admin_force_logout' log.username_attempt %}"
+                                      onsubmit="return confirm('Buộc đăng xuất người dùng [{{ log.username_attempt }}]?')"
+                                      style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-5 py-2 rounded-2xl transition-colors">
+                                        <i class="fas fa-sign-out-alt"></i> FORCE LOGOUT
+                                    </button>
+                                </form>
                             {% else %}
-                                <span class="text-zinc-500">—</span>
+                                <span class="text-zinc-500 text-xs">—</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="p-12 text-center text-zinc-500">Không có bản ghi nào.</td>
+                        <td colspan="6" class="p-12 text-center text-zinc-500">
+                            <i class="fas fa-inbox text-3xl mb-3 block opacity-30"></i>
+                            Không có bản ghi nào.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -171,11 +186,11 @@
             <span class="text-zinc-400">Trang {{ logs.number }} / {{ logs.paginator.num_pages }}</span>
             <div class="flex gap-2">
                 {% if logs.has_previous %}
-                    <a href="?page={{ logs.previous_page_number }}&per_page={{ per_page }}&search={{ query }}&action={{ action_filter }}&start_date={{ start_date }}&device={{ device_filter }}" 
+                    <a href="?page={{ logs.previous_page_number }}&per_page={{ per_page }}&search={{ query }}&action={{ action_filter }}&start_date={{ start_date }}&device={{ device_filter }}"
                        class="px-5 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-2xl">Trước</a>
                 {% endif %}
                 {% if logs.has_next %}
-                    <a href="?page={{ logs.next_page_number }}&per_page={{ per_page }}&search={{ query }}&action={{ action_filter }}&start_date={{ start_date }}&device={{ device_filter }}" 
+                    <a href="?page={{ logs.next_page_number }}&per_page={{ per_page }}&search={{ query }}&action={{ action_filter }}&start_date={{ start_date }}&device={{ device_filter }}"
                        class="px-5 py-2 bg-violet-600 hover:bg-violet-700 rounded-2xl">Tiếp theo</a>
                 {% endif %}
             </div>

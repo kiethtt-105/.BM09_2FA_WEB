@@ -1,5 +1,3 @@
-
-
 from django.contrib import admin
 from django.contrib.admin import AdminSite
 from django.contrib.auth.models import User, Group
@@ -7,7 +5,7 @@ from django.contrib.auth.admin import (
     UserAdmin as BaseUserAdmin,
     GroupAdmin as BaseGroupAdmin,
 )
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 
 from .models import (
     ActivityLog,
@@ -113,14 +111,14 @@ class UserProfileAdmin(admin.ModelAdmin):
     @admin.display(description='Admin tắt buộc')
     def badge_force_disable(self, obj):
         if obj.force_disable_2fa:
-            return format_html('<span style="color:red;font-weight:bold">⚠ Đang tắt buộc</span>')
-        return format_html('<span style="color:green">✓ Bình thường</span>')
+            return mark_safe('<span style="color:red;font-weight:bold">⚠ Đang tắt buộc</span>')
+        return mark_safe('<span style="color:green">✓ Bình thường</span>')
 
     @admin.display(description='Force Logout')
     def badge_force_logout(self, obj):
         if obj.force_logout:
-            return format_html('<span style="color:red;font-weight:bold">⚠ Đang bị kick</span>')
-        return format_html('<span style="color:green">✓ Bình thường</span>')
+            return mark_safe('<span style="color:red;font-weight:bold">⚠ Đang bị kick</span>')
+        return mark_safe('<span style="color:green">✓ Bình thường</span>')
 
     @admin.action(description='🔴 Kick — Cưỡng chế đăng xuất')
     def kick_users(self, request, queryset):
@@ -195,12 +193,10 @@ class UserPasskeyAdmin(admin.ModelAdmin):
 
     credential_id, public_key để readonly — dữ liệu khoá công khai không chỉnh sửa.
     cred_short: rút ngắn credential_id cho dễ đọc trên list view.
-    sign_count tăng mỗi lần xác thực — giảm đột ngột có thể báo hiệu credential bị clone.
     """
     list_display    = ['user', 'cred_short', 'sign_count', 'created_at']
     search_fields   = ['user__username']
     ordering        = ['-created_at']
-    date_hierarchy  = 'created_at'
     readonly_fields = ['credential_id', 'public_key', 'created_at']
     list_per_page   = 30
     fieldsets = (
@@ -359,8 +355,8 @@ class PendingRegistrationAdmin(admin.ModelAdmin):
     @admin.display(description='Còn hiệu lực')
     def badge_valid(self, obj):
         if obj.is_valid():
-            return format_html('<span style="color:green">✓ Còn hạn</span>')
-        return format_html('<span style="color:red">✗ Hết hạn</span>')
+            return mark_safe('<span style="color:green">✓ Còn hạn</span>')
+        return mark_safe('<span style="color:red">✗ Hết hạn</span>')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

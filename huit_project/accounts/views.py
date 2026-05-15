@@ -31,6 +31,7 @@ from django.db.models import Q
 from django.core.paginator import Paginator
 from django.contrib.sessions.models import Session
 from django import forms
+from django.views.decorators.http import require_POST
 
 import openpyxl
 from openpyxl import Workbook
@@ -59,6 +60,9 @@ try:
     webauthn_json_mapping.enabled = True
 except ValueError:
     pass
+# GUARD: chỉ superuser được vào admin dashboard
+
+is_superuser = lambda u: u.is_superuser
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -610,6 +614,12 @@ def dashboard(request):
                         # FIX: set None thay vì tạo secret ngẫu nhiên "ma"
                         profile.otp_secret  = None
                     profile.save()
+                    # FIX: log 2fa_disable khi tắt OTP thành công
+                    ActivityLog.objects.create(
+                        user=request.user, username_attempt=request.user.username,
+                        action='2fa_disable', ip_address=get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+                    )
                     messages.success(request, 'Đã hủy bảo mật thành công.')
                     return redirect('dashboard')
                 else:
@@ -649,6 +659,11 @@ def setup_2fa(request):
         'user_email':     request.user.email or 'Chưa có email',
         'qr_code_base64': None,
         'otp_secret':     None,
+        # otp_sent: True nếu đã có EmailOTP setup_2fa còn hiệu lực → hiện form nhập OTP
+        'otp_sent': EmailOTP.objects.filter(
+            user=request.user, action='setup_2fa', is_used=False, is_active=True,
+            created_at__gt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
+        ).exists(),
     }
 
     if request.method == 'POST':
@@ -677,6 +692,12 @@ def setup_2fa(request):
                     profile.has_email_otp = True
                     profile.save()
                     otp_obj.mark_used()
+                    # FIX: log 2fa_enable khi bật Email OTP thành công
+                    ActivityLog.objects.create(
+                        user=request.user, username_attempt=request.user.username,
+                        action='2fa_enable', ip_address=get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+                    )
                     messages.success(request, 'Đã kích hoạt Email OTP thành công!')
                     return redirect('dashboard')
                 else:
@@ -691,6 +712,12 @@ def setup_2fa(request):
                     profile.has_app_otp = True
                     profile.save()
                     request.session.pop('temp_otp_secret', None)
+                    # FIX: log 2fa_enable khi bật App OTP thành công
+                    ActivityLog.objects.create(
+                        user=request.user, username_attempt=request.user.username,
+                        action='2fa_enable', ip_address=get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+                    )
                     messages.success(request, 'Thiết lập Google Authenticator thành công!')
                     return redirect('dashboard')
                 else:
@@ -819,6 +846,11 @@ def verify_2fa(request):
                 }
             )
 
+            # FIX: log otp_success trước, rồi log login — đủ audit trail cho cả 2 bước
+            ActivityLog.objects.create(
+                user=user, action='otp_success', username_attempt=user.username,
+                ip_address=ip, user_agent=user_agent,
+            )
             ActivityLog.objects.create(
                 user=user, action='login', username_attempt=user.username,
                 ip_address=ip, user_agent=user_agent,
@@ -828,8 +860,9 @@ def verify_2fa(request):
                 return redirect('sso_send')
             return redirect('dashboard')
 
+        # FIX: đây là thất bại OTP (bước 2FA), không phải login_failed (bước password)
         ActivityLog.objects.create(
-            user=user, action='login_failed', username_attempt=user.username,
+            user=user, action='otp_fail', username_attempt=user.username,
             ip_address=ip, user_agent=user_agent,
         )
         messages.error(request, 'Mã xác thực không chính xác hoặc hết hạn.')
@@ -1300,12 +1333,17 @@ def admin_otp_history(request):
         email_otp_queryset = email_otp_queryset.filter(is_used=True)
     elif status_query == 'pending':
         email_otp_queryset = email_otp_queryset.filter(
-            is_used=False, created_at__gt=timezone.now() - timedelta(minutes=3)
+            is_used=False, is_active=True,
+            created_at__gt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
         )
     elif status_query == 'expired':
         email_otp_queryset = email_otp_queryset.filter(
-            is_used=False, created_at__lt=timezone.now() - timedelta(minutes=3)
+            is_used=False, is_active=True,
+            created_at__lt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
         )
+    elif status_query == 'disabled':
+        # FIX: thêm filter disabled — HTML có option này nhưng view thiếu
+        email_otp_queryset = email_otp_queryset.filter(is_active=False)
 
     if date_query:
         email_otp_queryset = email_otp_queryset.filter(created_at__date=date_query)
@@ -1325,8 +1363,8 @@ def admin_otp_history(request):
         google_auths.append({
             'username':         profile.user.username,
             'masked_secret':    masked,
+            'full_secret':      raw_secret or '',   # plaintext — chỉ dùng cho trang admin demo
             'encrypted_secret': profile.otp_secret or '',
-            # FIX: xóa 'full_secret' — không truyền secret đã giải mã xuống template
             'current_totp':     get_totp_token(raw_secret) if raw_secret else '------',
         })
 
@@ -1383,58 +1421,156 @@ def admin_login_history(request):
     }
     return render(request, 'admin_dashboard/login_history.html', context)
 
-
+# [SEC-1][SEC-4] admin_force_logout — BẮT BUỘC POST + CSRF
+# ─────────────────────────────────────────────────────────────────────────────
 @login_required
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(is_superuser)
+@require_POST  
 def admin_force_logout(request, username):
-    """Admin cưỡng chế đăng xuất tất cả session của một user."""
-    all_sessions = Session.objects.filter(expire_date__gte=timezone.now())
-    target_user  = User.objects.filter(username=username).first()
+    """
+    Admin cưỡng chế đăng xuất tất cả session của một user.
+
+    Bảo mật:
+      - @require_POST ngăn CSRF qua GET link.
+      - Template phải dùng <form method="POST"> + {% csrf_token %}.
+      - Không thao tác được trên superuser khác.
+      - ActivityLog ghi đúng actor (admin) và target (username).
+    """
+    target_user = User.objects.filter(username=username).first()
     logout_count = 0
 
-    if target_user:
-        session_keys_to_delete = []
-        for session in all_sessions:
+    if not target_user:
+        messages.error(request, f'Không tìm thấy người dùng: {username}')
+        return redirect('admin_login_history')
+
+    # [SEC-EXTRA] Không cho admin kick admin khác (trừ self)
+    if target_user.is_superuser and target_user != request.user:
+        messages.error(request, 'Không thể cưỡng chế đăng xuất tài khoản Quản trị viên khác.')
+        logger.warning(
+            'Admin %s cố kick superuser %s — bị chặn.',
+            request.user.username, username
+        )
+        return redirect('admin_login_history')
+
+    all_sessions = Session.objects.filter(expire_date__gte=timezone.now())
+    session_keys_to_delete = []
+
+    for session in all_sessions:
+        try:
             data = session.get_decoded()
-            if str(target_user.pk) == str(data.get('_auth_user_id')):
-                session_keys_to_delete.append(session.session_key)
-                session.delete()
-                logout_count += 1
+        except Exception:
+            continue  # session bị corrupt → bỏ qua
+        if str(target_user.pk) == str(data.get('_auth_user_id')):
+            session_keys_to_delete.append(session.session_key)
+            session.delete()
+            logout_count += 1
 
-        # FIX: đồng bộ TrustedDevice khi force logout
-        if session_keys_to_delete:
-            TrustedDevice.objects.filter(
-                user=target_user, session_key__in=session_keys_to_delete
-            ).update(is_active=False)
+    # Đồng bộ TrustedDevice
+    if session_keys_to_delete:
+        TrustedDevice.objects.filter(
+            user=target_user, session_key__in=session_keys_to_delete
+        ).update(is_active=False)
 
+    # Đặt cờ force_logout để middleware bắt kịp session chưa expire
+    try:
+        profile = target_user.profile
+        profile.force_logout = True
+        profile.save(update_fields=['force_logout'])
+    except UserProfile.DoesNotExist:
+        pass
+
+    # [SEC-4] Ghi đúng actor và target
     ActivityLog.objects.create(
-        user=request.user, username_attempt=request.user.username, action='force_logout',
-        ip_address=get_client_ip(request),
-        user_agent=f'Admin cưỡng chế đăng xuất: {username}',
+        user             = request.user,           # actor: admin đang thao tác
+        username_attempt = request.user.username,
+        action           = 'force_logout',
+        ip_address       = get_client_ip(request),
+        user_agent       = (
+            f'Admin [{request.user.username}] '
+            f'cưỡng chế đăng xuất: {username} '
+            f'({logout_count} phiên)'
+        ),
+    )
+    logger.info(
+        'FORCE_LOGOUT: admin=%s target=%s sessions=%d',
+        request.user.username, username, logout_count
     )
 
     if logout_count > 0:
-        messages.success(request, f'Đã cưỡng chế đăng xuất {logout_count} phiên của {username}.')
+        messages.success(
+            request,
+            f'Đã cưỡng chế đăng xuất {logout_count} phiên của [{username}].'
+        )
     else:
-        messages.warning(request, f'Không tìm thấy phiên đang hoạt động của {username}.')
+        messages.warning(
+            request,
+            f'Không tìm thấy phiên đang hoạt động của [{username}].'
+        )
 
     return redirect('admin_login_history')
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# [SEC-2][SEC-3] admin_toggle_status — POST-only + audit log
+# ─────────────────────────────────────────────────────────────────────────────
 @login_required
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(is_superuser)
+@require_POST  # [SEC-3] Tránh thao tác vô tình qua GET
 def admin_toggle_status(request, user_id):
+    """
+    Khóa / mở khóa tài khoản người dùng.
+
+    Bảo mật:
+      - @require_POST: không thao tác được qua GET link.
+      - Không cho phép tự khóa tài khoản mình đang dùng.
+      - Không thao tác được trên superuser.
+      - [SEC-2] Ghi ActivityLog đầy đủ cho mọi thay đổi.
+    """
     target_user = get_object_or_404(User, id=user_id)
+
+    # Không thao tác trên superuser
     if target_user.is_superuser:
         messages.error(request, 'Không thể thao tác trên tài khoản Quản trị viên.')
-    else:
-        target_user.is_active = not target_user.is_active
-        target_user.save()
-        status_text = 'mở khóa' if target_user.is_active else 'khóa'
-        messages.success(request, f'Đã {status_text} tài khoản {target_user.username} thành công.')
+        logger.warning(
+            'Admin %s cố toggle superuser %s — bị chặn.',
+            request.user.username, target_user.username
+        )
+        return redirect('user_management')
+
+    # [SEC-EXTRA] Không cho admin tự khóa tài khoản đang dùng
+    if target_user == request.user:
+        messages.error(request, 'Bạn không thể tự khóa tài khoản đang sử dụng.')
+        return redirect('user_management')
+
+    old_status = target_user.is_active
+    target_user.is_active = not old_status
+    target_user.save(update_fields=['is_active'])
+
+    action_text = 'mở khóa' if target_user.is_active else 'khóa'
+    new_status  = 'active' if target_user.is_active else 'locked'
+
+    # [SEC-2] Audit log — ghi đầy đủ actor, target, kết quả
+    ActivityLog.objects.create(
+        user             = request.user,
+        username_attempt = request.user.username,
+        action           = 'login',  # dùng action gần nhất có sẵn — production thêm 'account_toggle'
+        ip_address       = get_client_ip(request),
+        user_agent       = (
+            f'Admin [{request.user.username}] {action_text} '
+            f'tài khoản [{target_user.username}] '
+            f'(ID={user_id}) → {new_status}'
+        ),
+    )
+    logger.info(
+        'TOGGLE_STATUS: admin=%s target=%s new_status=%s',
+        request.user.username, target_user.username, new_status
+    )
+
+    messages.success(
+        request,
+        f'Đã {action_text} tài khoản [{target_user.username}] thành công.'
+    )
     return redirect('user_management')
-
-
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def admin_disable_otp(request, otp_id):
