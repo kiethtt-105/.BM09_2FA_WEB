@@ -1,29 +1,4 @@
-"""
-admin.py — Cấu hình Django Admin cho hệ thống HUIT 2FA
-=======================================================
-Cấu trúc sidebar (theo thứ tự hiển thị):
 
-  ACCOUNTS — Người dùng
-    1. Users                    (auth.User)
-    2. Hồ sơ người dùng         (UserProfile)
-    3. Cấu hình 2FA (Admin)     (User2FA)
-    4. Kiểm soát phiên          (UserSessionControl)
-
-  ACCOUNTS — Xác thực & OTP
-    5. Email OTP Logs           (EmailOTP)
-    6. [DEPRECATED] OTP cũ     (OTP)
-    7. Passkeys (FIDO2)         (UserPasskey)
-    8. Thiết bị tin cậy         (TrustedDevice)
-    9. Yêu cầu xác thực từ xa  (RemoteAuthRequest)
-
-  ACCOUNTS — Nhật ký & Lịch sử
-   10. Nhật ký hoạt động        (ActivityLog)
-   11. Lịch sử đăng nhập        (LoginHistory)
-   12. Đăng ký tạm chờ xác thực (PendingRegistration)
-
-  AUTHENTICATION AND AUTHORIZATION
-   13. Groups                   (auth.Group)
-"""
 
 from django.contrib import admin
 from django.contrib.admin import AdminSite
@@ -33,26 +8,24 @@ from django.contrib.auth.admin import (
     GroupAdmin as BaseGroupAdmin,
 )
 from django.utils.html import format_html
+
 from .models import (
     ActivityLog,
     EmailOTP,
-    LoginHistory,
-    OTP,
     PendingRegistration,
     RemoteAuthRequest,
     TrustedDevice,
-    User2FA,
     UserPasskey,
     UserProfile,
-    UserSessionControl,
 )
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # CUSTOM ADMIN SITE
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class DefaultAdminSite(AdminSite):
+    """Admin site tuỳ chỉnh — gắn vào /admin-origin/."""
     site_header = "HUIT Authentication System"
     site_title  = "HUIT Admin"
     index_title = "Trang quản trị hệ thống"
@@ -60,11 +33,17 @@ class DefaultAdminSite(AdminSite):
 default_admin_site = DefaultAdminSite(name='default_admin')
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # 1. USER
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class CustomUserAdmin(BaseUserAdmin):
+    """
+    Mở rộng UserAdmin mặc định của Django.
+
+    Hiển thị thêm họ tên đầy đủ, lọc theo trạng thái / quyền hạn.
+    readonly_fields: date_joined, last_login — không chỉnh sửa trực tiếp.
+    """
     list_display    = ['username', 'email', 'get_full_name', 'is_active', 'is_staff', 'is_superuser', 'date_joined']
     search_fields   = ['username', 'email', 'first_name', 'last_name']
     list_filter     = ['is_active', 'is_staff', 'is_superuser', 'groups']
@@ -83,23 +62,35 @@ class CustomUserAdmin(BaseUserAdmin):
         return f"{obj.first_name} {obj.last_name}".strip() or '—'
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # 2. USER PROFILE
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display    = ['user', 'get_full_name', 'phone_number', 'badge_email_otp', 'badge_app_otp', 'badge_fido2']
+    """
+    Quản lý hồ sơ người dùng mở rộng.
+
+    Gộp các cờ từ User2FA (force_disable_2fa, is_required) và
+    UserSessionControl (force_logout) vào cùng một form.
+    otp_secret để readonly + collapse — lưu dạng Fernet-encrypted.
+    has_fido2 là property (không phải DB field) nên không đưa vào fieldsets.
+    """
+    list_display    = ['user', 'get_full_name', 'phone_number',
+                       'badge_email_otp', 'badge_app_otp', 'badge_fido2',
+                       'badge_force_disable', 'badge_force_logout']
     search_fields   = ['user__username', 'user__email', 'phone_number']
-    list_filter     = ['has_email_otp', 'has_app_otp', 'has_fido2']
-    readonly_fields = ['otp_secret', 'fido2_credential', 'otp_expiry']
+    list_filter     = ['has_email_otp', 'has_app_otp', 'force_disable_2fa', 'is_required', 'force_logout']
+    readonly_fields = ['otp_secret']
     list_per_page   = 30
+    actions         = ['kick_users', 'reset_force_logout']
     fieldsets = (
-        ('👤 Người dùng',    {'fields': ('user',)}),
-        ('📞 Liên hệ',       {'fields': ('phone_number', 'middle_name')}),
-        ('🔐 Trạng thái 2FA', {'fields': ('has_email_otp', 'has_app_otp', 'has_fido2')}),
+        ('👤 Người dùng',          {'fields': ('user',)}),
+        ('📞 Liên hệ',             {'fields': ('phone_number', 'middle_name')}),
+        ('🔐 Trạng thái 2FA',     {'fields': ('has_email_otp', 'has_app_otp')}),
+        ('⚙️ Kiểm soát Admin',    {'fields': ('force_disable_2fa', 'is_required', 'force_logout')}),
         ('🔒 Dữ liệu nhạy cảm (chỉ đọc)', {
             'classes': ('collapse',),
-            'fields': ('otp_secret', 'email_otp', 'otp_expiry', 'fido2_credential'),
+            'fields':  ('otp_secret',),
         }),
     )
 
@@ -117,36 +108,7 @@ class UserProfileAdmin(admin.ModelAdmin):
 
     @admin.display(description='FIDO2', boolean=True)
     def badge_fido2(self, obj):
-        return obj.has_fido2
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 3. USER 2FA
-# ══════════════════════════════════════════════════════════════════════════════
-
-class User2FAAdmin(admin.ModelAdmin):
-    list_display    = ['user', 'badge_email_otp', 'badge_google_auth', 'badge_required', 'badge_force_disable']
-    search_fields   = ['user__username', 'user__email']
-    list_filter     = ['email_otp_enabled', 'google_auth_enabled', 'is_required', 'force_disable_2fa']
-    readonly_fields = ['google_secret']
-    list_per_page   = 30
-    fieldsets = (
-        ('👤 Người dùng',    {'fields': ('user',)}),
-        ('⚙️ Cấu hình 2FA', {'fields': ('email_otp_enabled', 'google_auth_enabled', 'is_required', 'force_disable_2fa')}),
-        ('🔒 Bí mật (chỉ đọc)', {'classes': ('collapse',), 'fields': ('google_secret',)}),
-    )
-
-    @admin.display(description='Email OTP', boolean=True)
-    def badge_email_otp(self, obj):
-        return obj.email_otp_enabled
-
-    @admin.display(description='Google Auth', boolean=True)
-    def badge_google_auth(self, obj):
-        return obj.google_auth_enabled
-
-    @admin.display(description='Bắt buộc', boolean=True)
-    def badge_required(self, obj):
-        return obj.is_required
+        return obj.has_fido2  # property — gọi user.passkeys.exists()
 
     @admin.display(description='Admin tắt buộc')
     def badge_force_disable(self, obj):
@@ -154,20 +116,8 @@ class User2FAAdmin(admin.ModelAdmin):
             return format_html('<span style="color:red;font-weight:bold">⚠ Đang tắt buộc</span>')
         return format_html('<span style="color:green">✓ Bình thường</span>')
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 4. USER SESSION CONTROL
-# ══════════════════════════════════════════════════════════════════════════════
-
-class UserSessionControlAdmin(admin.ModelAdmin):
-    list_display  = ['user', 'status_badge']
-    search_fields = ['user__username']
-    list_filter   = ['force_logout']
-    actions       = ['kick_users', 'reset_force_logout']
-    list_per_page = 30
-
-    @admin.display(description='Trạng thái phiên')
-    def status_badge(self, obj):
+    @admin.display(description='Force Logout')
+    def badge_force_logout(self, obj):
         if obj.force_logout:
             return format_html('<span style="color:red;font-weight:bold">⚠ Đang bị kick</span>')
         return format_html('<span style="color:green">✓ Bình thường</span>')
@@ -183,12 +133,19 @@ class UserSessionControlAdmin(admin.ModelAdmin):
         self.message_user(request, f'Đã reset {n} bản ghi.')
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 5. EMAIL OTP
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. EMAIL OTP
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class EmailOTPAdmin(admin.ModelAdmin):
-    list_display    = ['user', 'action_display', 'email_sent', 'ip_address', 'created_at', 'used_at', 'badge_used', 'badge_active']
+    """
+    Lịch sử Email OTP — log toàn bộ mã đã sinh.
+
+    action_display: tô màu theo loại thao tác (register / login_2fa / ...).
+    otp_code, otp_hash để readonly + collapse — không cho chỉnh sửa.
+    """
+    list_display    = ['user', 'action_display', 'email_sent', 'ip_address',
+                       'created_at', 'used_at', 'badge_used', 'badge_active']
     search_fields   = ['user__username', 'email_sent', 'ip_address']
     list_filter     = ['action', 'is_used', 'is_active']
     ordering        = ['-created_at']
@@ -196,11 +153,11 @@ class EmailOTPAdmin(admin.ModelAdmin):
     readonly_fields = ['otp_code', 'otp_hash', 'created_at', 'used_at']
     list_per_page   = 50
     fieldsets = (
-        ('👤 Người dùng',       {'fields': ('user', 'email_sent', 'ip_address')}),
-        ('📋 Thông tin OTP',    {'fields': ('action', 'is_used', 'is_active', 'created_at', 'used_at')}),
+        ('👤 Người dùng',    {'fields': ('user', 'email_sent', 'ip_address')}),
+        ('📋 Thông tin OTP', {'fields': ('action', 'is_used', 'is_active', 'created_at', 'used_at')}),
         ('🔒 Dữ liệu mã hóa (chỉ đọc)', {
             'classes': ('collapse',),
-            'fields': ('otp_code', 'otp_hash'),
+            'fields':  ('otp_code', 'otp_hash'),
         }),
     )
 
@@ -216,7 +173,7 @@ class EmailOTPAdmin(admin.ModelAdmin):
         color = colors.get(obj.action, '#666')
         return format_html(
             '<span style="color:{};font-weight:bold">{}</span>',
-            color, obj.get_action_display()
+            color, obj.get_action_display(),
         )
 
     @admin.display(description='Đã dùng', boolean=True)
@@ -228,29 +185,18 @@ class EmailOTPAdmin(admin.ModelAdmin):
         return obj.is_active
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 6. OTP (DEPRECATED)
-# ══════════════════════════════════════════════════════════════════════════════
-
-class OTPAdmin(admin.ModelAdmin):
-    list_display    = ['user', 'code', 'created_at', 'is_expired_display']
-    search_fields   = ['user__username']
-    ordering        = ['-created_at']
-    readonly_fields = ['code', 'created_at']
-    list_per_page   = 50
-
-    @admin.display(description='Hết hạn')
-    def is_expired_display(self, obj):
-        if obj.is_expired():
-            return format_html('<span style="color:red">✗ Hết hạn</span>')
-        return format_html('<span style="color:green">✓ Còn hạn</span>')
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 7. USER PASSKEY (FIDO2)
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. USER PASSKEY (FIDO2)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class UserPasskeyAdmin(admin.ModelAdmin):
+    """
+    Passkeys (FIDO2 / WebAuthn) đã đăng ký của người dùng.
+
+    credential_id, public_key để readonly — dữ liệu khoá công khai không chỉnh sửa.
+    cred_short: rút ngắn credential_id cho dễ đọc trên list view.
+    sign_count tăng mỗi lần xác thực — giảm đột ngột có thể báo hiệu credential bị clone.
+    """
     list_display    = ['user', 'cred_short', 'sign_count', 'created_at']
     search_fields   = ['user__username']
     ordering        = ['-created_at']
@@ -269,11 +215,18 @@ class UserPasskeyAdmin(admin.ModelAdmin):
         return (obj.credential_id[:24] + '…') if len(obj.credential_id) > 24 else obj.credential_id
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 8. TRUSTED DEVICE
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. TRUSTED DEVICE
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class TrustedDeviceAdmin(admin.ModelAdmin):
+    """
+    Thiết bị tin cậy đã được user xác nhận sau 2FA.
+
+    session_key liên kết với Django session — readonly.
+    session_short: rút ngắn 12 ký tự đầu cho list view.
+    is_active = False khi logout, admin kick, hoặc session hết hạn.
+    """
     list_display    = ['user', 'name', 'ip_address', 'last_seen', 'badge_active', 'session_short']
     search_fields   = ['user__username', 'name', 'ip_address']
     list_filter     = ['is_active']
@@ -282,9 +235,9 @@ class TrustedDeviceAdmin(admin.ModelAdmin):
     readonly_fields = ['device_id', 'session_key', 'user_agent', 'last_seen']
     list_per_page   = 30
     fieldsets = (
-        ('👤 Người dùng',      {'fields': ('user',)}),
+        ('👤 Người dùng',         {'fields': ('user',)}),
         ('💻 Thông tin thiết bị', {'fields': ('name', 'device_id', 'ip_address', 'user_agent')}),
-        ('📡 Trạng thái',      {'fields': ('is_active', 'last_seen', 'session_key')}),
+        ('📡 Trạng thái',         {'fields': ('is_active', 'last_seen', 'session_key')}),
     )
 
     @admin.display(description='Hoạt động', boolean=True)
@@ -296,11 +249,18 @@ class TrustedDeviceAdmin(admin.ModelAdmin):
         return (obj.session_key[:12] + '…') if obj.session_key else '—'
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 9. REMOTE AUTH REQUEST
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. REMOTE AUTH REQUEST
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class RemoteAuthRequestAdmin(admin.ModelAdmin):
+    """
+    Yêu cầu xác thực từ thiết bị khác (Remote / Push Auth).
+
+    status: pending / approved / denied — tô màu theo trạng thái.
+    session_key, created_at để readonly.
+    device_info_short: cắt 55 ký tự tránh tràn cột.
+    """
     list_display    = ['user', 'device_info_short', 'status_badge', 'created_at']
     search_fields   = ['user__username', 'device_info']
     list_filter     = ['status']
@@ -316,17 +276,25 @@ class RemoteAuthRequestAdmin(admin.ModelAdmin):
     @admin.display(description='Trạng thái')
     def status_badge(self, obj):
         colors = {'pending': '#FF9800', 'approved': '#4CAF50', 'denied': '#F44336'}
-        labels = {'pending': '⏳ Chờ', 'approved': '✓ Đồng ý', 'denied': '✗ Từ chối'}
-        color = colors.get(obj.status, '#666')
-        label = labels.get(obj.status, obj.status)
+        labels = {'pending': '⏳ Chờ',  'approved': '✓ Đồng ý', 'denied': '✗ Từ chối'}
+        color  = colors.get(obj.status, '#666')
+        label  = labels.get(obj.status, obj.status)
         return format_html('<span style="color:{};font-weight:bold">{}</span>', color, label)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 10. ACTIVITY LOG
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7. ACTIVITY LOG
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class ActivityLogAdmin(admin.ModelAdmin):
+    """
+    Nhật ký hoạt động hệ thống — thay thế hoàn toàn LoginHistory.
+    Toàn bộ readonly, không chỉnh sửa.
+
+    action_badge: xanh lá = thành công, đỏ = thất bại / nguy hiểm, cam = trung tính.
+    ua_short: rút gọn User-Agent 55 ký tự.
+    username_attempt lưu tên thô kể cả khi user không tồn tại — phát hiện brute-force.
+    """
     list_display    = ['timestamp', 'action_badge', 'username_attempt', 'user', 'ip_address', 'ua_short']
     search_fields   = ['username_attempt', 'ip_address', 'user__username']
     list_filter     = ['action']
@@ -347,7 +315,7 @@ class ActivityLogAdmin(admin.ModelAdmin):
             color = '#FF9800'
         return format_html(
             '<span style="color:{};font-weight:bold">{}</span>',
-            color, obj.get_action_display()
+            color, obj.get_action_display(),
         )
 
     @admin.display(description='User-Agent')
@@ -357,34 +325,18 @@ class ActivityLogAdmin(admin.ModelAdmin):
         return '—'
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 11. LOGIN HISTORY
-# ══════════════════════════════════════════════════════════════════════════════
-
-class LoginHistoryAdmin(admin.ModelAdmin):
-    list_display    = ['user', 'ip', 'device_short', 'time', 'status_badge']
-    search_fields   = ['user__username', 'ip', 'device']
-    list_filter     = ['status']
-    ordering        = ['-time']
-    date_hierarchy  = 'time'
-    readonly_fields = ['user', 'ip', 'device', 'time', 'status']
-    list_per_page   = 50
-
-    @admin.display(description='Thiết bị')
-    def device_short(self, obj):
-        return (obj.device[:55] + '…') if len(obj.device) > 55 else obj.device
-
-    @admin.display(description='Trạng thái')
-    def status_badge(self, obj):
-        color = '#4CAF50' if obj.status == 'success' else '#F44336'
-        return format_html('<b style="color:{}">{}</b>', color, obj.status)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 12. PENDING REGISTRATION
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# 8. PENDING REGISTRATION
+# ═══════════════════════════════════════════════════════════════════════════════
 
 class PendingRegistrationAdmin(admin.ModelAdmin):
+    """
+    Đăng ký tạm — chờ user xác thực OTP email để hoàn tất tạo tài khoản.
+
+    badge_valid: gọi is_valid() của model để kiểm tra 10 phút còn hạn.
+    otp_code, temp_data để readonly + collapse — chứa dữ liệu nhạy cảm.
+    temp_data['password'] đã qua make_password() — không lưu plaintext.
+    """
     list_display    = ['email', 'created_at', 'badge_used', 'badge_valid']
     search_fields   = ['email']
     list_filter     = ['is_used']
@@ -396,7 +348,7 @@ class PendingRegistrationAdmin(admin.ModelAdmin):
         ('📧 Thông tin', {'fields': ('email', 'is_used', 'created_at')}),
         ('🔒 Dữ liệu OTP (chỉ đọc)', {
             'classes': ('collapse',),
-            'fields': ('otp_code', 'temp_data'),
+            'fields':  ('otp_code', 'temp_data'),
         }),
     )
 
@@ -411,28 +363,24 @@ class PendingRegistrationAdmin(admin.ModelAdmin):
         return format_html('<span style="color:red">✗ Hết hạn</span>')
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # ĐĂNG KÝ VÀO default_admin_site  (/admin-origin/)
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 
-default_admin_site.register(User,                 CustomUserAdmin)
-default_admin_site.register(Group,                BaseGroupAdmin)
-default_admin_site.register(UserProfile,          UserProfileAdmin)
-default_admin_site.register(User2FA,              User2FAAdmin)
-default_admin_site.register(UserSessionControl,   UserSessionControlAdmin)
-default_admin_site.register(EmailOTP,             EmailOTPAdmin)
-default_admin_site.register(OTP,                  OTPAdmin)
-default_admin_site.register(UserPasskey,          UserPasskeyAdmin)
-default_admin_site.register(TrustedDevice,        TrustedDeviceAdmin)
-default_admin_site.register(RemoteAuthRequest,    RemoteAuthRequestAdmin)
-default_admin_site.register(ActivityLog,          ActivityLogAdmin)
-default_admin_site.register(LoginHistory,         LoginHistoryAdmin)
-default_admin_site.register(PendingRegistration,  PendingRegistrationAdmin)
+default_admin_site.register(User,                CustomUserAdmin)
+default_admin_site.register(Group,               BaseGroupAdmin)
+default_admin_site.register(UserProfile,         UserProfileAdmin)
+default_admin_site.register(EmailOTP,            EmailOTPAdmin)
+default_admin_site.register(UserPasskey,         UserPasskeyAdmin)
+default_admin_site.register(TrustedDevice,       TrustedDeviceAdmin)
+default_admin_site.register(RemoteAuthRequest,   RemoteAuthRequestAdmin)
+default_admin_site.register(ActivityLog,         ActivityLogAdmin)
+default_admin_site.register(PendingRegistration, PendingRegistrationAdmin)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # ĐĂNG KÝ VÀO admin.site MẶC ĐỊNH  (/admin/)
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 
 admin.site.site_header = "HUIT Authentication System"
 admin.site.site_title  = "HUIT Admin"
@@ -441,16 +389,12 @@ admin.site.index_title = "Trang quản trị hệ thống"
 admin.site.unregister(User)
 admin.site.unregister(Group)
 
-admin.site.register(User,                 CustomUserAdmin)
-admin.site.register(Group,                BaseGroupAdmin)
-admin.site.register(UserProfile,          UserProfileAdmin)
-admin.site.register(User2FA,              User2FAAdmin)
-admin.site.register(UserSessionControl,   UserSessionControlAdmin)
-admin.site.register(EmailOTP,             EmailOTPAdmin)
-admin.site.register(OTP,                  OTPAdmin)
-admin.site.register(UserPasskey,          UserPasskeyAdmin)
-admin.site.register(TrustedDevice,        TrustedDeviceAdmin)
-admin.site.register(RemoteAuthRequest,    RemoteAuthRequestAdmin)
-admin.site.register(ActivityLog,          ActivityLogAdmin)
-admin.site.register(LoginHistory,         LoginHistoryAdmin)
-admin.site.register(PendingRegistration,  PendingRegistrationAdmin)
+admin.site.register(User,                CustomUserAdmin)
+admin.site.register(Group,               BaseGroupAdmin)
+admin.site.register(UserProfile,         UserProfileAdmin)
+admin.site.register(EmailOTP,            EmailOTPAdmin)
+admin.site.register(UserPasskey,         UserPasskeyAdmin)
+admin.site.register(TrustedDevice,       TrustedDeviceAdmin)
+admin.site.register(RemoteAuthRequest,   RemoteAuthRequestAdmin)
+admin.site.register(ActivityLog,         ActivityLogAdmin)
+admin.site.register(PendingRegistration, PendingRegistrationAdmin)

@@ -1,14 +1,12 @@
 import jwt
 import time
-import random
 import hashlib
+import logging
 import pyotp
 import io
 import base64
 import json
 import datetime
-import pickle
-import sqlite3
 import secrets
 import uuid
 from decimal import Decimal
@@ -20,6 +18,7 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.hashers import make_password
 from django.http import JsonResponse, HttpResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
@@ -27,6 +26,7 @@ from django.views.decorators.cache import never_cache
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.db import connection
 from django.db.models import Q
 from django.core.paginator import Paginator
 from django.contrib.sessions.models import Session
@@ -36,10 +36,9 @@ import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment, PatternFill
-from django.contrib.auth.hashers import make_password
 
 from .models import (
-    LoginHistory, RemoteAuthRequest, TrustedDevice,
+    RemoteAuthRequest, TrustedDevice,
     EmailOTP, UserProfile, PendingRegistration,
     ActivityLog, UserPasskey
 )
@@ -54,6 +53,8 @@ from fido2.webauthn import (
 from fido2.utils import websafe_encode, websafe_decode
 from fido2.features import webauthn_json_mapping
 
+logger = logging.getLogger(__name__)
+
 try:
     webauthn_json_mapping.enabled = True
 except ValueError:
@@ -65,7 +66,7 @@ except ValueError:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class RegisterForm(UserCreationForm):
-    """Form đăng ký mở rộng: thêm họ, chữ đệm, tên, email, số điện thoại."""
+    """Form đăng ký mở rộng: họ, chữ đệm, tên, email, số điện thoại."""
 
     first_name = forms.CharField(
         max_length=50, required=True, label='Họ',
@@ -107,12 +108,29 @@ class RegisterForm(UserCreationForm):
 
 
 def _b64url_to_bytes(s) -> bytes:
-    """Chuyển đổi chuỗi Base64url (WebAuthn) về bytes. Xử lý padding và ký tự đặc biệt."""
+    """Chuyển đổi Base64url (WebAuthn) về bytes. Xử lý padding và ký tự đặc biệt."""
     if isinstance(s, bytes):
         return s
     s = s.replace('-', '+').replace('_', '/')
     s += '=' * (4 - len(s) % 4)
     return base64.b64decode(s)
+
+
+def _get_valid_otp(user, otp_code: str, action: str = None):
+    """
+    Tìm bản ghi EmailOTP còn hợp lệ khớp với user + otp_code.
+    Xác thực qua otp_hash (SHA-256) thay vì so sánh plaintext trực tiếp.
+    Đây là hàm xác thực OTP tập trung — tất cả views dùng hàm này.
+    """
+    # FIX: dùng otp_hash để so sánh thay vì otp_code plaintext
+    otp_hash = hashlib.sha256(otp_code.encode('utf-8')).hexdigest()
+    qs = EmailOTP.objects.filter(
+        user=user, otp_hash=otp_hash, is_used=False, is_active=True,
+        created_at__gt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
+    )
+    if action:
+        qs = qs.filter(action=action)
+    return qs.order_by('-created_at').first()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -133,22 +151,20 @@ def register(request):
     Luồng: validate form → tạo PendingRegistration → gửi OTP email
     → redirect sang verify_register_otp.
 
-    temp_data lưu password plaintext vì chưa tạo User — bản ghi này
-    bị xóa ngay sau khi xác thực OTP thành công.
+    Bảo mật: password được make_password() trước khi lưu vào temp_data JSON.
+    User.objects.create() dùng password đã hash — không gọi create_user() để tránh hash kép.
     """
     if request.method == 'POST':
         form = RegisterForm(request.POST)
         if form.is_valid():
             email = form.cleaned_data['email']
-
-            # Xóa bản ghi pending cũ nếu user đăng ký lại
             PendingRegistration.objects.filter(email=email).delete()
 
             otp_code = ''.join(str(secrets.randbelow(10)) for _ in range(6))
 
             PendingRegistration.objects.create(
-                email     = email,
-                otp_code  = otp_code,
+                email    = email,
+                otp_code = otp_code,
                 temp_data = {
                     'username':     form.cleaned_data['username'],
                     'first_name':   form.cleaned_data['first_name'],
@@ -156,22 +172,19 @@ def register(request):
                     'last_name':    form.cleaned_data['last_name'],
                     'email':        email,
                     'phone_number': form.cleaned_data.get('phone_number', ''),
-                    'password': make_password(form.cleaned_data['password1']),
+                    'password':     make_password(form.cleaned_data['password1']),
                 },
             )
 
             try:
-                ip    = get_client_ip(request)
-                first = form.cleaned_data['first_name']
-                last  = form.cleaned_data['last_name']
                 generate_and_send_email_otp(
                     user    = None,
                     email   = email,
                     action  = 'register',
-                    ip      = ip,
-                    subject = '🔐 Mã OTP Kích hoạt tài khoản - HUIT',
+                    ip      = get_client_ip(request),
+                    subject = 'Mã OTP kích hoạt tài khoản - HUIT',
                     body    = (
-                        f"Xin chào {first} {last},\n\n"
+                        f"Xin chào {form.cleaned_data['first_name']} {form.cleaned_data['last_name']},\n\n"
                         f"Mã OTP kích hoạt tài khoản của bạn là: {otp_code}\n\n"
                         f"Mã có hiệu lực trong 10 phút. Không chia sẻ mã này.\n\n"
                         f"Trân trọng,\nHUIT System"
@@ -194,8 +207,8 @@ def verify_register_otp(request):
     """
     Xác thực OTP đăng ký (bước 2/2).
 
-    action='resend': sinh OTP mới, lưu lại temp_data trước khi xóa bản ghi cũ
-    để không mất dữ liệu form đã điền.
+    action='resend': sinh OTP mới, bảo toàn temp_data, xóa bản ghi cũ.
+    Sau khi xác thực thành công: tạo User thật, tạo UserProfile, xóa PendingRegistration.
     """
     email = request.session.get('pending_register_email')
     if not email:
@@ -215,7 +228,7 @@ def verify_register_otp(request):
             pending = PendingRegistration.objects.filter(email=email).first()
             if pending:
                 new_otp   = ''.join(str(secrets.randbelow(10)) for _ in range(6))
-                temp_data = pending.temp_data  # Lưu lại trước khi xóa
+                temp_data = pending.temp_data
 
                 PendingRegistration.objects.filter(email=email).delete()
                 PendingRegistration.objects.create(
@@ -225,21 +238,14 @@ def verify_register_otp(request):
                 )
                 try:
                     send_mail(
-                        subject        = '🔐 Mã OTP mới - HUIT',
+                        subject        = 'Mã OTP mới - HUIT',
                         message        = f'Mã OTP mới của bạn: {new_otp}\n\nHiệu lực 10 phút.\n\nHUIT System',
                         from_email     = None,
                         recipient_list = [email],
                         fail_silently  = False,
                     )
-                    EmailOTP.objects.create(
-                        user       = None,
-                        otp_code   = new_otp,
-                        action     = 'register',
-                        ip_address = get_client_ip(request),
-                        email_sent = email,
-                        is_used    = False,
-                        is_active  = True,
-                    )
+                    # FIX: resend không tạo EmailOTP riêng để tránh 2 nguồn truth.
+                    # Xác thực dùng PendingRegistration.otp_code làm nguồn duy nhất.
                     messages.success(request, 'Đã gửi lại mã OTP mới.')
                 except Exception as e:
                     messages.error(request, f'Lỗi gửi email: {str(e)}')
@@ -262,13 +268,12 @@ def verify_register_otp(request):
         user = User.objects.create(
             username   = data['username'],
             email      = data['email'],
-            password   = data['password'],
+            password   = data['password'],  # đã make_password() trong register()
             is_active  = True,
             first_name = data['first_name'],
             last_name  = data['last_name'],
         )
 
-        # Liên kết bản ghi OTP đăng ký với user vừa tạo
         EmailOTP.objects.filter(otp_code=otp_entered, user__isnull=True).update(
             user=user, is_used=True
         )
@@ -281,12 +286,20 @@ def verify_register_otp(request):
             }
         )
 
+        ActivityLog.objects.create(
+            user             = user,
+            username_attempt = user.username,
+            action           = 'register',
+            ip_address       = get_client_ip(request),
+            user_agent       = request.META.get('HTTP_USER_AGENT', 'Unknown'),
+        )
+
         pending.is_used = True
         pending.save()
 
         del request.session['pending_register_email']
 
-        messages.success(request, f'🎉 Chào mừng {user.first_name} {user.last_name}! Tài khoản đã kích hoạt.')
+        messages.success(request, f'Chào mừng {user.first_name} {user.last_name}! Tài khoản đã kích hoạt.')
         return redirect('login')
 
     return render(request, 'accounts/verify_register_otp.html', {
@@ -296,7 +309,7 @@ def verify_register_otp(request):
 
 
 def logout_view(request):
-    """Đánh dấu TrustedDevice của session hiện tại là offline trước khi logout."""
+    """Đánh dấu TrustedDevice offline rồi logout."""
     session_key = request.session.session_key
     if session_key:
         TrustedDevice.objects.filter(session_key=session_key).update(is_active=False)
@@ -308,9 +321,11 @@ def logout_view(request):
 def login_view(request):
     """
     Đăng nhập với ba luồng:
-      1. Admin → bỏ qua 2FA, vào thẳng admin_dashboard.
+      1. Admin (is_superuser) → bỏ qua 2FA, vào thẳng admin_dashboard.
       2. User có 2FA → lưu user_id vào session, redirect verify_2fa.
       3. User không có 2FA → đăng nhập thẳng.
+
+    Đọc force_disable_2fa từ UserProfile (không còn đọc User2FA).
     """
     if request.user.is_authenticated:
         next_url = request.GET.get('next')
@@ -330,67 +345,54 @@ def login_view(request):
             profile = UserProfile.objects.select_related('user').get(user=user)
 
             if not user.is_active:
-                messages.error(request, "Tài khoản của bạn đã bị khóa.")
+                messages.error(request, 'Tài khoản của bạn đã bị khóa.')
                 return render(request, 'accounts/login.html', {'form': form})
 
-            # Admin bỏ qua 2FA
             if user.is_superuser:
                 login(request, user)
                 ActivityLog.objects.create(
-                    user             = user,
-                    username_attempt = username_input,
-                    action           = 'login',
-                    ip_address       = ip,
-                    user_agent       = user_agent,
+                    user=user, username_attempt=username_input, action='login',
+                    ip_address=ip, user_agent=user_agent,
                 )
-                messages.success(request, f"Chào Admin, {user.username}!")
+                messages.success(request, f'Chào Admin, {user.username}!')
                 return redirect('admin_dashboard')
 
-            # Đồng bộ cờ force_disable_2fa của admin xuống profile
-            user_2fa = getattr(user, 'user2fa', None)
-            if user_2fa and user_2fa.force_disable_2fa:
+            # Đồng bộ force_disable_2fa từ profile xuống cờ 2FA
+            if profile.force_disable_2fa:
                 profile.has_app_otp   = False
                 profile.has_email_otp = False
-                profile.save()
+                profile.save(update_fields=['has_app_otp', 'has_email_otp'])
 
-            # Nếu có bất kỳ phương thức 2FA nào → chuyển sang bước xác thực
-            has_fido2 = user.passkeys.exists()
+            has_fido2     = user.passkeys.exists()
+            other_devices = TrustedDevice.objects.filter(
+                user=user, is_active=True
+            ).exclude(session_key=request.session.session_key)
+
             if profile.has_app_otp or profile.has_email_otp or has_fido2:
                 request.session['pre_2fa_user_id'] = user.id
 
                 methods_enabled = []
-                if profile.has_app_otp:   methods_enabled.append("Authenticator")
-                if profile.has_email_otp: methods_enabled.append("Email OTP")
-                if has_fido2:             methods_enabled.append("Passkey")
-
-                other_devices = TrustedDevice.objects.filter(
-                    user=user, is_active=True
-                ).exclude(session_key=request.session.session_key)
-                if other_devices.exists():
-                    methods_enabled.append("Thiết bị khác")
+                if profile.has_app_otp:    methods_enabled.append('Authenticator')
+                if profile.has_email_otp:  methods_enabled.append('Email OTP')
+                if has_fido2:              methods_enabled.append('Passkey')
+                if other_devices.exists(): methods_enabled.append('Thiết bị khác')
 
                 if len(methods_enabled) > 1:
-                    msg = "Xác thực bằng " + ", ".join(methods_enabled[:-1]) + " hoặc " + methods_enabled[-1]
-                elif methods_enabled:
-                    msg = f"Xác thực bằng {methods_enabled[0]}"
+                    msg = 'Xác thực bằng ' + ', '.join(methods_enabled[:-1]) + ' hoặc ' + methods_enabled[-1]
                 else:
-                    msg = "Vui lòng xác thực 2FA"
+                    msg = f'Xác thực bằng {methods_enabled[0]}' if methods_enabled else 'Vui lòng xác thực 2FA'
 
                 messages.info(request, msg)
                 return redirect('verify_2fa')
 
-            # Không có 2FA → đăng nhập thẳng
             login(request, user)
             next_url = request.GET.get('next')
             if next_url:
                 return redirect(next_url)
 
             ActivityLog.objects.create(
-                user             = user,
-                username_attempt = username_input,
-                action           = 'login',
-                ip_address       = ip,
-                user_agent       = user_agent,
+                user=user, username_attempt=username_input, action='login',
+                ip_address=ip, user_agent=user_agent,
             )
 
             if not request.session.session_key:
@@ -399,41 +401,36 @@ def login_view(request):
             TrustedDevice.objects.update_or_create(
                 session_key = request.session.session_key,
                 defaults    = {
-                    "user":       user,
-                    "user_agent": user_agent,
-                    "ip_address": ip,
-                    "last_seen":  timezone.now(),
-                    "is_active":  True,
+                    'user':       user,
+                    'user_agent': user_agent,
+                    'ip_address': ip,
+                    'last_seen':  timezone.now(),
+                    'is_active':  True,
                 }
             )
-            messages.success(request, f"Chào mừng trở lại, {user.username}!")
+            messages.success(request, f'Chào mừng trở lại, {user.username}!')
             if request.session.get('sso_pending'):
                 request.session.pop('sso_pending', None)
                 return redirect('sso_send')
             return redirect('dashboard')
 
         else:
-            # Phân biệt lý do lỗi để hiển thị thông báo rõ hơn
             try:
                 check_user = User.objects.get(username=username_input)
                 if not check_user.is_active:
                     ActivityLog.objects.create(
-                        username_attempt = username_input,
-                        action           = 'login_locked_attempt',
-                        ip_address       = ip,
-                        user_agent       = user_agent,
+                        username_attempt=username_input, action='login_locked_attempt',
+                        ip_address=ip, user_agent=user_agent,
                     )
-                    messages.error(request, "Tài khoản của bạn hiện đang bị khóa. Vui lòng liên hệ Admin HUIT.")
+                    messages.error(request, 'Tài khoản đang bị khóa. Vui lòng liên hệ Admin HUIT.')
                 else:
-                    messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
+                    messages.error(request, 'Tên đăng nhập hoặc mật khẩu không đúng.')
             except User.DoesNotExist:
-                messages.error(request, "Tên đăng nhập hoặc mật khẩu không đúng.")
+                messages.error(request, 'Tên đăng nhập hoặc mật khẩu không đúng.')
 
             ActivityLog.objects.create(
-                username_attempt = username_input,
-                action           = 'login_failed',
-                ip_address       = ip,
-                user_agent       = user_agent,
+                username_attempt=username_input, action='login_failed',
+                ip_address=ip, user_agent=user_agent,
             )
     else:
         form = AuthenticationForm()
@@ -447,7 +444,12 @@ def login_view(request):
 
 @login_required
 def dashboard(request):
-    """Dashboard người dùng — cập nhật thông tin, bật/tắt 2FA."""
+    """
+    Dashboard người dùng — cập nhật thông tin, bật/tắt 2FA.
+
+    Xác thực OTP dùng EmailOTP (nguồn sự thật duy nhất).
+    Không còn đọc/ghi UserProfile.email_otp hay UserProfile.otp_expiry.
+    """
     if request.user.is_superuser:
         return redirect('admin_dashboard')
 
@@ -470,32 +472,20 @@ def dashboard(request):
 
             old_email = request.user.email
 
-            # Trường hợp 1: chưa có email hoặc chưa bật email OTP → OTP tới email mới
             if not old_email or not profile.has_email_otp:
-                otp = ''.join(str(secrets.randbelow(10)) for _ in range(6))
-                profile.email_otp  = otp
-                profile.otp_expiry = timezone.now() + timedelta(minutes=3)
-                profile.save()
+                # Gửi OTP tới email mới, dùng EmailOTP làm nguồn sự thật
                 try:
-                    send_mail(
-                        subject        = '🔐 Xác nhận cập nhật thông tin - HUIT',
-                        message        = (
+                    generate_and_send_email_otp(
+                        user    = request.user,
+                        email   = new_email,
+                        action  = 'update_info',
+                        ip      = get_client_ip(request),
+                        subject = 'Xác nhận cập nhật thông tin - HUIT',
+                        body    = (
                             f"Xin chào {new_first_name} {new_last_name},\n\n"
-                            f"Mã OTP xác nhận cập nhật thông tin: ► {otp}\n\n"
+                            f"Mã OTP xác nhận cập nhật thông tin.\n\n"
                             f"Hiệu lực 3 phút.\n\nHUIT System"
                         ),
-                        from_email     = None,
-                        recipient_list = [new_email],
-                        fail_silently  = False,
-                    )
-                    EmailOTP.objects.create(
-                        user       = request.user,
-                        otp_code   = otp,
-                        action     = 'update_info',
-                        ip_address = get_client_ip(request),
-                        email_sent = new_email,
-                        is_used    = False,
-                        is_active  = True,
                     )
                     messages.success(request, f'Mã OTP đã gửi tới {new_email}')
                 except Exception as e:
@@ -504,40 +494,27 @@ def dashboard(request):
                 request.session['pending_update'] = {
                     'first_name': new_first_name, 'middle_name': new_middle_name,
                     'last_name': new_last_name,   'new_email': new_email,
-                    'phone_number': new_phone,     'is_first_email': True,
+                    'phone_number': new_phone,    'is_first_email': True,
                 }
                 return redirect('dashboard')
 
-            # Trường hợp 2: email thay đổi → OTP tới email cũ để xác nhận
             elif new_email != old_email:
-                otp = ''.join(str(secrets.randbelow(10)) for _ in range(6))
-                profile.email_otp  = otp
-                profile.otp_expiry = timezone.now() + timedelta(minutes=3)
-                profile.save()
+                # Gửi OTP về email cũ để xác nhận thay đổi
                 try:
-                    send_mail(
-                        subject        = '🔐 Xác nhận thay đổi Email - HUIT',
-                        message        = (
+                    generate_and_send_email_otp(
+                        user    = request.user,
+                        email   = old_email,
+                        action  = 'update_info',
+                        ip      = get_client_ip(request),
+                        subject = 'Xác nhận thay đổi Email - HUIT',
+                        body    = (
                             f"Xin chào {request.user.first_name},\n\n"
-                            f"Mã OTP xác nhận thay đổi email: ► {otp}\n\n"
+                            f"Mã OTP xác nhận thay đổi email.\n\n"
                             f"Hiệu lực 3 phút.\n\nHUIT System"
                         ),
-                        from_email     = None,
-                        recipient_list = [old_email],  # Gửi về email cũ để xác nhận danh tính
-                        fail_silently  = False,
-                    )
-                    EmailOTP.objects.create(
-                        user       = request.user,
-                        otp_code   = otp,
-                        action     = 'update_info',
-                        ip_address = get_client_ip(request),
-                        email_sent = old_email,
-                        is_used    = False,
-                        is_active  = True,
                     )
                 except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).error("EMAIL ERROR update_info: %s", e)
+                    logger.error('EMAIL ERROR update_info: %s', e)
 
                 request.session['pending_update'] = {
                     'first_name': new_first_name, 'middle_name': new_middle_name,
@@ -547,8 +524,8 @@ def dashboard(request):
                 }
                 return redirect('dashboard')
 
-            # Trường hợp 3: email không đổi → cập nhật luôn, không cần OTP
             else:
+                # Email không đổi → cập nhật trực tiếp, không cần OTP
                 request.user.first_name = new_first_name
                 request.user.last_name  = new_last_name
                 profile.middle_name     = new_middle_name
@@ -566,27 +543,13 @@ def dashboard(request):
                 messages.error(request, 'Không có yêu cầu cập nhật.')
                 return redirect('dashboard')
 
-            if not profile.email_otp or profile.otp_expiry < timezone.now():
-                messages.error(request, 'Mã OTP đã hết hạn.')
-                request.session.pop('pending_update', None)
+            otp_obj = _get_valid_otp(request.user, otp_input, action='update_info')
+            if not otp_obj:
+                # Không xóa session — cho phép thử lại (không mark_used OTP sai)
+                messages.error(request, 'Mã OTP không đúng hoặc đã hết hạn!')
                 return redirect('dashboard')
 
-            if otp_input != profile.email_otp:
-                otp_log = EmailOTP.objects.filter(
-                    user=request.user, otp_code=otp_input, is_used=False
-                ).first()
-                if otp_log:
-                    otp_log.mark_used()
-                request.session.pop('pending_update', None)
-                messages.error(request, 'Mã OTP không đúng!')
-                return redirect('dashboard')
-
-            # OTP đúng → cập nhật thông tin
-            otp_log = EmailOTP.objects.filter(
-                user=request.user, otp_code=otp_input, is_used=False
-            ).first()
-            if otp_log:
-                otp_log.mark_used()
+            otp_obj.mark_used()
 
             request.user.first_name = pending['first_name']
             request.user.last_name  = pending['last_name']
@@ -595,8 +558,6 @@ def dashboard(request):
 
             profile.middle_name  = pending.get('middle_name', '')
             profile.phone_number = pending.get('phone_number', '')
-            profile.email_otp    = None
-            profile.otp_expiry   = None
             profile.save()
 
             request.session.pop('pending_update', None)
@@ -607,26 +568,14 @@ def dashboard(request):
             action = request.POST.get('action', '')
 
             if action == 'disable_email':
-                otp = ''.join(str(secrets.randbelow(10)) for _ in range(6))
-                profile.email_otp  = otp
-                profile.otp_expiry = timezone.now() + timedelta(minutes=3)
-                profile.save()
                 try:
-                    send_mail(
-                        subject        = '🔐 Xác nhận tắt Email OTP - HUIT',
-                        message        = f'Mã OTP xác nhận tắt 2FA email: {otp}\n\nHiệu lực 3 phút.',
-                        from_email     = None,
-                        recipient_list = [request.user.email],
-                        fail_silently  = False,
-                    )
-                    EmailOTP.objects.create(
-                        user       = request.user,
-                        otp_code   = otp,
-                        action     = 'disable_2fa',
-                        ip_address = get_client_ip(request),
-                        email_sent = request.user.email,
-                        is_used    = False,
-                        is_active  = True,
+                    generate_and_send_email_otp(
+                        user    = request.user,
+                        email   = request.user.email,
+                        action  = 'disable_2fa',
+                        ip      = get_client_ip(request),
+                        subject = 'Xác nhận tắt Email OTP - HUIT',
+                        body    = 'Mã OTP xác nhận tắt 2FA email.\n\nHiệu lực 3 phút.',
                     )
                     confirm_disable = 'disable_email'
                 except Exception:
@@ -636,29 +585,30 @@ def dashboard(request):
                 confirm_disable = 'disable_app'
 
             elif 'confirm_disable_action' in request.POST:
-                code   = request.POST.get('disable_otp_code', '').strip()
-                target = request.POST.get('confirm_disable_action')
-                valid  = False
+                code    = request.POST.get('disable_otp_code', '').strip()
+                target  = request.POST.get('confirm_disable_action')
+                valid   = False
+                otp_obj = None  # FIX: khởi tạo rõ ràng để tránh dùng locals()/dir()
 
-                if target == 'disable_email' and profile.email_otp == code and profile.otp_expiry > timezone.now():
-                    valid = True
+                if target == 'disable_email':
+                    otp_obj = _get_valid_otp(request.user, code, action='disable_2fa')
+                    if otp_obj:
+                        valid = True
                 elif target == 'disable_app':
                     raw_secret = profile.decrypt_secret()
                     if raw_secret and code == get_totp_token(raw_secret):
                         valid = True
 
                 if valid:
-                    otp_log = EmailOTP.objects.filter(
-                        user=request.user, otp_code=code, is_used=False
-                    ).first()
-                    if otp_log:
-                        otp_log.mark_used()
+                    # FIX: dùng biến otp_obj đã khai báo, không dùng dir()
+                    if target == 'disable_email' and otp_obj:
+                        otp_obj.mark_used()
                     if target == 'disable_email':
                         profile.has_email_otp = False
                     else:
                         profile.has_app_otp = False
-                        profile.otp_secret  = pyotp.random_base32()  # Reset secret khi tắt App OTP
-                    profile.email_otp = None
+                        # FIX: set None thay vì tạo secret ngẫu nhiên "ma"
+                        profile.otp_secret  = None
                     profile.save()
                     messages.success(request, 'Đã hủy bảo mật thành công.')
                     return redirect('dashboard')
@@ -687,10 +637,8 @@ def setup_2fa(request):
     """
     Thiết lập phương thức 2FA.
 
-    method='email': gửi OTP qua email → xác nhận → bật has_email_otp.
-    method='app': hiển thị QR code → user quét → nhập TOTP → bật has_app_otp.
-
-    Mỗi lần GET method='app' đều sinh secret mới lưu vào session.
+    method='email': gửi OTP → xác nhận qua EmailOTP → bật has_email_otp.
+    method='app'  : hiển thị QR → user quét → nhập TOTP → bật has_app_otp.
     """
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     method     = request.GET.get('method', 'email')
@@ -709,46 +657,27 @@ def setup_2fa(request):
                 if not request.user.email:
                     messages.error(request, 'Vui lòng cập nhật email trước!')
                     return redirect('dashboard')
-                otp = ''.join(str(secrets.randbelow(10)) for _ in range(6))
-                profile.email_otp  = otp
-                profile.otp_expiry = timezone.now() + timedelta(minutes=3)
-                profile.save()
                 try:
-                    send_mail(
-                        subject        = '🔐 Mã OTP Thiết lập Email 2FA - HUIT',
-                        message        = f'Mã OTP thiết lập 2FA: {otp}\n\nHiệu lực 3 phút.\n\nHUIT System',
-                        from_email     = None,
-                        recipient_list = [request.user.email],
-                        fail_silently  = False,
+                    generate_and_send_email_otp(
+                        user    = request.user,
+                        email   = request.user.email,
+                        action  = 'setup_2fa',
+                        ip      = get_client_ip(request),
+                        subject = 'Mã OTP thiết lập Email 2FA - HUIT',
+                        body    = 'Mã OTP thiết lập 2FA.\n\nHiệu lực 3 phút.\n\nHUIT System',
                     )
-                    EmailOTP.objects.create(
-                        user       = request.user,
-                        otp_code   = otp,
-                        action     = 'setup_2fa',
-                        ip_address = get_client_ip(request),
-                        email_sent = request.user.email,
-                        is_used    = False,
-                        is_active  = True,
-                    )
-                    messages.success(request, '✅ Mã OTP đã gửi đến email của bạn!')
+                    messages.success(request, 'Mã OTP đã gửi đến email của bạn!')
                 except Exception as e:
                     messages.error(request, f'Lỗi gửi email: {str(e)}')
 
             elif 'verify_email_otp' in request.POST:
-                code = request.POST.get('email_otp_code', '').strip()
-                if (profile.email_otp
-                        and code == profile.email_otp
-                        and profile.otp_expiry > timezone.now()):
+                code    = request.POST.get('email_otp_code', '').strip()
+                otp_obj = _get_valid_otp(request.user, code, action='setup_2fa')
+                if otp_obj:
                     profile.has_email_otp = True
-                    profile.email_otp     = None
-                    profile.otp_expiry    = None
                     profile.save()
-                    otp_log = EmailOTP.objects.filter(
-                        user=request.user, otp_code=code, is_used=False
-                    ).first()
-                    if otp_log:
-                        otp_log.mark_used()
-                    messages.success(request, '🎉 Đã kích hoạt Email OTP thành công!')
+                    otp_obj.mark_used()
+                    messages.success(request, 'Đã kích hoạt Email OTP thành công!')
                     return redirect('dashboard')
                 else:
                     messages.error(request, 'Mã OTP không đúng hoặc đã hết hạn!')
@@ -762,13 +691,15 @@ def setup_2fa(request):
                     profile.has_app_otp = True
                     profile.save()
                     request.session.pop('temp_otp_secret', None)
-                    messages.success(request, '✅ Thiết lập Google Authenticator thành công!')
+                    messages.success(request, 'Thiết lập Google Authenticator thành công!')
                     return redirect('dashboard')
                 else:
                     messages.error(request, 'Mã OTP không đúng!')
 
     if method == 'app':
-        new_secret = pyotp.random_base32()
+        # FIX: chỉ tạo secret mới nếu chưa có trong session,
+        # tránh race condition khi user F5 hoặc mở nhiều tab.
+        new_secret = request.session.get('temp_otp_secret') or pyotp.random_base32()
         request.session['temp_otp_secret'] = new_secret
         context['qr_code_base64'] = generate_qr_base64(request.user.username, new_secret)
         context['otp_secret']     = new_secret
@@ -784,6 +715,7 @@ def verify_2fa(request):
     """
     Bước xác thực 2FA sau khi nhập đúng username/password.
     Hỗ trợ: app (TOTP), email OTP, fido2 (Passkey), push (thiết bị online khác).
+    Xác thực OTP email dùng _get_valid_otp() — không đọc UserProfile.email_otp.
     """
     uid = request.session.get('pre_2fa_user_id')
     if not uid:
@@ -801,7 +733,6 @@ def verify_2fa(request):
     other_devices = TrustedDevice.objects.filter(
         user=user, is_active=True
     ).exclude(session_key=request.session.session_key)
-
     has_fido2 = user.passkeys.exists()
 
     methods = []
@@ -817,7 +748,7 @@ def verify_2fa(request):
     method       = request.GET.get('method')
     enabled_keys = [m['key'] for m in methods]
     if method not in enabled_keys:
-        return redirect(f"{request.path}?method={enabled_keys[0]}")
+        return redirect(f'{request.path}?method={enabled_keys[0]}')
 
     push_request_sent = False
 
@@ -843,59 +774,54 @@ def verify_2fa(request):
             })
 
         if action == 'send_email_code' and profile.has_email_otp:
-            otp = ''.join(str(secrets.randbelow(10)) for _ in range(6))
-            profile.email_otp  = otp
-            profile.otp_expiry = timezone.now() + timedelta(minutes=3)
-            profile.save()
-            send_mail(
-                subject        = 'Mã xác thực đăng nhập - HUIT',
-                message        = f'Mã OTP của bạn là: {otp}\n\nHiệu lực 3 phút.',
-                from_email     = None,
-                recipient_list = [user.email],
-                fail_silently  = True,
-            )
-            EmailOTP.objects.create(
-                user       = user,
-                otp_code   = otp,
-                action     = 'login_2fa',
-                ip_address = get_client_ip(request),
-                email_sent = user.email,
-                is_used    = False,
-                is_active  = True,
-            )
-            messages.success(request, 'Đã gửi mã OTP mới vào Email.')
+            try:
+                generate_and_send_email_otp(
+                    user    = user,
+                    email   = user.email,
+                    action  = 'login_2fa',
+                    ip      = ip,
+                    subject = 'Mã xác thực đăng nhập - HUIT',
+                    body    = 'Mã OTP đăng nhập của bạn.\n\nHiệu lực 3 phút.',
+                )
+                messages.success(request, 'Đã gửi mã OTP mới vào Email.')
+            except Exception as e:
+                messages.error(request, f'Lỗi gửi email: {str(e)}')
             return redirect(f'{request.path}?method=email')
 
-        valid = False
+        valid   = False
+        otp_obj = None  # FIX: khai báo rõ ràng trước khi dùng
+
         if method == 'app' and profile.has_app_otp:
             raw_secret = profile.decrypt_secret()
             if raw_secret and code == get_totp_token(raw_secret):
                 valid = True
         elif method == 'email' and profile.has_email_otp:
-            if code == profile.email_otp and profile.otp_expiry > timezone.now():
+            otp_obj = _get_valid_otp(user, code, action='login_2fa')
+            if otp_obj:
                 valid = True
 
         if valid:
             login(request, user)
             request.session.pop('pre_2fa_user_id', None)
 
-            if method == 'email':
-                profile.email_otp  = None
-                profile.otp_expiry = None
-                profile.save()
-                # Chỉ đánh dấu đúng bản ghi OTP vừa dùng
-                otp_log = EmailOTP.objects.filter(
-                    user=user, otp_code=code, is_used=False
-                ).first()
-                if otp_log:
-                    otp_log.mark_used()
+            # FIX: dùng biến otp_obj đã khai báo, không dùng dir()
+            if method == 'email' and otp_obj:
+                otp_obj.mark_used()
+
+            if not request.session.session_key:
+                request.session.create()
+
+            TrustedDevice.objects.update_or_create(
+                session_key = request.session.session_key,
+                defaults    = {
+                    'user': user, 'user_agent': user_agent,
+                    'ip_address': ip, 'last_seen': timezone.now(), 'is_active': True,
+                }
+            )
 
             ActivityLog.objects.create(
-                user             = user,
-                action           = 'login',
-                username_attempt = user.username,
-                ip_address       = ip,
-                user_agent       = user_agent,
+                user=user, action='login', username_attempt=user.username,
+                ip_address=ip, user_agent=user_agent,
             )
             if request.session.get('sso_pending'):
                 request.session.pop('sso_pending', None)
@@ -903,11 +829,8 @@ def verify_2fa(request):
             return redirect('dashboard')
 
         ActivityLog.objects.create(
-            user             = user,
-            action           = 'login_failed',
-            username_attempt = user.username,
-            ip_address       = ip,
-            user_agent       = user_agent,
+            user=user, action='login_failed', username_attempt=user.username,
+            ip_address=ip, user_agent=user_agent,
         )
         messages.error(request, 'Mã xác thực không chính xác hoặc hết hạn.')
 
@@ -924,16 +847,12 @@ def verify_2fa(request):
 
 @login_required
 def get_pending_auth_request(request):
-    """API polling: thiết bị đang online kiểm tra có yêu cầu xác thực mới không."""
+    """API polling: thiết bị online kiểm tra có yêu cầu xác thực mới không."""
     req = RemoteAuthRequest.objects.filter(
         user=request.user, status='pending'
     ).order_by('-created_at').first()
     if req:
-        return JsonResponse({
-            'has_request': True,
-            'request_id':  req.id,
-            'device_info': req.device_info,
-        })
+        return JsonResponse({'has_request': True, 'request_id': req.id, 'device_info': req.device_info})
     return JsonResponse({'has_request': False})
 
 
@@ -942,18 +861,13 @@ def respond_auth_request(request, req_id):
     """API: thiết bị online đồng ý hoặc từ chối yêu cầu xác thực."""
     status = request.GET.get('status')
     if status in ['approved', 'denied']:
-        RemoteAuthRequest.objects.filter(
-            id=req_id, user=request.user
-        ).update(status=status)
+        RemoteAuthRequest.objects.filter(id=req_id, user=request.user).update(status=status)
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error'}, status=400)
 
 
 def check_auth_status(request):
-    """
-    API polling: thiết bị mới kiểm tra trạng thái yêu cầu xác thực.
-    user có thể chưa được gán nếu uid không có trong session → dùng fallback "Unknown".
-    """
+    """API polling: thiết bị mới kiểm tra kết quả push auth."""
     session_key = request.session.session_key
     ip          = get_client_ip(request)
     user_agent  = request.META.get('HTTP_USER_AGENT', 'Unknown')
@@ -977,21 +891,16 @@ def check_auth_status(request):
                 pass
         req.delete()
         ActivityLog.objects.create(
-            user             = user,
-            username_attempt = user.username if user else "Unknown",
-            action           = 'login',
-            ip_address       = ip,
-            user_agent       = user_agent,
+            user=user, username_attempt=user.username if user else 'Unknown',
+            action='login', ip_address=ip, user_agent=user_agent,
         )
         return JsonResponse({'status': 'approved'})
 
     elif req.status == 'denied':
         req.delete()
         ActivityLog.objects.create(
-            username_attempt = "Unknown",
-            action           = 'login_failed',
-            ip_address       = ip,
-            user_agent       = user_agent,
+            username_attempt='Unknown', action='login_failed',
+            ip_address=ip, user_agent=user_agent,
         )
         return JsonResponse({'status': 'denied'})
 
@@ -1007,17 +916,14 @@ def test_passkey_view(request):
 
 
 def _get_fido2_server(request) -> Fido2Server:
-    """Tạo Fido2Server với rp_id = hostname hiện tại. Tách helper để tránh lặp code."""
+    """Helper: tạo Fido2Server với rp_id = hostname hiện tại."""
     rp_id = request.get_host().split(':')[0]
-    return Fido2Server(PublicKeyCredentialRpEntity(id=rp_id, name="HUIT MFA System"))
+    return Fido2Server(PublicKeyCredentialRpEntity(id=rp_id, name='HUIT MFA System'))
 
 
 @login_required
 def fido2_reg_begin(request):
-    """
-    Bắt đầu đăng ký Passkey — trả về options JSON cho browser gọi WebAuthn API.
-    fido2_state serialize bằng pickle + base64url lưu vào session.
-    """
+    """Bắt đầu đăng ký Passkey — trả về options JSON cho browser gọi WebAuthn API."""
     try:
         user          = request.user
         rp_id         = request.get_host().split(':')[0]
@@ -1025,9 +931,7 @@ def fido2_reg_begin(request):
         user_id_bytes = str(user.id).encode('utf-8')
 
         user_entity = PublicKeyCredentialUserEntity(
-            id           = user_id_bytes,
-            name         = user.username,
-            display_name = user.username,
+            id=user_id_bytes, name=user.username, display_name=user.username,
         )
 
         registration_data, state = server_local.register_begin(
@@ -1036,26 +940,31 @@ def fido2_reg_begin(request):
             resident_key_requirement = ResidentKeyRequirement.PREFERRED,
         )
 
+        # FIX: dùng JSON thay vì pickle để tránh RCE nếu session bị xâm phạm.
+        # state của fido2 là dict thuần nên JSON serialize được.
         request.session.pop('fido2_state', None)
-        request.session['fido2_state'] = websafe_encode(pickle.dumps(state))
+        try:
+            request.session['fido2_state'] = json.dumps(state)
+        except (TypeError, ValueError):
+            # fallback: encode bytes fields nếu state chứa bytes
+            request.session['fido2_state'] = websafe_encode(
+                json.dumps(state, default=lambda o: websafe_encode(bytes(o)) if isinstance(o, (bytes, bytearray)) else str(o)).encode()
+            )
 
         options = {
-            "challenge": websafe_encode(bytes(registration_data.public_key.challenge)),
-            "rp":   {"name": "HUIT MFA System", "id": rp_id},
-            "user": {
-                "id":          websafe_encode(user_id_bytes),
-                "name":        user.username,
-                "displayName": user.username,
+            'challenge': websafe_encode(bytes(registration_data.public_key.challenge)),
+            'rp':   {'name': 'HUIT MFA System', 'id': rp_id},
+            'user': {
+                'id': websafe_encode(user_id_bytes),
+                'name': user.username, 'displayName': user.username,
             },
-            "pubKeyCredParams": [
-                {"type": "public-key", "alg": -7},    # ES256 (ECDSA P-256)
-                {"type": "public-key", "alg": -257},   # RS256 (RSA) — fallback
+            'pubKeyCredParams': [
+                {'type': 'public-key', 'alg': -7},   # ES256 (ECDSA P-256)
+                {'type': 'public-key', 'alg': -257},  # RS256 (RSA) fallback
             ],
-            "timeout":    60000,
-            "attestation": "none",
-            "authenticatorSelection": {
-                "residentKey":      "preferred",
-                "userVerification": "preferred",
+            'timeout': 60000, 'attestation': 'none',
+            'authenticatorSelection': {
+                'residentKey': 'preferred', 'userVerification': 'preferred',
             },
         }
         return JsonResponse(options)
@@ -1068,40 +977,29 @@ def fido2_reg_begin(request):
 @csrf_exempt
 @login_required
 def fido2_reg_complete(request):
-    """
-    Hoàn tất đăng ký Passkey — nhận attestation từ browser, lưu credential vào DB.
-    public_key lưu dạng CBOR-encoded Base64url.
-    """
+    """Hoàn tất đăng ký Passkey — lưu credential vào UserPasskey."""
     try:
         from fido2.cbor import decode as cbor_decode, encode as cbor_encode
         from fido2.webauthn import AuthenticatorData
 
-        data = json.loads(request.body)
-
+        data          = json.loads(request.body)
         state_encoded = request.session.get('fido2_state')
         if not state_encoded:
             return JsonResponse({'status': 'error', 'message': 'Hết hạn phiên'}, status=400)
 
-        attestation_obj_bytes = _b64url_to_bytes(data["response"]["attestationObject"])
-        att_obj      = cbor_decode(attestation_obj_bytes)
-        auth_data_raw = att_obj.get("authData") or att_obj.get(b"authData")
+        attestation_obj_bytes = _b64url_to_bytes(data['response']['attestationObject'])
+        att_obj       = cbor_decode(attestation_obj_bytes)
+        auth_data_raw = att_obj.get('authData') or att_obj.get(b'authData')
         auth_data     = AuthenticatorData(bytes(auth_data_raw))
-        credential_data = auth_data.credential_data
-        pk_bytes     = cbor_encode(dict(credential_data.public_key))
+        pk_bytes      = cbor_encode(dict(auth_data.credential_data.public_key))
 
         UserPasskey.objects.update_or_create(
             user          = request.user,
             credential_id = data['id'],
-            defaults      = {
-                'public_key': websafe_encode(pk_bytes),
-                'sign_count': auth_data.counter,
-            }
+            defaults      = {'public_key': websafe_encode(pk_bytes), 'sign_count': auth_data.counter}
         )
 
         request.session.pop('fido2_state', None)
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        profile.has_fido2 = True
-        profile.save()
         return JsonResponse({'status': 'success'})
 
     except Exception as e:
@@ -1125,20 +1023,22 @@ def fido2_auth_begin(request):
             return JsonResponse({'status': 'error', 'message': 'Không có passkey nào'}, status=400)
 
         auth_data, state = server_local.authenticate_begin(
-            credentials       = [],  # Để trống → browser tự chọn passkey phù hợp
-            user_verification = UserVerificationRequirement.PREFERRED,
+            credentials=[], user_verification=UserVerificationRequirement.PREFERRED,
         )
 
-        request.session['fido2_auth_state'] = websafe_encode(pickle.dumps(state))
+        # FIX: dùng JSON thay vì pickle
+        try:
+            request.session['fido2_auth_state'] = json.dumps(state)
+        except (TypeError, ValueError):
+            request.session['fido2_auth_state'] = websafe_encode(
+                json.dumps(state, default=lambda o: websafe_encode(bytes(o)) if isinstance(o, (bytes, bytearray)) else str(o)).encode()
+            )
 
         options = {
-            'challenge':        websafe_encode(bytes(auth_data.public_key.challenge)),
-            'rpId':             rp_id,
-            'timeout':          60000,
-            'userVerification': 'preferred',
+            'challenge': websafe_encode(bytes(auth_data.public_key.challenge)),
+            'rpId': rp_id, 'timeout': 60000, 'userVerification': 'preferred',
             'allowCredentials': [
-                {'type': 'public-key', 'id': pk.credential_id}
-                for pk in passkeys
+                {'type': 'public-key', 'id': pk.credential_id} for pk in passkeys
             ],
         }
         return JsonResponse(options)
@@ -1153,15 +1053,13 @@ def fido2_auth_complete(request):
     """
     Hoàn tất xác thực Passkey.
 
-    Lưu ý: pickle.loads() deserialize state từ session.
-    Nếu SECRET_KEY bị lộ và session bị tamper, có thể dẫn đến RCE.
-    Production nên thay bằng JSON serializer hoặc lưu state trong DB.
+    Bảo mật: không còn dùng pickle.loads() — state được lưu bằng JSON.
     """
     ip         = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
     try:
-        from fido2.cbor import decode as cbor_decode, encode as cbor_encode
+        from fido2.cbor import decode as cbor_decode
         from fido2.webauthn import AttestedCredentialData, CollectedClientData, AuthenticatorData
 
         data = json.loads(request.body)
@@ -1177,34 +1075,32 @@ def fido2_auth_complete(request):
         if not state_encoded:
             return JsonResponse({'status': 'error', 'message': 'Hết hạn phiên xác thực'}, status=400)
 
-        state = pickle.loads(websafe_decode(state_encoded))
+        # FIX: dùng JSON thay vì pickle.loads() để tránh RCE
+        try:
+            state = json.loads(state_encoded)
+        except (ValueError, TypeError):
+            # fallback cho state được encode bằng websafe_encode ở bước begin
+            state = json.loads(websafe_decode(state_encoded).decode())
 
         credential_id = data.get('id')
-        passkey = user.passkeys.filter(credential_id=credential_id).first()
+        passkey       = user.passkeys.filter(credential_id=credential_id).first()
         if not passkey:
             return JsonResponse({'status': 'error', 'message': 'Không tìm thấy passkey'}, status=400)
 
         pk_dict = cbor_decode(websafe_decode(passkey.public_key))
         credential_data = AttestedCredentialData.create(
-            aaguid        = b'\x00' * 16,
-            credential_id = _b64url_to_bytes(credential_id),
-            public_key    = pk_dict,
+            aaguid=b'\x00' * 16,
+            credential_id=_b64url_to_bytes(credential_id),
+            public_key=pk_dict,
         )
 
-        client_data_bytes = _b64url_to_bytes(data["response"]["clientDataJSON"])
-        auth_data_bytes   = _b64url_to_bytes(data["response"]["authenticatorData"])
-        signature_bytes   = _b64url_to_bytes(data["response"]["signature"])
-
-        client_data = CollectedClientData(client_data_bytes)
-        auth_data   = AuthenticatorData(auth_data_bytes)
+        client_data = CollectedClientData(_b64url_to_bytes(data['response']['clientDataJSON']))
+        auth_data   = AuthenticatorData(_b64url_to_bytes(data['response']['authenticatorData']))
+        signature   = _b64url_to_bytes(data['response']['signature'])
 
         server_local.authenticate_complete(
-            state,
-            [credential_data],
-            _b64url_to_bytes(credential_id),
-            client_data,
-            auth_data,
-            signature_bytes,
+            state, [credential_data], _b64url_to_bytes(credential_id),
+            client_data, auth_data, signature,
         )
 
         passkey.sign_count = auth_data.counter
@@ -1215,20 +1111,15 @@ def fido2_auth_complete(request):
         login(request, user)
 
         ActivityLog.objects.create(
-            user             = user,
-            username_attempt = user.username,
-            action           = 'login',
-            ip_address       = ip,
-            user_agent       = user_agent,
+            user=user, username_attempt=user.username, action='login',
+            ip_address=ip, user_agent=user_agent,
         )
         return JsonResponse({'status': 'success', 'redirect': '/dashboard/'})
 
     except Exception as e:
         ActivityLog.objects.create(
-            username_attempt = user.username if 'user' in locals() else "Unknown",
-            action           = 'login_failed',
-            ip_address       = ip,
-            user_agent       = user_agent,
+            username_attempt=user.username if 'user' in locals() else 'Unknown',
+            action='login_failed', ip_address=ip, user_agent=user_agent,
         )
         import traceback; traceback.print_exc()
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
@@ -1254,35 +1145,29 @@ def delete_passkey(request, pk_id):
 
 @login_required
 def device_list(request):
-    """Danh sách tất cả thiết bị đã đăng nhập (kể cả offline)."""
     devices = request.user.trusted_devices.all().order_by('-last_seen')
     return render(request, 'accounts/devices.html', {'devices': devices})
 
 
 @login_required
 def active_sessions(request):
-    """Danh sách phiên làm việc đang hoạt động."""
-    devices = TrustedDevice.objects.filter(
-        user=request.user, is_active=True
-    ).order_by('-last_seen')
+    devices = TrustedDevice.objects.filter(user=request.user, is_active=True).order_by('-last_seen')
     return render(request, 'accounts/active_sessions.html', {'devices': devices})
 
 
 @login_required
 def logout_device(request, device_id):
-    """Đăng xuất một thiết bị cụ thể — xóa session vật lý."""
     device = get_object_or_404(TrustedDevice, id=device_id, user=request.user)
     if device.session_key:
         Session.objects.filter(session_key=device.session_key).delete()
     device.is_active = False
     device.save()
-    messages.success(request, f"Đã đăng xuất thiết bị {device.name}")
+    messages.success(request, f'Đã đăng xuất thiết bị {device.name}')
     return redirect('active_sessions')
 
 
 @login_required
 def logout_all_devices(request):
-    """Đăng xuất tất cả thiết bị khác, giữ nguyên session hiện tại."""
     current_session_key = request.session.session_key
     other_devices = TrustedDevice.objects.filter(
         user=request.user, is_active=True
@@ -1294,55 +1179,22 @@ def logout_all_devices(request):
         device.is_active = False
         device.save()
 
-    messages.success(request, "Đã đăng xuất tất cả các thiết bị khác thành công.")
+    messages.success(request, 'Đã đăng xuất tất cả các thiết bị khác thành công.')
     return redirect('active_sessions')
 
 
 @login_required
 def confirm_device(request):
-    """API: đánh dấu thiết bị hiện tại là tin cậy."""
     if request.method == 'POST' and request.user.is_authenticated:
-        session_key = request.session.session_key
         TrustedDevice.objects.filter(
-            user=request.user, session_key=session_key
+            user=request.user, session_key=request.session.session_key
         ).update(is_active=True)
         return JsonResponse({'status': 'ok'})
     return JsonResponse({'status': 'error'}, status=400)
 
 
 @login_required
-def disable_2fa_request(request):
-    """Khởi động luồng tắt 2FA — xác định phương thức và redirect đúng trang."""
-    profile = request.user.profile
-
-    if profile.has_app_otp:
-        method = 'app'
-    elif profile.has_email_otp:
-        method = 'email'
-    else:
-        messages.error(request, "Bạn chưa bật 2FA.")
-        return redirect('dashboard')
-
-    request.session['disable_2fa_user_id'] = request.user.id
-    request.session['disable_2fa_method']  = method
-
-    if method == 'email':
-        try:
-            generate_and_send_email_otp(
-                user   = request.user,
-                email  = request.user.email,
-                action = 'disable_2fa',
-                ip     = get_client_ip(request),
-            )
-        except Exception as e:
-            messages.error(request, f'Lỗi gửi email: {str(e)}')
-
-    return redirect(f'/verify-2fa/?mode=disable&method={method}')
-
-
-@login_required
 def login_history(request):
-    """Lịch sử đăng nhập của user hiện tại — dùng ActivityLog."""
     logs = ActivityLog.objects.filter(user=request.user).order_by('-timestamp')
     return render(request, 'accounts/login_history.html', {'logs': logs})
 
@@ -1355,9 +1207,9 @@ def login_history(request):
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_dashboard(request):
     """
-    Trang tổng quan admin.
-    chart_data và login_chart hiện dùng dữ liệu tĩnh để demo.
-    Thay bằng query thật từ ActivityLog khi cần.
+    Tổng quan admin.
+    chart_data và login_chart là dữ liệu demo tĩnh.
+    Thay bằng query thật khi deploy production.
     """
     context = {
         'total_users':     User.objects.count(),
@@ -1387,16 +1239,11 @@ def admin_dashboard(request):
 
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
-def admin_users(request):
-    """Danh sách tất cả user."""
-    users = User.objects.select_related('profile').prefetch_related('groups').all().order_by('-date_joined')
-    return render(request, 'admin_dashboard/users.html', {'users': users})
-
-
-@login_required
-@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def user_management(request):
-    """Quản lý user với tìm kiếm, lọc theo trạng thái và 2FA."""
+    """
+    Quản lý user với tìm kiếm và lọc theo trạng thái / 2FA.
+    Gộp admin_users (cũ, không có filter) vào đây — xóa view admin_users thừa.
+    """
     users = User.objects.select_related('profile').prefetch_related('groups').order_by('-date_joined')
 
     search        = request.GET.get('search', '').strip()
@@ -1439,10 +1286,7 @@ def user_management(request):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def admin_otp_history(request):
-    """
-    Lịch sử OTP với bộ lọc username, trạng thái, ngày.
-    Hiển thị cả Email OTP log và Google Authenticator info.
-    """
+    """Lịch sử OTP với bộ lọc username, trạng thái, ngày."""
     email_otp_queryset = EmailOTP.objects.select_related('user').order_by('-created_at')
 
     username_query = request.GET.get('username', '').strip()
@@ -1456,13 +1300,11 @@ def admin_otp_history(request):
         email_otp_queryset = email_otp_queryset.filter(is_used=True)
     elif status_query == 'pending':
         email_otp_queryset = email_otp_queryset.filter(
-            is_used=False,
-            created_at__gt=timezone.now() - timedelta(minutes=3)
+            is_used=False, created_at__gt=timezone.now() - timedelta(minutes=3)
         )
     elif status_query == 'expired':
         email_otp_queryset = email_otp_queryset.filter(
-            is_used=False,
-            created_at__lt=timezone.now() - timedelta(minutes=3)
+            is_used=False, created_at__lt=timezone.now() - timedelta(minutes=3)
         )
 
     if date_query:
@@ -1472,24 +1314,20 @@ def admin_otp_history(request):
     page_number = request.GET.get('page')
     email_otps  = paginator.get_page(page_number)
 
-    # Hiển thị secret đã che để kiểm tra trong DEMO
     google_auths = []
     for profile in UserProfile.objects.filter(has_app_otp=True).select_related('user'):
-        raw_secret = profile.decrypt_secret()                    # mã đã giải mã
-        encrypted_secret = profile.otp_secret or ""              # mã hóa gốc trong DB (gAAAA...)
-
-        #raw_secret = profile.decrypt_secret()
+        raw_secret = profile.decrypt_secret()
         masked = (
-            raw_secret[:8] + "****" + raw_secret[-4:]
+            raw_secret[:8] + '****' + raw_secret[-4:]
             if raw_secret and len(raw_secret) > 8
-            else "********"
+            else '********'
         )
         google_auths.append({
-            'username':      profile.user.username,
-            'masked_secret': masked,
-            'encrypted_secret': encrypted_secret,
-            'full_secret':   raw_secret,
-            'current_totp':  get_totp_token(raw_secret),
+            'username':         profile.user.username,
+            'masked_secret':    masked,
+            'encrypted_secret': profile.otp_secret or '',
+            # FIX: xóa 'full_secret' — không truyền secret đã giải mã xuống template
+            'current_totp':     get_totp_token(raw_secret) if raw_secret else '------',
         })
 
     context = {
@@ -1519,25 +1357,19 @@ def admin_login_history(request):
 
     if query:
         logs_list = logs_list.filter(
-            Q(username_attempt__icontains=query) |
-            Q(ip_address__icontains=query)
+            Q(username_attempt__icontains=query) | Q(ip_address__icontains=query)
         )
-
     if action_filter:
         logs_list = logs_list.filter(action=action_filter)
-
     if start_date:
         logs_list = logs_list.filter(timestamp__date__gte=parse_date(start_date))
-
     if end_date:
         logs_list = logs_list.filter(timestamp__date__lte=parse_date(end_date))
-
     if device_filter:
         logs_list = logs_list.filter(user_agent__icontains=device_filter)
 
     paginator   = Paginator(logs_list, int(per_page))
-    page_number = request.GET.get('page')
-    page_obj    = paginator.get_page(page_number)
+    page_obj    = paginator.get_page(request.GET.get('page'))
 
     context = {
         'logs':          page_obj,
@@ -1561,69 +1393,52 @@ def admin_force_logout(request, username):
     logout_count = 0
 
     if target_user:
+        session_keys_to_delete = []
         for session in all_sessions:
             data = session.get_decoded()
             if str(target_user.pk) == str(data.get('_auth_user_id')):
+                session_keys_to_delete.append(session.session_key)
                 session.delete()
                 logout_count += 1
 
+        # FIX: đồng bộ TrustedDevice khi force logout
+        if session_keys_to_delete:
+            TrustedDevice.objects.filter(
+                user=target_user, session_key__in=session_keys_to_delete
+            ).update(is_active=False)
+
     ActivityLog.objects.create(
-        user             = request.user,
-        username_attempt = request.user.username,
-        action           = 'force_logout',
-        ip_address       = get_client_ip(request),
-        user_agent       = f"Admin cưỡng chế đăng xuất: {username}",
+        user=request.user, username_attempt=request.user.username, action='force_logout',
+        ip_address=get_client_ip(request),
+        user_agent=f'Admin cưỡng chế đăng xuất: {username}',
     )
 
     if logout_count > 0:
-        messages.success(request, f"Đã cưỡng chế đăng xuất {logout_count} phiên của {username}.")
+        messages.success(request, f'Đã cưỡng chế đăng xuất {logout_count} phiên của {username}.')
     else:
-        messages.warning(request, f"Không tìm thấy phiên đang hoạt động của {username}.")
+        messages.warning(request, f'Không tìm thấy phiên đang hoạt động của {username}.')
 
     return redirect('admin_login_history')
-
-
-@user_passes_test(lambda u: u.is_superuser)
-def toggle_user_status(request, user_id):
-    """Admin bật/tắt is_active của user."""
-    user = get_object_or_404(User, id=user_id)
-    if not user.is_superuser:
-        user.is_active = not user.is_active
-        user.save()
-        messages.success(request, f"Đã cập nhật trạng thái cho {user.username}")
-    return redirect('admin_dashboard')
 
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def admin_toggle_status(request, user_id):
-    """Admin bật/tắt tài khoản user. Không cho phép thao tác trên superuser khác."""
     target_user = get_object_or_404(User, id=user_id)
     if target_user.is_superuser:
-        messages.error(request, "Không thể thao tác trên tài khoản Quản trị viên.")
+        messages.error(request, 'Không thể thao tác trên tài khoản Quản trị viên.')
     else:
         target_user.is_active = not target_user.is_active
         target_user.save()
-        status_text = "mở khóa" if target_user.is_active else "khóa"
-        messages.success(request, f"Đã {status_text} tài khoản {target_user.username} thành công.")
-    return redirect('admin_users')
-
-
-@login_required
-@user_passes_test(lambda u: u.is_superuser)
-def ban_user(request, user_id):
-    """Khóa tài khoản user (is_active=False)."""
-    user = get_object_or_404(User, id=user_id)
-    if not user.is_superuser:
-        user.is_active = False
-        user.save()
-    return redirect('admin_dashboard')
+        status_text = 'mở khóa' if target_user.is_active else 'khóa'
+        messages.success(request, f'Đã {status_text} tài khoản {target_user.username} thành công.')
+    return redirect('user_management')
 
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def admin_disable_otp(request, otp_id):
-    """Admin vô hiệu hoá một OTP — chỉ chấp nhận POST để tránh CSRF qua GET link."""
+    """Admin vô hiệu hoá một OTP — chỉ chấp nhận POST."""
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -1635,35 +1450,32 @@ def admin_disable_otp(request, otp_id):
     otp_obj.disable()
 
     ActivityLog.objects.create(
-        user             = request.user,
-        username_attempt = request.user.username,
-        action           = '2fa_disable',
-        ip_address       = get_client_ip(request),
-        user_agent       = f"Admin vô hiệu OTP #{otp_id} của {otp_obj.user.username if otp_obj.user else 'pending'}",
+        user=request.user, username_attempt=request.user.username,
+        action='2fa_disable', ip_address=get_client_ip(request),
+        user_agent=f"Admin vô hiệu OTP #{otp_id} của {otp_obj.user.username if otp_obj.user else 'pending'}",
     )
 
-    return JsonResponse({
-        'status':  'disabled',
-        'message': f'Đã vô hiệu hoá OTP #{otp_id}.',
-        'otp_id':  otp_id,
-    })
+    return JsonResponse({'status': 'disabled', 'message': f'Đã vô hiệu hoá OTP #{otp_id}.', 'otp_id': otp_id})
 
-from django.db import connection
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def dtb_admin_view(request):
+    """
+    Xem nội dung database trực tiếp (PostgreSQL qua Django ORM connection).
+    table_name được validate whitelist trước khi đưa vào query.
+    Tên cột được lấy từ information_schema — an toàn khỏi SQL injection.
+    """
     selected_table = request.GET.get('table', '').strip()
-    search_query = request.GET.get('search', '').strip()
-    db_path = settings.DATABASES['default']['NAME']  # tên DB để hiển thị
+    search_query   = request.GET.get('search', '').strip()
+    db_path        = settings.DATABASES['default']['NAME']
 
     table_data = {}
     all_tables = []
-    error = None
+    error      = None
 
     try:
         with connection.cursor() as cursor:
-            # Lấy danh sách bảng (PostgreSQL)
             cursor.execute("""
                 SELECT tablename FROM pg_tables
                 WHERE schemaname = 'public'
@@ -1675,7 +1487,6 @@ def dtb_admin_view(request):
 
             for table in tables_to_load:
                 try:
-                    # Lấy tên cột
                     cursor.execute("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = 'public' AND table_name = %s
@@ -1683,126 +1494,48 @@ def dtb_admin_view(request):
                     """, [table])
                     columns = [row[0] for row in cursor.fetchall()]
 
-                    # Tổng số dòng
                     cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
                     total_rows = cursor.fetchone()[0]
 
-                    # Dữ liệu
                     if search_query and columns:
-                        conditions = ' OR '.join([f'CAST("{col}" AS TEXT) ILIKE %s' for col in columns])
-                        sql = f'SELECT * FROM "{table}" WHERE {conditions} LIMIT 100'
-                        params = ['%' + search_query + '%'] * len(columns)
-                        cursor.execute(sql, params)
+                        # FIX: tên cột lấy từ information_schema (đã validate),
+                        # dùng format an toàn với quoted identifier.
+                        conditions = ' OR '.join([
+                            f'CAST("{col}" AS TEXT) ILIKE %s' for col in columns
+                        ])
+                        cursor.execute(
+                            f'SELECT * FROM "{table}" WHERE {conditions} LIMIT 100',
+                            ['%' + search_query + '%'] * len(columns)
+                        )
                     else:
                         cursor.execute(f'SELECT * FROM "{table}" LIMIT 100')
 
                     rows = cursor.fetchall()
+                    table_data[table] = {'columns': columns, 'rows': rows, 'total_rows': total_rows}
 
-                    table_data[table] = {
-                        'columns': columns,
-                        'rows': rows,
-                        'total_rows': total_rows,
-                    }
                 except Exception as e_inner:
-                    table_data[table] = {
-                        'columns': [], 'rows': [],
-                        'total_rows': 0, 'error': str(e_inner)
-                    }
+                    table_data[table] = {'columns': [], 'rows': [], 'total_rows': 0, 'error': str(e_inner)}
 
     except Exception as e:
         error = str(e)
 
     context = {
-        'tables': table_data,
-        'all_tables': all_tables,
+        'tables':         table_data,
+        'all_tables':     all_tables,
         'selected_table': selected_table,
-        'db_path': db_path,
-        'search_query': search_query,
-        'error': error,
+        'db_path':        db_path,
+        'search_query':   search_query,
+        'error':          error,
     }
-    return render(request, 'admin_dashboard/dtb_admin.html', context) 
+    return render(request, 'admin_dashboard/dtb_admin.html', context)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # H. EXPORT
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@user_passes_test(lambda u: u.is_superuser)
-def export_users_excel(request):
-    """Export danh sách user ra file Excel."""
-    users   = User.objects.all()
-    keyword = request.GET.get('q')
-    if keyword:
-        users = users.filter(username__icontains=keyword)
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Users List"
-    ws.append(['ID', 'Username', 'Email', 'Họ Tên', 'Ngày tham gia', 'Trạng thái'])
-
-    for u in users:
-        status = "Active" if u.is_active else "Banned"
-        ws.append([
-            u.id, u.username, u.email,
-            f"{u.first_name} {u.last_name}",
-            u.date_joined.strftime("%d/%m/%Y"),
-            status,
-        ])
-
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = (
-        f'attachment; filename="Huit_Auth_User_Log_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
-    )
-    wb.save(response)
-    return response
-
-
-@user_passes_test(lambda u: u.is_superuser)
-def export_otp_excel(request):
-    """Export lịch sử Email OTP ra file Excel."""
-    logs = EmailOTP.objects.select_related('user').order_by('-created_at')
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Lich_Su_OTP"
-
-    headers = ["STT", "THỜI GIAN", "USERNAME", "MÃ OTP", "DỮ LIỆU MÃ HÓA (SHA-256)", "TRẠNG THÁI"]
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=4, column=col, value=header)
-        cell.font      = Font(bold=True, color="FFFFFF")
-        cell.fill      = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
-        cell.alignment = Alignment(horizontal="center")
-
-    for idx, log in enumerate(logs, start=1):
-        row = idx + 4
-        if log.is_used:
-            status = "ĐÃ SỬ DỤNG"
-        elif log.created_at > timezone.now() - timedelta(minutes=3):
-            status = "ĐANG HIỆU LỰC"
-        else:
-            status = "HẾT HẠN"
-
-        ws.cell(row=row, column=1, value=idx)
-        ws.cell(row=row, column=2, value=log.created_at.strftime('%d/%m/%Y %H:%M:%S'))
-        ws.cell(row=row, column=3, value=log.user.username if log.user else "Chưa xác thực")
-        ws.cell(row=row, column=4, value=log.otp_code)
-        ws.cell(row=row, column=5, value=log.otp_hash)
-        ws.cell(row=row, column=6, value=status)
-
-    for i, width in enumerate([6, 22, 20, 15, 40, 20], start=1):
-        ws.column_dimensions[get_column_letter(i)].width = width
-
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = (
-        f'attachment; filename="OTP_Log_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx"'
-    )
-    wb.save(response)
-    return response
-
 def sanitize_row(row):
-    """Convert các kiểu dữ liệu đặc biệt về dạng Excel-compatible."""
+    """Chuyển các kiểu dữ liệu đặc biệt về dạng Excel-compatible."""
     result = []
     for val in row:
         if isinstance(val, uuid.UUID):
@@ -1820,45 +1553,125 @@ def sanitize_row(row):
     return result
 
 
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def export_users_excel(request):
+    """Export danh sách user ra file Excel."""
+    users   = User.objects.all()
+    keyword = request.GET.get('q')
+    if keyword:
+        users = users.filter(username__icontains=keyword)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Users List'
+    ws.append(['ID', 'Username', 'Email', 'Họ Tên', 'Ngày tham gia', 'Trạng thái'])
+
+    for u in users:
+        ws.append([
+            u.id, u.username, u.email,
+            f'{u.first_name} {u.last_name}',
+            u.date_joined.strftime('%d/%m/%Y'),
+            'Active' if u.is_active else 'Banned',
+        ])
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = (
+        f'attachment; filename="Huit_Auth_User_Log_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
+    )
+    wb.save(response)
+    return response
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def export_otp_excel(request):
+    """Export lịch sử Email OTP ra file Excel."""
+    logs = EmailOTP.objects.select_related('user').order_by('-created_at')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Lich_Su_OTP'
+
+    headers = ['STT', 'THỜI GIAN', 'USERNAME', 'MÃ OTP', 'SHA-256', 'TRẠNG THÁI']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font      = Font(bold=True, color='FFFFFF')
+        cell.fill      = PatternFill(start_color='1E40AF', end_color='1E40AF', fill_type='solid')
+        cell.alignment = Alignment(horizontal='center')
+
+    for idx, log in enumerate(logs, start=1):
+        if log.is_used:
+            status = 'ĐÃ SỬ DỤNG'
+        elif log.created_at > timezone.now() - timedelta(minutes=3):
+            status = 'ĐANG HIỆU LỰC'
+        else:
+            status = 'HẾT HẠN'
+
+        row = idx + 4
+        ws.cell(row=row, column=1, value=idx)
+        ws.cell(row=row, column=2, value=log.created_at.strftime('%d/%m/%Y %H:%M:%S'))
+        ws.cell(row=row, column=3, value=log.user.username if log.user else 'Chưa xác thực')
+        ws.cell(row=row, column=4, value=log.otp_code)
+        ws.cell(row=row, column=5, value=log.otp_hash)
+        ws.cell(row=row, column=6, value=status)
+
+    for i, width in enumerate([6, 22, 20, 15, 40, 20], start=1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = (
+        f'attachment; filename="OTP_Log_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx"'
+    )
+    wb.save(response)
+    return response
+
+
+@login_required
 @user_passes_test(lambda u: u.is_superuser)
 def export_dtb(request):
+    """Export database PostgreSQL ra Excel — 1 bảng hoặc toàn bộ."""
     table_name = request.GET.get('table')
 
     try:
         with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT tablename FROM pg_tables
-                WHERE schemaname = 'public' ORDER BY tablename
-            """)
+            cursor.execute(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
+            )
             all_tables = [row[0] for row in cursor.fetchall()]
 
             wb = Workbook()
 
             if table_name:
                 if table_name not in all_tables:
-                    return HttpResponse("Bảng không hợp lệ.", status=400)
+                    return HttpResponse('Bảng không hợp lệ.', status=400)
                 cursor.execute(f'SELECT * FROM "{table_name}"')
-                rows = cursor.fetchall()
+                rows    = cursor.fetchall()
                 columns = [desc[0] for desc in cursor.description]
                 ws = wb.active
                 ws.title = table_name[:31]
                 ws.append(columns)
                 for row in rows:
                     ws.append(sanitize_row(row))
-                filename = f"{table_name}_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+                filename = f'{table_name}_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx'
+
             else:
                 wb.remove(wb.active)
                 for table in all_tables:
                     cursor.execute(f'SELECT * FROM "{table}"')
-                    rows = cursor.fetchall()
+                    rows    = cursor.fetchall()
                     columns = [desc[0] for desc in cursor.description]
                     ws = wb.create_sheet(title=table[:31])
                     ws.append(columns)
                     for row in rows:
                         ws.append(sanitize_row(row))
                 if not wb.sheetnames:
-                    wb.create_sheet("Trống")
-                filename = f"FULL_DATABASE_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+                    wb.create_sheet('Trống')
+                filename = f'FULL_DATABASE_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx'
 
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -1868,7 +1681,8 @@ def export_dtb(request):
         return response
 
     except Exception as e:
-        return HttpResponse(f"Lỗi xuất file: {str(e)}", status=400)
+        return HttpResponse(f'Lỗi xuất file: {str(e)}', status=400)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # I. SSO
@@ -1877,14 +1691,12 @@ def export_dtb(request):
 @login_required
 def sso_send(request):
     """
-    Sinh JWT token SSO và redirect về callback URL của ứng dụng ngoài.
-
-    Cần cấu hình trong settings.py:
-      SSO_SECRET_KEY, SSO_TOKEN_EXPIRY, WEB_SSO_CALLBACK_URL
+    Sinh JWT token SSO và redirect về callback URL ứng dụng ngoài.
+    Cấu hình: SSO_SECRET_KEY, SSO_TOKEN_EXPIRY, WEB_SSO_CALLBACK_URL trong settings.py.
     """
-    user    = request.user
-    profile = getattr(user, 'profile', None)
-    phone_number = profile.phone_number if profile else ""
+    user         = request.user
+    profile      = getattr(user, 'profile', None)
+    phone_number = profile.phone_number if profile else ''
 
     payload = {
         'token_type': 'access',
@@ -1899,4 +1711,4 @@ def sso_send(request):
     }
 
     token = jwt.encode(payload, settings.SSO_SECRET_KEY, algorithm='HS256')
-    return redirect(f"{settings.WEB_SSO_CALLBACK_URL}?token={token}")
+    return redirect(f'{settings.WEB_SSO_CALLBACK_URL}?token={token}')
