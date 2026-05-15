@@ -55,7 +55,10 @@ class UserProfile(models.Model):
     force_disable_2fa = models.BooleanField(default=False, verbose_name='Admin tắt buộc 2FA')
     is_required       = models.BooleanField(default=False, verbose_name='Bắt buộc bật 2FA')
     force_logout      = models.BooleanField(default=False, verbose_name='Cưỡng chế đăng xuất')
-
+    allow_push_auth = models.BooleanField(
+    default=True,
+    verbose_name='Cho phép xác nhận đăng nhập từ thiết bị khác'
+    )
     class Meta:
         verbose_name        = 'Hồ sơ người dùng'
         verbose_name_plural = 'Hồ sơ người dùng'

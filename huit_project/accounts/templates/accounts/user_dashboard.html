@@ -241,9 +241,6 @@
                         {% if profile.allow_push_auth %}text-sky-500{% else %}text-slate-400{% endif %}"></i>
                     <div>
                         <h4 class="font-bold text-base text-slate-800">Xác nhận đăng nhập từ thiết bị khác</h4>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Khi đăng nhập từ thiết bị mới, một thiết bị đang online sẽ nhận thông báo để phê duyệt.
-                        </p>
                     </div>
                 </div>
                 
@@ -283,7 +280,7 @@
         </div>
     </div>
 
-    <script>
+        <script>
         function switchTab(tab) {
             const tInfo = document.getElementById('tab-info');
             const tSec  = document.getElementById('tab-security');
@@ -313,6 +310,46 @@
             setTimeout(() => t.classList.add('translate-x-full'), 4000);
         }
 
+        function getCsrfToken() {
+            return document.cookie.split(';')
+                .find(c => c.trim().startsWith('csrftoken='))
+                ?.split('=')[1] ?? '';
+        }
+
+        // ==================== THIẾT BỊ MỚI ALERT ====================
+        {% if show_device_alert %}
+        Swal.fire({
+            title: 'Thiết bị mới!',
+            html: '<p style="color:#64748b">Phát hiện đăng nhập từ thiết bị lạ. Xác nhận đây là bạn?</p>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#6366f1',
+            cancelButtonColor: '#ef4444',
+            confirmButtonText: 'Đúng, là tôi',
+            cancelButtonText: 'Không phải tôi',
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch('/confirm-device/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                }).then(r => {
+                    if (r.ok) {
+                        Swal.fire({ 
+                            title: 'Thành công!', 
+                            icon: 'success', 
+                            confirmButtonColor: '#10b981' 
+                        }).then(() => location.reload());
+                    }
+                }).catch(() => {
+                    Swal.fire('Lỗi', 'Không thể xác nhận thiết bị.', 'error');
+                });
+            } else {
+                window.location.href = "{% url 'logout' %}";
+            }
+        });
+        {% endif %}
+
+        // ==================== CHECK APPROVAL (Push Auth) ====================
         function checkApproval() {
             fetch('/api/get-auth-request/')
                 .then(res => res.json())
@@ -330,59 +367,25 @@
                             allowOutsideClick: false
                         }).then(result => {
                             let status = result.isConfirmed ? 'approved' : 'denied';
-                            fetch('/api/respond-auth/' + data.request_id + '/?status=' + status);
+                            fetch(`/api/respond-auth/${data.request_id}/`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': getCsrfToken(),
+                                },
+                                body: JSON.stringify({ status })
+                            });
                         });
                     }
                 });
         }
-        
-        setInterval(checkApproval, 5000);
-        // ==================== Django Template Variables ====================
-        
-        Swal.fire({
-            title: 'Thiết bị mới!',
-            html: '<p style="color:#64748b">Phát hiện đăng nhập từ thiết bị lạ. Xác nhận đây là bạn?</p>',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#6366f1',
-            cancelButtonColor: '#ef4444',
-            confirmButtonText: 'Đúng, là tôi',
-            cancelButtonText: 'Không phải tôi',
-        }).then((result) => {
-            if (result.isConfirmed) {
-                fetch('/confirm-device/', {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-                }).then(r => {
-                    if (r.ok) Swal.fire({ title: 'Thành công!', icon: 'success', confirmButtonColor: '#6366f1' })
-                               .then(() => location.reload());
-                });
-            } else {
-                window.location.href = "{% url 'logout' %}";
-            }
-        });
-        // ══ Push notification polling cho thiết bị ĐANG ONLINE ══
-        let currentRequestId = null;
-        let pushCheckInterval = null;
 
-        function checkForPushRequest() {
-            fetch('/api/get-auth-request/')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.has_request && data.request_id !== currentRequestId) {
-                        currentRequestId = data.request_id;
-                        showPushModal(data.request_id, data.device_info);
-                    }
-                })
-                .catch(e => console.error('[Push check]', e));
-        }
-        function getCsrfToken() {
-            return document.cookie.split(';')
-                .find(c => c.trim().startsWith('csrftoken='))
-                ?.split('=')[1] ?? '';
-}
+        // Push Modal
+        let currentRequestId = null;
+
         function showPushModal(reqId, deviceInfo) {
             const ua = deviceInfo || 'Thiết bị không xác định';
+            currentRequestId = reqId;
             Swal.fire({
                 title: 'Xác nhận đăng nhập?',
                 html: `<p>Thiết bị: <strong>${ua}</strong></p><p style="font-size:13px;color:#64748b">Đang yêu cầu truy cập tài khoản của bạn</p>`,
@@ -405,27 +408,23 @@
                 });
             });
         }
-        
 
-        function respondPush(status) {
-            if (!currentRequestId) return;
-            const modal = document.getElementById('push-modal');
-
-            fetch(`/api/respond-auth/${currentRequestId}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken(),
-                },
-                body: JSON.stringify({ status }),
-            });
+        function checkForPushRequest() {
+            fetch('/api/get-auth-request/')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.has_request && data.request_id !== currentRequestId) {
+                        showPushModal(data.request_id, data.device_info);
+                    }
+                })
+                .catch(e => console.error('[Push check]', e));
         }
 
-        // Chạy mỗi 5 giây
-        pushCheckInterval = setInterval(checkForPushRequest, 5000);
+        // Toggle Push Auth
         function togglePushAuth() {
             const btn  = document.getElementById('push-auth-btn');
             const knob = document.getElementById('push-auth-knob');
+            if (!btn) return;
             btn.disabled = true;
 
             fetch('{% url "toggle_push_auth" %}', {
@@ -439,25 +438,34 @@
                     return;
                 }
                 const on = data.allow_push_auth;
-                // Cập nhật visual toggle
                 btn.setAttribute('aria-checked', on ? 'true' : 'false');
                 btn.classList.toggle('bg-sky-500', on);
                 btn.classList.toggle('bg-slate-300', !on);
                 knob.classList.toggle('translate-x-6', on);
                 knob.classList.toggle('translate-x-0', !on);
-                // Cập nhật card border/bg
+
                 const card = btn.closest('div[class*="rounded-3xl"]');
                 if (card) {
                     card.classList.toggle('border-sky-400', on);
-                    card.classList.toggle('bg-sky-50',      on);
+                    card.classList.toggle('bg-sky-50', on);
                     card.classList.toggle('border-slate-200', !on);
-                    card.classList.toggle('bg-white',        !on);
+                    card.classList.toggle('bg-white', !on);
                 }
-                showToast(on ? '🔔 Đã bật xác nhận từ thiết bị khác' : '🔕 Đã tắt');
+                showToast(on ? '🔔 Đã bật' : '🔕 Đã tắt');
             })
-            .catch(() => showToast('Lỗi kết nối, thử lại sau.'))
-            .finally(() => { btn.disabled = false; });
+            .catch(() => showToast('Lỗi kết nối'))
+            .finally(() => btn.disabled = false);
         }
+
+        // Khởi chạy
+        setInterval(checkApproval, 5000);
+        setInterval(checkForPushRequest, 5000);
+
+        {% if messages %}
+            {% for m in messages %}showToast("{{ m }}");{% endfor %}
+        {% endif %}
+        {% if pending_update %}toggleEditForm();{% endif %}
     </script>
+
 </body>
 </html>

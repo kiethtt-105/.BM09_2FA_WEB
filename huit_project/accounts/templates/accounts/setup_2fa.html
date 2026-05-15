@@ -244,6 +244,32 @@ body::after {
         <i class="fas fa-paper-plane"></i> Gửi mã OTP vào Email
       </button>
     </form>
+  {% endif %}
+    <!-- Form nhập OTP - Luôn hiển thị sau khi đã gửi (hoặc có OTP) -->
+    {% if otp_sent or request.method == 'POST' %}
+    <div style="margin-top: 24px;">
+      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:14px;">
+        Nhập mã 6 số từ email của bạn
+      </p>
+      <form method="POST">
+        {% csrf_token %}
+        <div class="otp-row">
+          {% for i in '123456' %}
+          <input type="text" maxlength="1"
+                 class="otp-box bg-slate-50 focus:bg-white outline-none"
+                 oninput="handleOtpInput(this, {{ forloop.counter }})"
+                 onkeydown="handleOtpKeydown(event, {{ forloop.counter }})"
+                 autocomplete="off" inputmode="numeric">
+          {% endfor %}
+    </div>
+    <input type="hidden" name="email_otp_code" id="hidden-otp" required>
+    <button type="submit" name="verify_email_otp" class="btn btn-green">
+      <i class="fas fa-shield-check"></i> Xác nhận & Kích hoạt
+    </button>
+        </div>
+      </form>
+    </div>
+
     {% endif %}
 
     {% if otp_sent %}
