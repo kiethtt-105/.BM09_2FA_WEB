@@ -145,7 +145,7 @@ def verify_hotp(secret: str, counter: int, otp_input: str,
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 2. TOTP — RFC 6238 (tự cài đặt)
+# 2. TOTP — RFC 6238 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def compute_totp(secret: str, digits: int = 6, step: int = 30,
@@ -207,7 +207,7 @@ def verify_totp(secret: str, otp_input: str,
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def get_totp_token(secret: str) -> str:
-    """Alias của compute_totp — giữ tương thích với views.py cũ."""
+    """Alias của compute_totp để giữ backward compatibility với views.py."""
     return compute_totp(secret)
 
 
@@ -358,7 +358,7 @@ def generate_and_send_email_otp(
         - Plaintext chỉ tồn tại trong bộ nhớ RAM và nội dung email.
 
     Trả về:
-        str: Mã OTP vừa sinh (chỉ dùng nội bộ để nhét vào email — không lưu DB).
+        str: Mã OTP vừa sinh (chỉ dùng nội bộ để gửi email — không lưu DB).
     """
     # ── Sinh OTP ─────────────────────────────────────────────────────────
     otp_code = ''.join(str(secrets.randbelow(10)) for _ in range(6))

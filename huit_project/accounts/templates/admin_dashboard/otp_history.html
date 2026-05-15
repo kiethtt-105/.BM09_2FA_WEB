@@ -1,473 +1,93 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HUIT OTP Real-time · Lịch sử OTP</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        .otp-masked { font-family: monospace; letter-spacing: 3px; font-size: 1.1rem; }
-        .hash-text  { font-family: monospace; font-size: 0.7rem; letter-spacing: 0.5px; color: #a78bfa; }
-        .table-row  { transition: all 0.2s ease; }
-        .table-row:hover { background-color: #27272a !important; }
-        .reveal-btn:hover { transform: scale(1.1); }
-        .totp-code { font-variant-numeric: tabular-nums; }
-        .disabled-row { opacity: 0.45; }
-        .badge { display: inline-flex; padding: 3px 12px; font-size: 0.7rem; font-weight: 600;
-                 border-radius: 999px; white-space: nowrap; }
+"""
+views_otp_history.py — Snippet view admin_otp_history đã cập nhật
+===================================================================
+Copy function này vào views.py, thay thế hàm admin_otp_history cũ.
 
-        /* ── Email OTP table column widths ── */
-        .email-otp-table { table-layout: fixed; width: 100%; }
-        .email-otp-table th, .email-otp-table td { vertical-align: middle; overflow: hidden; }
-        .col-username { width: 110px; }
-        .col-type     { width: 130px; }
-        .col-otp      { width: 90px; }
-        .col-hash     { width: 280px; }
-        .col-status   { width: 120px; }
-        .col-ip       { width: 115px; }
-        .col-time     { width: 155px; }
-        .col-action   { width: 95px; }
+Thay đổi so với phiên bản cũ:
+  - Không truyền full_secret vào context (tránh lộ plaintext vô tình).
+    Template nhận raw_secret từ decrypt_secret() để hiển thị TOTP realtime client-side.
+  - Không đọc otp_code (luôn rỗng trong DB sau khi model.save() xóa).
+  - google_auths dùng key 'raw_secret' thay vì 'full_secret' để rõ ràng hơn.
+"""
 
-        /* ── Google Auth table column widths ── */
-        .ga-table { table-layout: fixed; width: 100%; }
-        .ga-table th, .ga-table td { vertical-align: middle; overflow: hidden; }
-        .col-ga-user   { width: 110px; }
-        .col-ga-secret { width: 220px; word-break: break-all; white-space: normal; }
-        .col-ga-enc    { width: 230px; }
-        .col-ga-totp   { width: 140px; }
-        .col-ga-timer  { width: 160px; }
-        .col-ga-copy   { width: 110px; }
-    </style>
-</head>
-<body class="bg-zinc-950 text-zinc-200">
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.paginator import Paginator
+from django.utils import timezone
+from datetime import timedelta
 
-<div class="flex min-h-screen">
+from .models import EmailOTP, UserProfile
+from .utils import get_totp_token   # alias của compute_totp
 
-    <!-- Sidebar -->
-    <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full overflow-y-auto">
-        <div class="flex items-center gap-3 mb-10">
-            <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center text-3xl font-bold text-white">H</div>
-            <h1 class="text-3xl font-bold">HUIT</h1>
-        </div>
-        <nav class="space-y-1">
-            <a href="/admin-dashboard/users/"
-               class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
-                👥 Quản lý Người dùng
-            </a>
-            <a href="/admin-dashboard/otp-history/"
-               class="flex items-center gap-3 px-5 py-4 bg-violet-600/10 text-violet-400 rounded-2xl font-bold border border-violet-600/20">
-                🔑 Lịch sử OTP
-            </a>
-            <a href="/admin-dashboard/login-history/"
-               class="flex items-center gap-3 px-5 py-4 hover:bg-zinc-800 rounded-2xl text-zinc-300">
-                📋 Hoạt động Đăng nhập
-            </a>
-            <a href="/admin-dashboard/dtb_admin/"
-               class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">
-                🗄️ DTB Admin
-            </a>
-        </nav>
-    </div>
 
-    <!-- Main Content -->
-    <div class="flex-1 ml-72 p-10">
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def admin_otp_history(request):
+    """
+    Lịch sử OTP với bộ lọc username, trạng thái, ngày.
 
-        <!-- Header -->
-        <div class="flex justify-between items-center mb-8">
-            <div class="flex items-center gap-4">
-                <i class="fas fa-microchip text-4xl text-violet-500"></i>
-                <div>
-                    <h1 class="text-3xl font-bold">OTP REAL-TIME</h1>
-                    <p class="text-zinc-400">Admin Panel - Lịch sử OTP</p>
-                </div>
-            </div>
-            <div class="flex items-center gap-4">
-                <button onclick="location.reload()" id="refresh-btn"
-                        class="bg-zinc-800 hover:bg-zinc-700 px-5 py-3 rounded-2xl font-medium flex items-center gap-2 transition-all">
-                    <i class="fas fa-sync-alt"></i> <span>Tải lại</span>
-                </button>
-                <a href="{% url 'export_otp_excel' %}"
-                   class="bg-violet-600 hover:bg-violet-700 px-6 py-3 rounded-2xl font-medium flex items-center gap-2">
-                    <i class="fas fa-file-download"></i> XUẤT LOG (.XLSX)
-                </a>
-                <div class="text-right">
-                    <div class="text-sm text-zinc-400">TỔNG GIAO DỊCH</div>
-                    <h2 class="text-4xl font-bold">{{ total_otp|default:"0" }}</h2>
-                </div>
-            </div>
-        </div>
+    Bảo mật:
+        - otp_code không được đọc (luôn rỗng trong DB).
+        - Chỉ đọc otp_hash để hiển thị.
+        - raw_secret truyền vào template để JS tính TOTP realtime (decrypt phía server).
+        - encrypted_secret truyền vào để show giá trị thực trong DB.
+    """
+    email_otp_queryset = EmailOTP.objects.select_related('user').order_by('-created_at')
 
-        <!-- Filter -->
-        <div class="bg-zinc-900 rounded-3xl p-6 mb-10">
-            <form method="GET" class="grid grid-cols-12 gap-4 items-end">
-                <div class="col-span-3">
-                    <label class="block text-xs text-zinc-400 mb-1">TÌM USERNAME</label>
-                    <input type="text" name="username" value="{{ request.GET.username }}"
-                           class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3"
-                           placeholder="Nhập tên username...">
-                </div>
-                <div class="col-span-3">
-                    <label class="block text-xs text-zinc-400 mb-1">TRẠNG THÁI</label>
-                    <select name="status" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3">
-                        <option value="">Tất cả</option>
-                        <option value="pending"  {% if request.GET.status == 'pending'  %}selected{% endif %}>Đang hiệu lực</option>
-                        <option value="used"     {% if request.GET.status == 'used'     %}selected{% endif %}>Đã sử dụng</option>
-                        <option value="expired"  {% if request.GET.status == 'expired'  %}selected{% endif %}>Hết hạn</option>
-                    </select>
-                </div>
-                <div class="col-span-3">
-                    <label class="block text-xs text-zinc-400 mb-1">NGÀY THỰC HIỆN</label>
-                    <input type="date" name="date" value="{{ request.GET.date }}"
-                           class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3">
-                </div>
-                <div class="col-span-3">
-                    <button type="submit"
-                            class="w-full bg-violet-600 hover:bg-violet-700 py-3 rounded-2xl font-medium">
-                        🔍 LỌC DỮ LIỆU
-                    </button>
-                </div>
-            </form>
-        </div>
+    username_query = request.GET.get('username', '').strip()
+    status_query   = request.GET.get('status', '')
+    date_query     = request.GET.get('date', '')
 
-        <!-- ════════════ EMAIL OTP SECTION ════════════ -->
-        <div class="mb-12">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-2xl font-bold flex items-center gap-3">
-                    <i class="fas fa-envelope text-emerald-500"></i>
-                    Email OTP - 2FA
-                </h2>
-                <div class="text-xs text-zinc-500 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 max-w-md text-right">
-                    💡 <span class="text-amber-400 font-semibold">Demo:</span> Cột "MÃ OTP" hiển thị plaintext để minh hoạ.<br>
-                    Cột <span class="text-violet-400">SHA-256</span> là dữ liệu thực tế được lưu trong DB.
-                </div>
-            </div>
+    if username_query:
+        email_otp_queryset = email_otp_queryset.filter(
+            user__username__icontains=username_query
+        )
 
-            {% if email_otps %}
-            <div class="bg-zinc-900 rounded-3xl overflow-hidden">
-                <table class="email-otp-table">
-                    <thead>
-                        <tr class="border-b border-zinc-800 text-xs uppercase text-zinc-400">
-                            <th class="text-left py-4 px-4 col-username">USERNAME</th>
-                            <th class="text-left py-4 px-4 col-type">LOẠI</th>
-                            <th class="text-left py-4 px-4 col-otp">MÃ OTP <span class="text-amber-400 normal-case">(PLAINTEXT)</span></th>
-                            <th class="text-left py-4 px-4 col-hash">SHA-256 HASH <span class="text-violet-400 normal-case">(THỰC TẾ - DTB)</span></th>
-                            <th class="text-left py-4 px-4 col-status">TRẠNG THÁI</th>
-                            <th class="text-left py-4 px-4 col-ip">IP</th>
-                            <th class="text-left py-4 px-4 col-time">THỜI GIAN</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for otp in email_otps %}
-                        <tr class="table-row border-b border-zinc-800 last:border-none {% if not otp.is_active %}disabled-row{% endif %}"
-                            id="row-{{ otp.id }}">
+    if status_query == 'used':
+        email_otp_queryset = email_otp_queryset.filter(is_used=True)
+    elif status_query == 'pending':
+        email_otp_queryset = email_otp_queryset.filter(
+            is_used   = False,
+            is_active = True,
+            created_at__gt = timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
+        )
+    elif status_query == 'expired':
+        email_otp_queryset = email_otp_queryset.filter(
+            is_used=False,
+            created_at__lt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
+        )
 
-                            <td class="py-4 px-4 col-username font-medium">
-                                {{ otp.user.username|default:"—" }}
-                            </td>
+    if date_query:
+        email_otp_queryset = email_otp_queryset.filter(created_at__date=date_query)
 
-                            <td class="py-4 px-4 col-type">
-                                {% if otp.action == 'register' %}
-                                    <span class="badge bg-blue-500/10 text-blue-400">Đăng ký</span>
-                                {% elif otp.action == 'login_2fa' %}
-                                    <span class="badge bg-emerald-500/10 text-emerald-400">Đăng nhập 2FA</span>
-                                {% elif otp.action == 'setup_2fa' %}
-                                    <span class="badge bg-violet-500/10 text-violet-400">Thiết lập 2FA</span>
-                                {% elif otp.action == 'update_info' %}
-                                    <span class="badge bg-amber-500/10 text-amber-400">Cập nhật TT</span>
-                                {% elif otp.action == 'disable_2fa' %}
-                                    <span class="badge bg-red-500/10 text-red-400">Tắt 2FA</span>
-                                {% else %}
-                                    <span class="badge bg-zinc-700/50 text-zinc-400">{{ otp.action }}</span>
-                                {% endif %}
-                            </td>
+    paginator   = Paginator(email_otp_queryset, 15)
+    email_otps  = paginator.get_page(request.GET.get('page'))
 
-                            <!-- MÃ OTP PLAINTEXT (demo) -->
-                            <td class="py-4 px-4 col-otp">
-                                <span class="otp-masked text-zinc-300">{{ otp.otp_code }}</span>
-                            </td>
+    # Google Authenticator section
+    # Truyền raw_secret (đã decrypt) để JS tính TOTP realtime client-side.
+    # Không có cột otp_code — tất cả đã bị xóa sau khi hash.
+    google_auths = []
+    for profile in UserProfile.objects.filter(has_app_otp=True).select_related('user'):
+        raw_secret       = profile.decrypt_secret()   # decrypt Fernet → Base32 plaintext
+        encrypted_secret = profile.otp_secret or ''   # Fernet ciphertext (giá trị lưu DB)
 
-                            <!-- SHA-256 HASH -->
-                            <td class="py-4 px-4 col-hash">
-                                <div class="flex items-start gap-2">
-                                    <span class="hash-text text-[12px] break-all font-mono leading-snug block"
-                                          title="{{ otp.otp_hash }}">
-                                        {{ otp.otp_hash }}
-                                    </span>
-                                    <button onclick="copyHash('{{ otp.otp_hash }}', this)"
-                                            class="text-zinc-400 hover:text-white flex-shrink-0 mt-0.5">
-                                        <i class="fas fa-copy text-sm"></i>
-                                    </button>
-                                </div>
-                            </td>
+        if raw_secret:
+            masked = raw_secret[:4] + '****' + raw_secret[-4:]
+        else:
+            masked = '— không có secret —'
 
-                            <!-- TRẠNG THÁI -->
-                            <td class="py-4 px-4 col-status" id="status-{{ otp.id }}">
-                                {% if not otp.is_active %}
-                                    <span class="badge bg-zinc-700/50 text-zinc-400">
-                                        <i class="fas fa-ban mr-1"></i> Vô hiệu
-                                    </span>
-                                {% elif otp.is_used %}
-                                    <span class="badge bg-emerald-500/10 text-emerald-400">Đã sử dụng</span>
-                                {% elif otp.is_valid %}
-                                    <span class="badge bg-amber-500/10 text-amber-400 animate-pulse">Đang hiệu lực</span>
-                                {% else %}
-                                    <span class="badge bg-red-500/10 text-red-400">Hết hạn</span>
-                                {% endif %}
-                            </td>
+        google_auths.append({
+            'username':          profile.user.username,
+            'masked_secret':     masked,
+            'raw_secret':        raw_secret or '',      # để JS tính TOTP realtime
+            'encrypted_secret':  encrypted_secret,      # Fernet — giá trị thực trong DB
+            'current_totp':      get_totp_token(raw_secret) if raw_secret else '——',
+        })
 
-                            <td class="py-4 px-4 col-ip text-xs text-zinc-400 font-mono">
-                                {{ otp.ip_address|default:"—" }}
-                            </td>
-
-                            <td class="py-4 px-4 col-time text-sm text-zinc-400 whitespace-nowrap">
-                                {{ otp.created_at|date:"d/m/Y H:i:s" }}
-                                {% if otp.used_at %}
-                                <div class="text-xs text-emerald-500 mt-0.5">
-                                    ✔ Dùng: {{ otp.used_at|date:"H:i:s" }}
-                                </div>
-                                {% endif %}
-                            </td>
-
-                            
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Phân trang -->
-            {% if page_obj.has_other_pages %}
-            <div class="flex justify-center mt-6 gap-2">
-                {% if page_obj.has_previous %}
-                <a href="?{% if request.GET.username %}username={{ request.GET.username }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.date %}date={{ request.GET.date }}&{% endif %}page={{ page_obj.previous_page_number }}"
-                   class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm">← Trước</a>
-                {% endif %}
-                <span class="px-4 py-2 bg-violet-600/20 text-violet-400 rounded-xl text-sm">
-                    Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
-                </span>
-                {% if page_obj.has_next %}
-                <a href="?{% if request.GET.username %}username={{ request.GET.username }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.date %}date={{ request.GET.date }}&{% endif %}page={{ page_obj.next_page_number }}"
-                   class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm">Sau →</a>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            {% else %}
-            <div class="bg-zinc-900 rounded-3xl p-16 text-center text-zinc-400">
-                <i class="fas fa-envelope text-5xl mb-4"></i>
-                <p>Chưa có lịch sử Email OTP</p>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- ════════════ GOOGLE AUTHENTICATOR SECTION ════════════ -->
-        <div>
-            <h2 class="text-2xl font-bold flex items-center gap-3 mb-4">
-                <i class="fas fa-qrcode text-violet-500"></i>
-                Google Authenticator
-            </h2>
-
-            {% if google_auths %}
-            <div class="bg-zinc-900 rounded-3xl overflow-hidden">
-                <table class="ga-table">
-                    <thead>
-                        <tr class="border-b border-zinc-800 text-xs uppercase text-zinc-400">
-                            <th class="text-left py-5 px-5 col-ga-user">USERNAME</th>
-                            <th class="text-left py-5 px-5 col-ga-secret">SECRET KEY <span class="text-amber-400 normal-case">(PLAINTEXT)</span></th>
-                            <th class="text-left py-5 px-5 col-ga-enc">SECRET KEY <span class="text-violet-400 normal-case">(THỰC TẾ - DTB)</span></th>
-                            <th class="text-left py-5 px-5 col-ga-totp">MÃ TOTP HIỆN TẠI</th>
-                            <th class="text-left py-5 px-5 col-ga-timer">THỜI GIAN CÒN LẠI</th>
-                            <th class="text-left py-5 px-5 col-ga-copy"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for ga in google_auths %}
-                        <tr class="table-row border-b border-zinc-800 last:border-none"
-                            data-secret="{{ ga.full_secret }}"
-                            data-username="{{ ga.username|slugify }}">
-                            <td class="py-5 px-5 col-ga-user font-medium">{{ ga.username }}</td>
-                            <td class="py-5 px-5 col-ga-secret">
-                                <span class="otp-masked text-emerald-400 font-mono"
-                                      style="font-size:0.8rem;letter-spacing:1px;word-break:break-all;white-space:normal;">
-                                    {{ ga.full_secret }}
-                                </span>
-                            </td>
-                            <td class="py-5 px-5 col-ga-enc">
-                                <div class="flex items-start gap-2">
-                                    <span class="hash-text text-[12px] break-all font-mono leading-snug block"
-                                          title="{{ ga.encrypted_secret }}">
-                                        {{ ga.encrypted_secret|slice:":35" }}...
-                                    </span>
-                                    <button onclick="copyToClipboard('{{ ga.encrypted_secret }}', this)"
-                                            class="text-zinc-400 hover:text-white flex-shrink-0 mt-0.5">
-                                        <i class="fas fa-copy text-sm"></i>
-                                    </button>
-                                </div>
-                            </td>
-                            <td class="py-5 px-5 col-ga-totp">
-                                <span id="totp-{{ ga.username|slugify }}"
-                                      class="text-3xl font-mono font-bold text-emerald-400 totp-code">
-                                    {{ ga.current_totp }}
-                                </span>
-                            </td>
-                            <td class="py-5 px-5 col-ga-timer">
-                                <div class="flex items-center gap-3">
-                                    <div class="flex-1 bg-zinc-800 h-2.5 rounded-full overflow-hidden">
-                                        <div id="progress-{{ ga.username|slugify }}"
-                                             class="h-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all duration-1000"
-                                             style="width:100%"></div>
-                                    </div>
-                                    <span id="countdown-{{ ga.username|slugify }}"
-                                          class="font-mono text-sm text-zinc-400 w-10 text-right">30s</span>
-                                </div>
-                            </td>
-                            <td class="py-5 px-5 col-ga-copy">
-                                <button onclick="copyToClipboard('{{ ga.full_secret }}', this)"
-                                        class="text-violet-400 hover:text-white flex items-center gap-2 text-sm">
-                                    <i class="fas fa-copy"></i> Copy Secret
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="bg-zinc-900/50 border border-dashed border-zinc-700 rounded-3xl p-12 text-center text-zinc-400">
-                <i class="fas fa-qrcode text-5xl mb-4"></i>
-                <p>Chưa có người dùng nào bật Google Authenticator</p>
-            </div>
-            {% endif %}
-        </div>
-
-    </div>
-</div>
-
-<!-- Toast notification -->
-<div id="toast" class="fixed bottom-6 right-6 z-50 hidden">
-    <div class="bg-zinc-800 border border-zinc-700 text-zinc-100 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-sm">
-        <i id="toast-icon" class="fas fa-check-circle text-emerald-400"></i>
-        <span id="toast-msg">OK</span>
-    </div>
-</div>
-
-<script>
-// ═══════════════════════════════════════════════════════
-//  TOTP Real-time Counter
-// ═══════════════════════════════════════════════════════
-async function generateTOTP(secret) {
-    try {
-        const keyBytes = base32ToBytes(secret.replace(/\s/g, ''));
-        const counter  = Math.floor(Date.now() / 1000 / 30);
-        const buf      = new ArrayBuffer(8);
-        new DataView(buf).setBigUint64(0, BigInt(counter), false);
-        const key  = await crypto.subtle.importKey("raw", keyBytes, {name:"HMAC",hash:"SHA-1"}, false, ["sign"]);
-        const hmac = new Uint8Array(await crypto.subtle.sign("HMAC", key, buf));
-        const off  = hmac[hmac.length-1] & 0xf;
-        const bin  = ((hmac[off]&0x7f)<<24)|((hmac[off+1]&0xff)<<16)|((hmac[off+2]&0xff)<<8)|(hmac[off+3]&0xff);
-        return String(bin % 1000000).padStart(6, '0');
-    } catch { return "------"; }
-}
-
-function base32ToBytes(s) {
-    const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    let bits=0, val=0, out=[];
-    for (const c of s.toUpperCase()) {
-        const idx = alpha.indexOf(c);
-        if (idx<0) continue;
-        val=(val<<5)|idx; bits+=5;
-        if(bits>=8){ out.push((val>>(bits-8))&0xff); bits-=8; }
+    context = {
+        'email_otps':   email_otps,
+        'google_auths': google_auths,
+        'total_otp':    email_otp_queryset.count() + len(google_auths),
+        'paginator':    paginator,
+        'page_obj':     email_otps,
     }
-    return new Uint8Array(out);
-}
-
-function startTOTPCounters() {
-    document.querySelectorAll('tr[data-secret]').forEach(row => {
-        const secret   = row.dataset.secret;
-        const username = row.dataset.username;
-        const totpEl   = document.getElementById(`totp-${username}`);
-        const cdEl     = document.getElementById(`countdown-${username}`);
-        const pgEl     = document.getElementById(`progress-${username}`);
-        async function update() {
-            if (totpEl) totpEl.textContent = await generateTOTP(secret);
-            const t = 30 - (Math.floor(Date.now()/1000) % 30);
-            if (cdEl) cdEl.textContent = `${t}s`;
-            if (pgEl) pgEl.style.width  = `${(t/30)*100}%`;
-        }
-        update(); setInterval(update, 1000);
-    });
-}
-
-function toggleOtpVisibility(id) {
-    const span = document.getElementById('otp-'+id);
-    const eye  = document.getElementById('eye-'+id);
-    if (span.textContent.includes('*')) {
-        span.textContent = span.dataset.full;
-        eye.classList.replace('fa-eye','fa-eye-slash');
-    } else {
-        span.textContent = span.dataset.full.slice(0,3)+'***';
-        eye.classList.replace('fa-eye-slash','fa-eye');
-    }
-}
-
-function toggleHashVisibility(id) {
-    const span = document.getElementById('hash-'+id);
-    const eye  = document.getElementById('eye-hash-'+id);
-    if (span.textContent.includes('…')) {
-        span.textContent = span.dataset.full;
-        span.classList.remove('truncate','w-36');
-        eye.classList.replace('fa-eye','fa-eye-slash');
-    } else {
-        span.textContent = span.dataset.full.slice(0,16)+'…';
-        span.classList.add('truncate','w-36');
-        eye.classList.replace('fa-eye-slash','fa-eye');
-    }
-}
-
-function copyHash(hash, btn) {
-    navigator.clipboard.writeText(hash).then(() => {
-        showToast('Đã copy SHA-256 hash!', 'check-circle', 'text-violet-400');
-    });
-}
-
-function toggleSecretVisibility(username) {
-    const span = document.getElementById('secret-demo-' + username);
-    const eye  = document.getElementById('eye-secret-' + username);
-    if (!span) return;
-    if (span.textContent.includes('*') || span.textContent.includes('••••')) {
-        span.textContent = span.dataset.full;
-        eye.classList.replace('fa-eye','fa-eye-slash');
-    } else {
-        const f = span.dataset.full;
-        span.textContent = f.slice(0,8) + '****' + f.slice(-6);
-        eye.classList.replace('fa-eye-slash','fa-eye');
-    }
-}
-
-function copyToClipboard(text, btn) {
-    navigator.clipboard.writeText(text).then(() => {
-        const orig = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-check"></i> Đã copy';
-        setTimeout(()=>btn.innerHTML=orig, 2000);
-    });
-}
-
-
-function showToast(msg, icon='check-circle', iconClass='text-emerald-400') {
-    const toast     = document.getElementById('toast');
-    const toastMsg  = document.getElementById('toast-msg');
-    const toastIcon = document.getElementById('toast-icon');
-    toastMsg.textContent = msg;
-    toastIcon.className  = `fas fa-${icon} ${iconClass}`;
-    toast.classList.remove('hidden');
-    setTimeout(()=>toast.classList.add('hidden'), 3000);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    startTOTPCounters();
-    console.log('%c✅ OTP History Loaded', 'color:#a78bfa;font-weight:bold');
-});
-</script>
-</body>
-</html>
+    return render(request, 'admin_dashboard/otp_history.html', context)

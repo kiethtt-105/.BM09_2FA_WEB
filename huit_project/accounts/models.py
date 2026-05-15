@@ -1,22 +1,16 @@
 """
 models.py — Hệ thống HUIT 2FA
 ==============================
-Schema tối ưu: 7 bảng (giảm từ 11)
+Schema: 7 bảng
 
-  Đã xóa:
-    - OTP              : deprecated, không có is_used/hash, không dùng trong code
-    - User2FA          : trùng UserProfile (4 cột boolean + google_secret plaintext)
-    - LoginHistory     : trùng ActivityLog, không có view nào query
-    - UserSessionControl: 1 boolean → gộp vào UserProfile.force_logout
+Thay đổi bảo mật EmailOTP:
+    otp_code plaintext bị xóa khỏi DB ngay sau khi SHA-256 được tính trong save().
+    Sau save(), otp_code = '' trong DB — chỉ otp_hash còn lại.
+    Xác thực OTP bằng EmailOTP.verify_otp() — hash input rồi so sánh, không đọc plaintext.
 
-  Đã gộp vào UserProfile:
-    - force_disable_2fa, is_required (từ User2FA)
-    - force_logout (từ UserSessionControl)
-
-  Đã xóa khỏi UserProfile:
-    - email_otp, otp_expiry : OTP tạm → EmailOTP là nguồn sự thật duy nhất
-    - fido2_credential      : JSONField không dùng, UserPasskey thay thế
-    - has_fido2             : boolean không đồng bộ → thay bằng property
+Thêm HOTP:
+    UserProfile.hotp_counter — counter đồng bộ server cho phương thức HOTP.
+    UserProfile.has_hotp     — cờ bật/tắt HOTP.
 """
 
 from django.db import models
@@ -39,18 +33,9 @@ class UserProfile(models.Model):
     """
     Mở rộng User Django bằng OneToOne.
 
-    Bảo mật otp_secret:
-        Luôn lưu dạng Fernet-encrypted (AES-128-CBC).
-        ENCRYPTION_KEY phải là Fernet key hợp lệ (44 ký tự Base64url).
-
-    Quản lý 2FA:
-        has_app_otp / has_email_otp : user tự bật/tắt qua dashboard.
-        force_disable_2fa           : admin ép tắt, ưu tiên cao hơn cờ user.
-        is_required                 : admin ép user phải bật 2FA.
-        force_logout                : admin đặt True → middleware logout user ở request kế tiếp.
-
-    FIDO2:
-        Không lưu cờ has_fido2 — kiểm tra qua property user.passkeys.exists().
+    otp_secret  : TOTP/HOTP secret — luôn Fernet-encrypted trong DB.
+    hotp_counter: Counter server-side cho HOTP. Tăng 1 mỗi lần xác thực thành công.
+    has_hotp    : Cờ user đã bật HOTP (event-based OTP).
     """
 
     user = models.OneToOneField(
@@ -60,10 +45,12 @@ class UserProfile(models.Model):
     middle_name  = models.CharField('Chữ đệm',       max_length=50, blank=True, default='')
     phone_number = models.CharField('Số điện thoại', max_length=15, blank=True, default='')
 
-    otp_secret = models.CharField(max_length=255, blank=True, null=True)
+    otp_secret   = models.CharField(max_length=255, blank=True, null=True)
+    hotp_counter = models.PositiveBigIntegerField(default=0, verbose_name='HOTP Counter')
 
-    has_app_otp   = models.BooleanField(default=False, verbose_name='Đã bật App OTP')
+    has_app_otp   = models.BooleanField(default=False, verbose_name='Đã bật App OTP (TOTP)')
     has_email_otp = models.BooleanField(default=False, verbose_name='Đã bật Email OTP')
+    has_hotp      = models.BooleanField(default=False, verbose_name='Đã bật HOTP')
 
     force_disable_2fa = models.BooleanField(default=False, verbose_name='Admin tắt buộc 2FA')
     is_required       = models.BooleanField(default=False, verbose_name='Bắt buộc bật 2FA')
@@ -74,7 +61,6 @@ class UserProfile(models.Model):
         verbose_name_plural = 'Hồ sơ người dùng'
 
     def encrypt_secret(self, raw_secret: str) -> str:
-        """Mã hóa TOTP secret bằng Fernet trước khi lưu DB."""
         if not raw_secret:
             return None
         f = Fernet(settings.ENCRYPTION_KEY.encode())
@@ -82,8 +68,8 @@ class UserProfile(models.Model):
 
     def decrypt_secret(self) -> str:
         """
-        Giải mã TOTP secret.
-        Token Fernet nhận dạng bằng tiền tố 'gAAAA'.
+        Giải mã TOTP/HOTP secret.
+        Nhận dạng token Fernet qua tiền tố 'gAAAA'.
         Trả None nếu không giải mã được — không bao giờ trả plaintext không xác thực.
         """
         if not self.otp_secret:
@@ -97,7 +83,6 @@ class UserProfile(models.Model):
             return None
 
     def save(self, *args, **kwargs):
-        """Tự động mã hóa otp_secret nếu chưa qua Fernet."""
         if self.otp_secret and not self.otp_secret.startswith('gAAAA'):
             self.otp_secret = self.encrypt_secret(self.otp_secret)
         super().save(*args, **kwargs)
@@ -107,14 +92,12 @@ class UserProfile(models.Model):
 
     @property
     def is_2fa_enabled(self) -> bool:
-        """True nếu bật ít nhất 1 phương thức 2FA và admin không ép tắt."""
         if self.force_disable_2fa:
             return False
-        return self.has_email_otp or self.has_app_otp
+        return self.has_email_otp or self.has_app_otp or self.has_hotp
 
     @property
     def has_fido2(self) -> bool:
-        """Kiểm tra trực tiếp từ UserPasskey — không cần cờ boolean riêng."""
         return self.user.passkeys.exists()
 
     def get_full_name(self) -> str:
@@ -128,14 +111,7 @@ class UserProfile(models.Model):
 class PendingRegistration(models.Model):
     """
     Lưu thông tin đăng ký tạm thời trước khi OTP xác thực thành công.
-
-    Luồng:
-        1. User điền form → tạo bản ghi + gửi OTP email.
-        2. User xác thực OTP → tạo User thật → xóa bản ghi.
-
-    Bảo mật:
-        temp_data['password'] là chuỗi đã qua make_password() — không lưu plaintext.
-        OTP_EXPIRY_MINUTES = 10 phút.
+    temp_data['password'] = make_password() — không lưu plaintext.
     """
 
     email      = models.EmailField(unique=True)
@@ -164,13 +140,19 @@ class PendingRegistration(models.Model):
 class EmailOTP(models.Model):
     """
     Audit trail cho toàn bộ OTP email đã phát hành.
-    Đây là nguồn sự thật duy nhất cho xác thực OTP — không lưu OTP vào UserProfile.
+    Là nguồn sự thật duy nhất cho xác thực OTP email.
 
-    Hai lớp lưu trữ (thiết kế có chủ ý cho đồ án demo):
-        otp_code  : plaintext — để hội đồng kiểm tra trực quan luồng OTP.
-        otp_hash  : SHA-256(otp_code) — dùng để so sánh khi xác thực.
+    Thiết kế bảo mật:
+        otp_code  — Trường nhận plaintext khi tạo.
+                    Trong save(), tự động hash → otp_hash, sau đó otp_code = '' (xóa).
+                    DB không bao giờ lưu plaintext sau khi save() hoàn thành.
 
-    Lưu ý: production thực tế chỉ lưu otp_hash, không lưu plaintext.
+        otp_hash  — SHA-256(otp_code). Dùng để xác thực bằng cách hash input
+                    rồi so sánh — không cần đọc plaintext từ DB.
+
+    Xác thực:
+        Gọi EmailOTP.verify_otp(user, input_string, action) → trả EmailOTP hoặc None.
+        Hàm này hash input và so sánh với otp_hash — an toàn trước timing attack.
     """
 
     ACTION_CHOICES = [
@@ -186,9 +168,16 @@ class EmailOTP(models.Model):
         null=True, blank=True,
         verbose_name='Người dùng'
     )
-    otp_code = models.CharField(max_length=6,  verbose_name='Mã OTP (plaintext demo)')
-    otp_hash = models.CharField(max_length=64, blank=True, null=True,
-                                verbose_name='Mã OTP SHA-256')
+
+    # Trường này nhận plaintext khi create(); bị xóa (='') ngay sau khi save() hash xong
+    otp_code = models.CharField(
+        max_length=6, blank=True, default='',
+        verbose_name='OTP plaintext (bị xóa sau hash)'
+    )
+    otp_hash = models.CharField(
+        max_length=64, blank=True, null=True,
+        verbose_name='SHA-256 hash của OTP'
+    )
 
     action     = models.CharField(max_length=20, choices=ACTION_CHOICES,
                                   default='login_2fa', verbose_name='Loại thao tác')
@@ -208,9 +197,71 @@ class EmailOTP(models.Model):
         verbose_name_plural = 'Email OTP Logs'
 
     def save(self, *args, **kwargs):
-        if self.otp_code and not self.otp_hash:
-            self.otp_hash = hashlib.sha256(self.otp_code.encode('utf-8')).hexdigest()
+        """
+        Hash otp_code → otp_hash, sau đó XÓA plaintext.
+        Thứ tự thực hiện:
+          1. Tính SHA-256(otp_code) → gán vào otp_hash.
+          2. Gán otp_code = '' (trống).
+          3. Gọi super().save() → INSERT/UPDATE vào DB với otp_code rỗng.
+        """
+        if self.otp_code:
+            self.otp_hash = hashlib.sha256(
+                self.otp_code.encode('utf-8')
+            ).hexdigest()
+            self.otp_code = ''
         super().save(*args, **kwargs)
+
+    @classmethod
+    def verify_otp(cls, user, otp_input: str, action: str = None) -> 'EmailOTP | None':
+        """
+        Xác thực OTP bằng cách hash input rồi so sánh với otp_hash trong DB.
+        Không bao giờ đọc otp_code từ DB.
+
+        Tham số:
+            user      : User object cần xác thực.
+            otp_input : Chuỗi OTP do user nhập vào.
+            action    : Lọc theo loại thao tác (None = không lọc).
+
+        Trả về:
+            EmailOTP nếu hợp lệ, None nếu sai hoặc hết hạn/đã dùng.
+        """
+        import hmac as _hmac
+        input_hash = hashlib.sha256(otp_input.encode('utf-8')).hexdigest()
+        qs = cls.objects.filter(
+            user      = user,
+            is_used   = False,
+            is_active = True,
+            created_at__gt = timezone.now() - datetime.timedelta(minutes=cls.OTP_VALID_MINUTES)
+        )
+        if action:
+            qs = qs.filter(action=action)
+
+        # So sánh từng bản ghi bằng compare_digest để tránh timing attack
+        for record in qs.order_by('-created_at')[:10]:
+            if record.otp_hash and _hmac.compare_digest(record.otp_hash, input_hash):
+                return record
+        return None
+
+    @classmethod
+    def verify_otp_pending(cls, email: str, otp_input: str) -> 'EmailOTP | None':
+        """
+        Xác thực OTP đăng ký — user chưa tồn tại, so sánh theo email.
+        """
+        import hmac as _hmac
+        input_hash = hashlib.sha256(otp_input.encode('utf-8')).hexdigest()
+        qs = cls.objects.filter(
+            user__isnull = True,
+            email_sent   = email,
+            action       = 'register',
+            is_used      = False,
+            is_active    = True,
+            created_at__gt = timezone.now() - datetime.timedelta(minutes=10),
+        ).order_by('-created_at')[:10]
+
+        for record in qs:
+            if record.otp_hash and _hmac.compare_digest(record.otp_hash, input_hash):
+                return record
+        return None
 
     def is_valid(self) -> bool:
         return (
@@ -241,13 +292,6 @@ class EmailOTP(models.Model):
 # 4. ActivityLog
 # ════════════════════════════════════════════════════════════════════════════
 class ActivityLog(models.Model):
-    """
-    Nhật ký toàn bộ sự kiện bảo mật.
-    Thay thế hoàn toàn LoginHistory (đã xóa khỏi schema).
-
-    username_attempt lưu tên đăng nhập thô kể cả khi user không tồn tại
-    — dùng để phát hiện brute-force theo tên đăng nhập.
-    """
 
     ACTION_CHOICES = [
         ('login',                'Đăng nhập thành công'),
@@ -288,17 +332,6 @@ class ActivityLog(models.Model):
 # 5. TrustedDevice
 # ════════════════════════════════════════════════════════════════════════════
 class TrustedDevice(models.Model):
-    """
-    Mỗi session đăng nhập 2FA thành công được ghi vào đây.
-
-    Vai trò:
-        - Hiển thị danh sách thiết bị đang online.
-        - Push auth: thiết bị lạ gửi yêu cầu → thiết bị online xác nhận.
-        - Logout từ xa: xóa Django session tương ứng.
-
-    is_active = False khi user tự logout, admin force_logout, hoặc session Django hết hạn.
-    """
-
     user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
     device_id   = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     session_key = models.CharField(max_length=40, blank=True, null=True)
@@ -320,18 +353,6 @@ class TrustedDevice(models.Model):
 # 6. RemoteAuthRequest
 # ════════════════════════════════════════════════════════════════════════════
 class RemoteAuthRequest(models.Model):
-    """
-    Yêu cầu xác thực đẩy khi đăng nhập từ thiết bị lạ.
-
-    Luồng push auth:
-        1. Thiết bị lạ tạo bản ghi status='pending'.
-        2. Thiết bị online polling /get_pending_auth_request/.
-        3. Thiết bị online gọi /respond_auth_request/<id>/?status=approved|denied.
-        4. Thiết bị lạ polling /check_auth_status/ → đăng nhập hoặc từ chối.
-
-    Bản ghi bị xóa ngay sau khi xử lý xong.
-    """
-
     STATUS_CHOICES = [
         ('pending',  'Chờ xác nhận'),
         ('approved', 'Đã đồng ý'),
@@ -356,14 +377,6 @@ class RemoteAuthRequest(models.Model):
 # 7. UserPasskey
 # ════════════════════════════════════════════════════════════════════════════
 class UserPasskey(models.Model):
-    """
-    FIDO2 / WebAuthn passkey credential.
-
-    Mỗi user có thể đăng ký nhiều passkey (đa thiết bị).
-    sign_count tăng mỗi lần xác thực — nếu giảm đột ngột → credential có thể bị clone.
-    public_key lưu dạng CBOR-encoded Base64url.
-    """
-
     user          = models.ForeignKey(User, on_delete=models.CASCADE, related_name='passkeys')
     credential_id = models.CharField(max_length=500, unique=True)
     public_key    = models.TextField()
@@ -384,10 +397,5 @@ class UserPasskey(models.Model):
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
-    """
-    Tự động tạo UserProfile khi User mới được tạo.
-    Chỉ chạy khi created=True để tránh query thừa mỗi lần User.save().
-    Signal save_user_profile (cũ) đã xóa — get_or_create trong create_user_profile đủ an toàn.
-    """
     if created:
         UserProfile.objects.get_or_create(user=instance)
