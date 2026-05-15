@@ -115,7 +115,7 @@ class PendingRegistration(models.Model):
     """
     Lưu thông tin đăng ký tạm thời trước khi OTP xác thực thành công.
     temp_data['password'] = make_password() — không lưu plaintext.
-    """
+    """ 
 
     email      = models.EmailField(unique=True)
     otp_code   = models.CharField(max_length=6)
