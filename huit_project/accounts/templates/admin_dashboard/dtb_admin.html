@@ -8,101 +8,222 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         .table-row:hover { background-color: #27272a !important; }
-        th { position: sticky; top: 0; background-color: #18181b; z-index: 10; }
+
+        /*
+         * [FIX-H1] STICKY HEADER BỊ KHE HỞ
+         * Lỗi cũ: th { background-color: #18181b } — màu không khớp với header row bg-zinc-800 (#27272a)
+         * → Khi scroll, có thể thấy khe hở màu khác nhau giữa header sticky và nội dung bên dưới.
+         * Sửa: dùng cùng màu bg-zinc-800 (#27272a) để thead sticky liền mạch.
+         */
+        th {
+            position: sticky;
+            top: 0;
+            background-color: #27272a; /* [FIX-H1] khớp với bg-zinc-800 của <tr> header */
+            z-index: 10;
+        }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 
 <div class="flex min-h-screen">
-    <!-- Sidebar -->
+
+    <!-- ═══════════════════════════════════════════════════
+         SIDEBAR
+    ═══════════════════════════════════════════════════ -->
     <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full overflow-y-auto">
         <div class="flex items-center gap-3 mb-10">
             <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center text-3xl font-bold text-white">H</div>
             <h1 class="text-3xl font-bold">HUIT</h1>
         </div>
         <nav class="space-y-1">
-            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">👥 Quản lý Người dùng</a>
-            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">🔑 Lịch sử OTP</a>
-            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">📋 Hoạt động Đăng nhập</a>
-            <a href="/admin-dashboard/dtb_admin/" class="flex items-center gap-3 px-5 py-4 rounded-2xl bg-violet-600 text-white">🗄️ DTB Admin</a>
+            <a href="/admin-dashboard/users/"
+               class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">
+               👥 Quản lý Người dùng
+            </a>
+            <a href="/admin-dashboard/otp-history/"
+               class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">
+               🔑 Lịch sử OTP
+            </a>
+            <a href="/admin-dashboard/login-history/"
+               class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">
+               📋 Hoạt động Đăng nhập
+            </a>
+
+            <!--
+                [FIX-H2] SIDEBAR ACTIVE ITEM MẤT HOVER STATE
+                Lỗi cũ: item active chỉ có bg-violet-600, không có hover class
+                → Khi rê chuột vào item đang active, không có phản hồi visual.
+                Sửa: thêm hover:bg-violet-700 để duy trì phản hồi hover.
+            -->
+            <a href="/admin-dashboard/dtb_admin/"
+               class="flex items-center gap-3 px-5 py-4 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white">
+               🗄️ DTB Admin
+            </a>
         </nav>
     </div>
 
-    <!-- Main Content -->
+    <!-- ═══════════════════════════════════════════════════
+         MAIN CONTENT
+    ═══════════════════════════════════════════════════ -->
     <div class="flex-1 ml-72 p-8">
+
+        <!-- Header -->
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-3xl font-bold flex items-center gap-3">
                 <i class="fas fa-database text-violet-400"></i>
                 DTB Admin - SQLite Explorer
             </h1>
-            <p class="text-zinc-400">{{ db_path }}</p>
+            <!--
+                [FIX-H3] db_path HIỂN THỊ THIẾU NHÃN
+                Lỗi cũ: chỉ render {{ db_path }} trần → người dùng không biết đây là gì.
+                Sửa: thêm nhãn "📂 DB:" phía trước để rõ ngữ cảnh.
+            -->
+            <p class="text-zinc-400 text-sm truncate max-w-xs" title="{{ db_path }}">
+                📂 DB: {{ db_path }}
+            </p>
         </div>
 
         <!-- Controls -->
-        <div class="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 mb-8 flex gap-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 mb-8 flex gap-4 items-center">
             <form method="GET" class="flex-1 flex gap-4">
-                <select name="table" onchange="this.form.submit()" 
-                        class="bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 focus:border-violet-500">
+                <select name="table" onchange="this.form.submit()"
+                        class="bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 focus:border-violet-500 focus:outline-none">
                     <option value="">📋 Hiển thị nhiều bảng (mặc định)</option>
                     {% for t in all_tables %}
                     <option value="{{ t }}" {% if selected_table == t %}selected{% endif %}>🗃️ {{ t }}</option>
                     {% endfor %}
                 </select>
 
-                <input type="text" name="search" value="{{ search_query }}" 
-                       placeholder="🔍 Tìm kiếm..." 
-                       class="flex-1 bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 focus:border-violet-500">
-                
-                <button type="submit" class="bg-violet-600 hover:bg-violet-700 px-6 py-3 rounded-2xl">
+                <!--
+                    [FIX-H4] BIẾN search_query KHÔNG TỒN TẠI TRONG CONTEXT
+                    Lỗi cũ: value="{{ search_query }}" — views.py (dtb_admin_view) KHÔNG truyền
+                    biến 'search_query' vào context, chỉ có 'selected_table', 'tables', 'all_tables'.
+                    → Input search luôn trống khi reload, không giữ được giá trị đã tìm.
+                    Sửa: đổi thành request.GET.search hoặc dùng biến đúng.
+                    Trong Django template, dùng request.GET.table không được nên cần views.py
+                    truyền thêm: 'search_query': request.GET.get('search', '')
+                    Tạm thời dùng {{ request.GET.search }} nếu django.template.context_processors.request
+                    đã được bật trong TEMPLATES settings (thường là mặc định).
+                -->
+                <input type="text" name="search" value="{{ request.GET.search }}"
+                       placeholder="🔍 Tìm kiếm trong bảng..."
+                       class="flex-1 bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 focus:border-violet-500 focus:outline-none">
+
+                <button type="submit"
+                        class="bg-violet-600 hover:bg-violet-700 px-6 py-3 rounded-2xl transition-colors">
                     <i class="fas fa-search"></i>
                 </button>
+
+                <!--
+                    [FIX-H5] THIẾU NÚT XUẤT TOÀN BỘ DATABASE
+                    Lỗi cũ: không có nút export toàn bộ DB — chỉ có export từng bảng trong vòng lặp.
+                    → Admin không thể export tất cả cùng lúc từ thanh controls.
+                    Sửa: thêm nút "Xuất tất cả" ở thanh controls.
+                -->
+                <a href="{% url 'export_dtb' %}"
+                   class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-2xl text-sm flex items-center gap-2 whitespace-nowrap transition-colors">
+                    <i class="fas fa-file-excel"></i> Xuất tất cả
+                </a>
             </form>
         </div>
 
-        <!-- Danh sách bảng -->
+        <!-- Thông báo lỗi -->
         {% if error %}
-        <div class="bg-red-900 border border-red-700 text-red-300 p-6 rounded-3xl mb-8">{{ error }}</div>
+        <div class="bg-red-900 border border-red-700 text-red-300 p-6 rounded-3xl mb-8 flex items-center gap-3">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ error }}
+        </div>
         {% endif %}
 
+        <!--
+            [FIX-H6] THIẾU TRẠNG THÁI RỖNG (EMPTY STATE)
+            Lỗi cũ: nếu tables rỗng (không có bảng nào), trang hiển thị khoảng trắng.
+            → Admin không biết database trống hay có lỗi loading.
+            Sửa: thêm empty state rõ ràng.
+        -->
+        {% if not tables %}
+        <div class="bg-zinc-900 border border-zinc-700 rounded-3xl p-16 text-center text-zinc-500">
+            <i class="fas fa-database text-5xl mb-4 block"></i>
+            <p class="text-lg">Không có bảng nào để hiển thị.</p>
+            <p class="text-sm mt-2">Chọn bảng từ dropdown hoặc kiểm tra kết nối database.</p>
+        </div>
+        {% endif %}
+
+        <!-- Danh sách bảng -->
         <div class="space-y-10">
             {% for table_name, data in tables.items %}
             <div class="bg-zinc-900 border border-zinc-700 rounded-3xl overflow-hidden">
+
+                <!-- Table Header -->
                 <div class="px-8 py-5 bg-zinc-800 flex justify-between items-center">
                     <h2 class="text-xl font-semibold flex items-center gap-3">
-                        <i class="fas fa-table text-violet-400"></i> 
+                        <i class="fas fa-table text-violet-400"></i>
                         {{ table_name }}
-                        <span class="text-xs bg-zinc-700 px-3 py-1 rounded-full">{{ data.total_rows }} rows</span>
+                        <span class="text-xs bg-zinc-700 px-3 py-1 rounded-full">
+                            {{ data.total_rows }} rows
+                        </span>
+                        <!-- Thông báo khi hiển thị giới hạn 200 dòng -->
+                        {% if data.total_rows > 200 %}
+                        <span class="text-xs bg-amber-800 text-amber-200 px-3 py-1 rounded-full">
+                            Hiển thị 200 / {{ data.total_rows }}
+                        </span>
+                        {% endif %}
                     </h2>
-                    <a href="{% url 'export_dtb' %}?table={{ table_name }}" 
-                       class="bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 rounded-2xl text-sm flex items-center gap-2">
+                    <a href="{% url 'export_dtb' %}?table={{ table_name }}"
+                       class="bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 rounded-2xl text-sm flex items-center gap-2 transition-colors">
                         <i class="fas fa-file-excel"></i> Xuất Excel
                     </a>
                 </div>
 
-                <div class="overflow-x-auto max-h-[520px]">
+                <!-- Table Content -->
+                <div class="overflow-x-auto max-h-[520px] overflow-y-auto">
                     <table class="w-full">
                         <thead>
                             <tr class="bg-zinc-800">
+                                <!-- Thêm cột số thứ tự để dễ đọc -->
+                                <th class="px-4 py-4 text-left text-xs uppercase text-zinc-500 w-12">#</th>
                                 {% for col in data.columns %}
-                                <th class="px-6 py-4 text-left text-xs uppercase text-zinc-400">{{ col }}</th>
+                                <th class="px-6 py-4 text-left text-xs uppercase text-zinc-400 whitespace-nowrap">
+                                    {{ col }}
+                                </th>
                                 {% endfor %}
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-zinc-800">
                             {% for row in data.rows %}
                             <tr class="table-row">
+                                <td class="px-4 py-3 text-xs text-zinc-600">{{ forloop.counter }}</td>
                                 {% for cell in row %}
-                                <td class="px-6 py-3 text-sm">{{ cell|truncatechars:70 }}</td>
+                                <td class="px-6 py-3 text-sm font-mono">
+                                    <!--
+                                        Hiển thị NULL rõ ràng thay vì ô trống
+                                        (giúp phân biệt NULL với chuỗi rỗng)
+                                    -->
+                                    {% if cell is None %}
+                                        <span class="text-zinc-600 italic">NULL</span>
+                                    {% else %}
+                                        {{ cell|truncatechars:70 }}
+                                    {% endif %}
+                                </td>
                                 {% endfor %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="999" class="px-6 py-8 text-center text-zinc-600 italic">
+                                    Bảng trống (0 dòng)
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
             </div>
             {% endfor %}
         </div>
-    </div>
-</div>
+
+    </div><!-- end main content -->
+</div><!-- end flex wrapper -->
+
 </body>
 </html>

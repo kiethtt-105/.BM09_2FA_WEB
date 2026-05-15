@@ -10,6 +10,8 @@ import datetime
 import pickle
 import sqlite3
 import secrets
+import uuid
+from decimal import Decimal
 from datetime import timedelta
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -1646,74 +1648,66 @@ def admin_disable_otp(request, otp_id):
         'otp_id':  otp_id,
     })
 
+from django.db import connection
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def dtb_admin_view(request):
-    """DTB Admin - Hiển thị nhiều bảng ngay khi vào trang"""
-    db_path = settings.DATABASES['default']['NAME']
     selected_table = request.GET.get('table', '').strip()
     search_query = request.GET.get('search', '').strip()
+    db_path = settings.DATABASES['default']['NAME']  # tên DB để hiển thị
 
     table_data = {}
     all_tables = []
     error = None
 
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        with connection.cursor() as cursor:
+            # Lấy danh sách bảng (PostgreSQL)
+            cursor.execute("""
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public'
+                ORDER BY tablename
+            """)
+            all_tables = [row[0] for row in cursor.fetchall()]
 
-        # Lấy tất cả bảng
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name NOT LIKE 'sqlite_%' 
-            ORDER BY name
-        """)
-        all_tables = [row[0] for row in cursor.fetchall()]
-
-        # Nếu chưa chọn bảng cụ thể → hiển thị 8 bảng đầu tiên
-        if not selected_table:
-            tables_to_load = all_tables[:8]
-        else:
             tables_to_load = [selected_table] if selected_table in all_tables else all_tables[:8]
 
-        for table in tables_to_load:
-            try:
-                # Cột
-                cursor.execute(f'PRAGMA table_info([{table}]);')
-                columns = [col[1] for col in cursor.fetchall()]
+            for table in tables_to_load:
+                try:
+                    # Lấy tên cột
+                    cursor.execute("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = %s
+                        ORDER BY ordinal_position
+                    """, [table])
+                    columns = [row[0] for row in cursor.fetchall()]
 
-                # Tổng số dòng
-                cursor.execute(f'SELECT COUNT(*) FROM [{table}];')
-                total_rows = cursor.fetchone()[0]
+                    # Tổng số dòng
+                    cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
+                    total_rows = cursor.fetchone()[0]
 
-                # Dữ liệu (giới hạn 100 dòng)
-                limit = 100
-                sql = f"SELECT * FROM [{table}] LIMIT {limit};"
-                params = []
+                    # Dữ liệu
+                    if search_query and columns:
+                        conditions = ' OR '.join([f'CAST("{col}" AS TEXT) ILIKE %s' for col in columns])
+                        sql = f'SELECT * FROM "{table}" WHERE {conditions} LIMIT 100'
+                        params = ['%' + search_query + '%'] * len(columns)
+                        cursor.execute(sql, params)
+                    else:
+                        cursor.execute(f'SELECT * FROM "{table}" LIMIT 100')
 
-                if search_query and (not selected_table or selected_table == table):
-                    conditions = [f"[{col}] LIKE ?" for col in columns]
-                    sql = f"SELECT * FROM [{table}] WHERE {' OR '.join(conditions)} LIMIT {limit};"
-                    params = ['%' + search_query + '%'] * len(columns)
+                    rows = cursor.fetchall()
 
-                cursor.execute(sql, params)
-                rows = cursor.fetchall()
-
-                table_data[table] = {
-                    'columns': columns,
-                    'rows': rows,
-                    'total_rows': total_rows,
-                }
-            except Exception as e_inner:
-                table_data[table] = {
-                    'columns': [], 
-                    'rows': [], 
-                    'total_rows': 0, 
-                    'error': str(e_inner)
-                }
-
-        conn.close()
+                    table_data[table] = {
+                        'columns': columns,
+                        'rows': rows,
+                        'total_rows': total_rows,
+                    }
+                except Exception as e_inner:
+                    table_data[table] = {
+                        'columns': [], 'rows': [],
+                        'total_rows': 0, 'error': str(e_inner)
+                    }
 
     except Exception as e:
         error = str(e)
@@ -1726,9 +1720,7 @@ def dtb_admin_view(request):
         'search_query': search_query,
         'error': error,
     }
-
-    return render(request, 'admin_dashboard/dtb_admin.html', context)
-
+    return render(request, 'admin_dashboard/dtb_admin.html', context) 
 # ═══════════════════════════════════════════════════════════════════════════════
 # H. EXPORT
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1809,69 +1801,74 @@ def export_otp_excel(request):
     wb.save(response)
     return response
 
+def sanitize_row(row):
+    """Convert các kiểu dữ liệu đặc biệt về dạng Excel-compatible."""
+    result = []
+    for val in row:
+        if isinstance(val, uuid.UUID):
+            result.append(str(val))
+        elif isinstance(val, Decimal):
+            result.append(float(val))
+        elif isinstance(val, (datetime.date, datetime.datetime)):
+            result.append(str(val))
+        elif isinstance(val, (dict, list)):
+            result.append(json.dumps(val, ensure_ascii=False))
+        elif val is None:
+            result.append('')
+        else:
+            result.append(val)
+    return result
+
 
 @user_passes_test(lambda u: u.is_superuser)
 def export_dtb(request):
-    """
-    Export database ra Excel: 1 bảng hoặc toàn bộ (nhiều sheet).
-    table_name được validate qua whitelist trước khi dùng trong query.
-    """
-    db_path    = settings.DATABASES['default']['NAME']
     table_name = request.GET.get('table')
 
     try:
-        conn   = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public' ORDER BY tablename
+            """)
+            all_tables = [row[0] for row in cursor.fetchall()]
 
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
-        )
-        all_tables = [row[0] for row in cursor.fetchall()]
+            wb = Workbook()
 
-        wb = Workbook()
-
-        if table_name:
-            if table_name not in all_tables:  # Whitelist check
-                return HttpResponse("Bảng không hợp lệ.", status=400)
-
-            cursor.execute(f"SELECT * FROM [{table_name}]")
-            rows    = cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-
-            ws = wb.active
-            ws.title = table_name[:31]
-            ws.append(columns)
-            for row in rows:
-                ws.append(row)
-
-            filename = f"{table_name}_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
-
-        else:
-            wb.remove(wb.active)
-            for table in all_tables:
-                cursor.execute(f"PRAGMA table_info([{table}])")
-                columns = [col[1] for col in cursor.fetchall()]
-                cursor.execute(f"SELECT * FROM [{table}]")
+            if table_name:
+                if table_name not in all_tables:
+                    return HttpResponse("Bảng không hợp lệ.", status=400)
+                cursor.execute(f'SELECT * FROM "{table_name}"')
                 rows = cursor.fetchall()
-
-                ws = wb.create_sheet(title=table[:31])
+                columns = [desc[0] for desc in cursor.description]
+                ws = wb.active
+                ws.title = table_name[:31]
                 ws.append(columns)
                 for row in rows:
-                    ws.append(row)
-
-            filename = f"FULL_DATABASE_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+                    ws.append(sanitize_row(row))
+                filename = f"{table_name}_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            else:
+                wb.remove(wb.active)
+                for table in all_tables:
+                    cursor.execute(f'SELECT * FROM "{table}"')
+                    rows = cursor.fetchall()
+                    columns = [desc[0] for desc in cursor.description]
+                    ws = wb.create_sheet(title=table[:31])
+                    ws.append(columns)
+                    for row in rows:
+                        ws.append(sanitize_row(row))
+                if not wb.sheetnames:
+                    wb.create_sheet("Trống")
+                filename = f"FULL_DATABASE_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
 
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         wb.save(response)
-        conn.close()
         return response
 
     except Exception as e:
         return HttpResponse(f"Lỗi xuất file: {str(e)}", status=400)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # I. SSO
