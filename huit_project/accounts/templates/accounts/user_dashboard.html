@@ -230,7 +230,47 @@
                         {% endif %}
                     </div>
                     {% endwith %}
-            <!-- PUSH AUTH TOGGLE — chỉ hiện khi có ít nhất 1 phương thức 2FA -->
+
+                    <!-- HOTP — Mã theo sự kiện -->
+                    <div class="p-6 rounded-3xl border-2 transition-all hover:shadow-xl flex flex-col items-center text-center
+                        {% if profile.has_hotp %}border-amber-500 bg-amber-50{% else %}border-slate-200 bg-white{% endif %}">
+                        <i class="fas fa-key text-4xl mb-4 {% if profile.has_hotp %}text-amber-500{% else %}text-slate-400{% endif %}"></i>
+                        <h4 class="font-bold text-lg">HOTP</h4>
+                        <p class="text-xs text-slate-400 mt-1 mb-1">Mã theo sự kiện (RFC 4226)</p>
+                        {% if profile.has_hotp %}
+                            <span class="mt-2 inline-flex items-center px-4 py-1 bg-amber-100 text-amber-700 text-xs font-black rounded-3xl">ĐÃ KÍCH HOẠT</span>
+                            <span class="mt-1 text-xs text-amber-500 font-semibold font-mono">Counter: {{ profile.hotp_counter }}</span>
+
+                            <!-- Nút sinh mã HOTP -->
+                            <button onclick="generateHOTP()"
+                                    id="hotp-gen-btn"
+                                    class="mt-4 w-full py-2.5 bg-amber-500 text-white rounded-2xl text-sm font-bold hover:bg-amber-600 transition flex items-center justify-center gap-2">
+                                <i class="fas fa-bolt"></i> Tạo mã HOTP
+                            </button>
+
+                            <!-- Khu vực hiển thị mã -->
+                            <div id="hotp-code-display" class="hidden mt-3 w-full bg-amber-50 border-2 border-amber-300 rounded-2xl p-3 text-center">
+                                <div class="text-xs text-amber-600 font-bold mb-1">MÃ OTP</div>
+                                <div id="hotp-code-value" class="text-3xl font-black font-mono tracking-widest text-amber-700"></div>
+                                <div class="text-xs text-slate-400 mt-1 font-mono" id="hotp-counter-used"></div>
+                                <div id="hotp-countdown-bar" class="mt-2 h-1 bg-amber-200 rounded-full overflow-hidden">
+                                    <div id="hotp-countdown-fill" class="h-full bg-amber-500 transition-all duration-1000" style="width:100%"></div>
+                                </div>
+                                <div class="text-xs text-amber-500 mt-1 font-mono" id="hotp-countdown-text">Mã ẩn sau 60s</div>
+                            </div>
+
+                            <form method="POST" class="mt-auto pt-4 w-full">
+                                {% csrf_token %}
+                                <button name="action" value="disable_hotp" class="text-red-500 text-sm font-bold underline">TẮT HOTP</button>
+                            </form>
+                        {% else %}
+                            <span class="mt-2 inline-flex items-center px-4 py-1 bg-slate-100 text-slate-500 text-xs font-black rounded-3xl">CHƯA KÍCH HOẠT</span>
+                            <a href="{% url 'setup_hotp' %}"
+                               class="mt-6 w-full py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold text-center hover:bg-indigo-700 transition">
+                                <i class="fas fa-key mr-1"></i> Thiết lập HOTP
+                            </a>
+                        {% endif %}
+                    </div>
             {% if profile.is_2fa_enabled or request.user.passkeys.exists %}
             <div class="mt-6 p-6 rounded-3xl border-2 transition-all
                 {% if profile.allow_push_auth %}border-sky-400 bg-sky-50{% else %}border-slate-200 bg-white{% endif %}
@@ -308,6 +348,62 @@
             if (m) m.innerText = msg;
             t.classList.remove('translate-x-full');
             setTimeout(() => t.classList.add('translate-x-full'), 4000);
+        }
+
+        // ==================== GENERATE HOTP ====================
+        function generateHOTP() {
+            const btn      = document.getElementById('hotp-gen-btn');
+            const display  = document.getElementById('hotp-code-display');
+            const codeEl   = document.getElementById('hotp-code-value');
+            const ctEl     = document.getElementById('hotp-counter-used');
+            const fillEl   = document.getElementById('hotp-countdown-fill');
+            const textEl   = document.getElementById('hotp-countdown-text');
+            if (!btn) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang tạo...';
+
+            fetch('{% url "generate_hotp_code" %}', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() },
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    showToast('⚠️ ' + data.error);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-bolt"></i> Tạo mã HOTP';
+                    return;
+                }
+
+                // Hiện mã
+                codeEl.textContent  = data.code;
+                ctEl.textContent    = 'Counter dùng: ' + data.counter_used + ' → tiếp theo: ' + data.next_counter;
+                display.classList.remove('hidden');
+
+                // Countdown 60s rồi ẩn
+                let left = 60;
+                fillEl.style.width = '100%';
+                textEl.textContent = 'Mã ẩn sau ' + left + 's';
+
+                const tick = setInterval(() => {
+                    left--;
+                    fillEl.style.width = (left / 60 * 100) + '%';
+                    textEl.textContent = 'Mã ẩn sau ' + left + 's';
+                    if (left <= 0) {
+                        clearInterval(tick);
+                        display.classList.add('hidden');
+                        codeEl.textContent = '';
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-bolt"></i> Tạo mã HOTP';
+                    }
+                }, 1000);
+            })
+            .catch(() => {
+                showToast('Lỗi kết nối');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bolt"></i> Tạo mã HOTP';
+            });
         }
 
         function getCsrfToken() {

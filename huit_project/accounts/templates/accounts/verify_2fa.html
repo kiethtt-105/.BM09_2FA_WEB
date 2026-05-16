@@ -74,6 +74,7 @@ body::before{
 .method-card:hover{border-color:rgba(255,255,255,.15);color:var(--text);}
 .method-card.active-app   {border-color:var(--accent);color:var(--accent);background:rgba(99,102,241,.08);}
 .method-card.active-email {border-color:var(--green); color:var(--green); background:rgba(16,185,129,.08);}
+.method-card.active-hotp  {border-color:var(--amber); color:var(--amber); background:rgba(245,158,11,.08);}
 .method-card.active-fido2 {border-color:var(--purple);color:var(--purple);background:rgba(168,85,247,.08);}
 .method-card.active-push  {border-color:var(--amber); color:var(--amber); background:rgba(245,158,11,.08);}
 .method-icon{font-size:24px;}
@@ -192,6 +193,7 @@ body::before{
       <div class="method-sub">
         {% if m.key == 'app' %}Google Auth
         {% elif m.key == 'email' %}Nhận qua mail
+        {% elif m.key == 'hotp' %}Mã theo sự kiện
         {% elif m.key == 'fido2' %}Vân tay/Face
         {% elif m.key == 'push' %}Từ thiết bị khác
         {% endif %}
@@ -204,13 +206,14 @@ body::before{
   <div class="method-hint">
     {% if method == 'app' %}<i class="fas fa-mobile-screen-button"></i> Nhập mã từ ứng dụng Google Authenticator
     {% elif method == 'email' %}<i class="fas fa-envelope"></i> Nhập mã OTP gửi qua email
+    {% elif method == 'hotp' %}<i class="fas fa-hashtag"></i> Nhấn nút để sinh mã HOTP từ ứng dụng
     {% elif method == 'fido2' %}<i class="fas fa-fingerprint"></i> Xác thực bằng vân tay / khuôn mặt
     {% elif method == 'push' %}<i class="fas fa-bell"></i> Gửi yêu cầu đến thiết bị đang đăng nhập
     {% endif %}
   </div>
 
-  <!-- ══ APP / EMAIL OTP ══ -->
-  {% if method == 'app' or method == 'email' %}
+  <!-- ══ APP / EMAIL / HOTP OTP ══ -->
+  {% if method == 'app' or method == 'email' or method == 'hotp' %}
   <form method="POST" id="otp-form">
     {% csrf_token %}
     <div class="otp-row">
@@ -223,6 +226,20 @@ body::before{
       <i class="fas fa-lock-open"></i> Xác nhận & Đăng nhập
     </button>
   </form>
+
+  {% if method == 'hotp' %}
+  <div class="divider"></div>
+  <button onclick="generateHOTP()" id="gen-hotp-btn" class="btn btn-amber">
+    <i class="fas fa-rotate-right"></i>
+    <span id="gen-hotp-text">Sinh mã HOTP mới</span>
+  </button>
+  <div id="hotp-result" style="display:none;margin-top:12px;text-align:center;
+    font-family:var(--mono);font-size:2rem;font-weight:700;
+    letter-spacing:8px;color:var(--amber);"></div>
+  <div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center;font-family:var(--mono);">
+    Mỗi lần bấm sinh ra 1 mã mới — dùng 1 lần rồi hết hiệu lực
+  </div>
+  {% endif %}
 
   {% if method == 'email' %}
   <div class="divider"></div>
@@ -333,6 +350,49 @@ boxes.forEach((box, idx) => {
   });
 });
 if(boxes.length) boxes[0].focus();
+
+// ══ HOTP ═══════════════════════════════════════════════
+async function generateHOTP(){
+  const btn  = document.getElementById('gen-hotp-btn');
+  const txt  = document.getElementById('gen-hotp-text');
+  const res  = document.getElementById('hotp-result');
+  if(btn) btn.disabled = true;
+  if(txt) txt.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang sinh mã...';
+
+  try {
+    const resp = await fetch('{% url "generate_hotp_code" %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token }}',
+      },
+    });
+    const data = await resp.json();
+    if(data.status === 'ok' && data.code) {
+      if(res){
+        res.style.display = 'block';
+        res.textContent = data.code;
+      }
+      // Auto fill vào các ô
+      const boxes = document.querySelectorAll('.otp-box');
+      [...data.code].forEach((ch, i) => {
+        if(boxes[i]){ boxes[i].value = ch; boxes[i].classList.add('filled'); }
+      });
+      let otp = ''; boxes.forEach(b => otp += b.value);
+      const hidden = document.getElementById('hidden-otp');
+      if(hidden) hidden.value = otp;
+      const confirmBtn = document.getElementById('confirm-btn');
+      if(confirmBtn) confirmBtn.disabled = otp.length < 6;
+    } else {
+      alert(data.message || 'Lỗi sinh mã HOTP');
+    }
+  } catch(e) {
+    alert('Lỗi kết nối: ' + e.message);
+  } finally {
+    if(btn) btn.disabled = false;
+    if(txt) txt.innerHTML = 'Sinh mã HOTP mới';
+  }
+}
 
 // ══ EMAIL OTP ══════════════════════════════════════════
 function sendEmailOTP(){

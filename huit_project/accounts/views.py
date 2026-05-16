@@ -84,6 +84,7 @@ from .models import (
 # [BUG-3][BUG-4] Import verify_totp thay vì chỉ get_totp_token
 from .utils import (
     get_totp_token, verify_totp,
+    compute_hotp, verify_hotp,          # HOTP — tự implement RFC 4226
     generate_qr_base64, get_client_ip, generate_and_send_email_otp,
 )
 
@@ -649,11 +650,13 @@ def dashboard(request):
                 if raw_secret and verify_totp(raw_secret, code):
                     valid = True
 
-            # [BUG-6] Nhánh HOTP
+            # [BUG-6] Nhánh HOTP — dùng verify_hotp đúng với counter hiện tại
             elif target == 'disable_hotp':
                 raw_secret = profile.decrypt_secret()
-                if raw_secret and verify_totp(raw_secret, code):
-                    valid = True
+                if raw_secret:
+                    ok, _ = verify_hotp(raw_secret, profile.hotp_counter, code, look_ahead=5)
+                    if ok:
+                        valid = True
 
             if valid:
                 if target == 'disable_email':
@@ -881,10 +884,9 @@ def verify_2fa(request):
                 valid = True
 
         elif method == 'hotp' and profile.has_hotp:
-            from .utils import verify_hotp as _verify_hotp
             raw_secret = profile.decrypt_secret()
             if raw_secret:
-                ok, new_counter = _verify_hotp(raw_secret, profile.hotp_counter, code)
+                ok, new_counter = verify_hotp(raw_secret, profile.hotp_counter, code)
                 if ok:
                     profile.hotp_counter = new_counter
                     profile.save(update_fields=['hotp_counter'])
@@ -1929,6 +1931,117 @@ def export_dtb(request):
 
     except Exception as e:
         return HttpResponse(f'Lỗi xuất file: {str(e)}', status=400)
+
+
+@login_required
+@require_POST
+def generate_hotp_code(request):
+    """
+    ════════════════════════════════════════════════════════
+    HOTP — Sinh mã theo sự kiện (RFC 4226)
+    ════════════════════════════════════════════════════════
+    Flow:
+      1. User bấm nút "Tạo mã HOTP" trên dashboard.
+      2. Server lấy hotp_counter hiện tại của user.
+      3. Tính mã = compute_hotp(secret, counter) — tự implement, không thư viện.
+      4. Tăng counter lên 1 và lưu DB.
+      5. Trả JSON {code, counter_used} về frontend.
+      6. Frontend hiển thị mã trong 60 giây, sau đó ẩn đi.
+
+    Bảo mật:
+      - @require_POST: tránh sinh mã bằng GET/link.
+      - @login_required: chỉ user đang đăng nhập mới gọi được.
+      - Mã không lưu server-side — chỉ tính theo counter.
+      - CSRF được Django tự enforce qua middleware.
+    """
+    profile = request.user.profile
+
+    if not profile.has_hotp:
+        return JsonResponse({'error': 'HOTP chưa được kích hoạt.'}, status=400)
+
+    raw_secret = profile.decrypt_secret()
+    if not raw_secret:
+        return JsonResponse({'error': 'Không tìm thấy secret. Vui lòng thiết lập lại HOTP.'}, status=400)
+
+    counter_used = profile.hotp_counter
+    code = compute_hotp(raw_secret, counter_used)
+
+    # Tăng counter ngay — mã chỉ dùng được 1 lần
+    profile.hotp_counter += 1
+    profile.save(update_fields=['hotp_counter'])
+
+    logger.info('HOTP_GEN: user=%s counter=%d', request.user.username, counter_used)
+
+    return JsonResponse({
+        'code':         code,
+        'counter_used': counter_used,
+        'next_counter': profile.hotp_counter,
+    })
+
+
+@login_required
+def setup_hotp(request):
+    """
+    ════════════════════════════════════════════════════════
+    Setup HOTP — Thiết lập xác thực HOTP cho user
+    ════════════════════════════════════════════════════════
+    Flow:
+      GET : Sinh secret mới (lưu tạm session), hiển thị QR + secret.
+      POST: User nhập mã HOTP từ counter=0 để xác nhận.
+            Nếu đúng → lưu secret vào profile, bật has_hotp, reset counter=1.
+
+    Secret dùng chung với TOTP (cùng field otp_secret) nếu user đã bật TOTP.
+    Nếu chưa có secret nào → sinh mới bằng pyotp.random_base32().
+    """
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        code       = request.POST.get('otp_code', '').strip()
+        temp_secret = request.session.get('temp_hotp_secret')
+
+        if not temp_secret:
+            messages.error(request, 'Phiên thiết lập đã hết hạn. Vui lòng thử lại.')
+            return redirect('setup_hotp')
+
+        # Xác thực mã HOTP với counter=0 (lần đầu tiên)
+        # look_ahead=3: chấp nhận counter 0, 1, 2 — tránh trường hợp user thử nhiều lần
+        ok, new_counter = verify_hotp(temp_secret, 0, code, look_ahead=3)
+
+        if ok:
+            profile.otp_secret   = temp_secret   # save() sẽ tự encrypt
+            profile.has_hotp     = True
+            profile.hotp_counter = new_counter    # counter sau khi verify (thường là 1)
+            profile.save()
+
+            request.session.pop('temp_hotp_secret', None)
+
+            ActivityLog.objects.create(
+                user=request.user, username_attempt=request.user.username,
+                action='2fa_enable', ip_address=get_client_ip(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+            )
+            messages.success(request, '✅ Đã kích hoạt HOTP thành công!')
+            return redirect('dashboard')
+        else:
+            messages.error(request, '❌ Mã HOTP không đúng. Hãy tạo mã từ counter 0 và thử lại.')
+
+    # GET — sinh secret mới hoặc dùng lại từ session
+    temp_secret = request.session.get('temp_hotp_secret') or pyotp.random_base32()
+    request.session['temp_hotp_secret'] = temp_secret
+
+    # Tính mã demo counter=0 để user thấy trước
+    demo_code = compute_hotp(temp_secret, 0)
+
+    # QR code theo chuẩn otpauth://hotp/ — tương thích Aegis, andOTP
+    qr_base64 = generate_qr_base64(request.user.username, temp_secret, otp_type='hotp')
+
+    return render(request, 'accounts/setup_2fa.html', {
+        'method':     'hotp',
+        'profile':    profile,
+        'otp_secret': temp_secret,
+        'qr_base64':  qr_base64,
+        'demo_code':  demo_code,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -38,6 +38,10 @@ urlpatterns = [
     path('passkeys/',                    views.manage_passkeys, name='manage_passkeys'),
     path('passkeys/delete/<int:pk_id>/', views.delete_passkey,  name='delete_passkey'),
 
+    # HOTP Setup
+    path('setup/hotp/', views.setup_hotp, name='setup_hotp'),
+    path('api/generate-hotp/', views.generate_hotp_code, name='generate_hotp_code'),
+
     # Test
     path('test-passkey/', views.test_passkey_view, name='test_passkey'),
     
