@@ -24,38 +24,40 @@ export default function ScanScreen({ navigation, route }: any) {
     );
   }
 
-  const handleScan = async ({ data }: { data: string }) => {
-    if (scanned) return;
-    setScanned(true);
+const handleScan = async ({ data }: { data: string }) => {
+  if (scanned) return;
+  setScanned(true);
 
-    try {
-      // Parse URI chuẩn TOTP: otpauth://totp/label?secret=XXX&issuer=YYY
-      const totp = OTPAuth.URI.parse(data);
+  try {
+    const parsed = OTPAuth.URI.parse(data);
 
-      // Lưu vào SecureStore
-      const stored = await SecureStore.getItemAsync('accounts');
-      const accounts = stored ? JSON.parse(stored) : [];
+    const isHOTP = parsed instanceof OTPAuth.HOTP;
 
-      accounts.push({
-        id: Date.now().toString(),
-        label: totp.label,
-        issuer: (totp as any).issuer || totp.label,
-        secret: totp.secret.base32,
-      });
+    const stored = await SecureStore.getItemAsync('accounts');
+    const accounts = stored ? JSON.parse(stored) : [];
 
-      await SecureStore.setItemAsync('accounts', JSON.stringify(accounts));
+    accounts.push({
+      id: Date.now().toString(),
+      label: parsed.label,
+      issuer: (parsed as any).issuer || parsed.label,
+      secret: parsed.secret.base32,
+      type: isHOTP ? 'hotp' : 'totp',                    // 👈 lưu type
+      counter: isHOTP ? ((parsed as OTPAuth.HOTP).counter ?? 0) : undefined,
+    });
 
-      Alert.alert(
-        '✅ Thành công!',
-        `Đã thêm: ${(totp as any).issuer || totp.label}`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
-    } catch (e) {
-      Alert.alert('❌ Lỗi', 'QR code không đúng định dạng TOTP!', [
-        { text: 'Thử lại', onPress: () => setScanned(false) }
-      ]);
-    }
-  };
+    await SecureStore.setItemAsync('accounts', JSON.stringify(accounts));
+
+    Alert.alert(
+      '✅ Thành công!',
+      `Đã thêm: ${(parsed as any).issuer || parsed.label}\nLoại: ${isHOTP ? 'HOTP' : 'TOTP'}`,
+      [{ text: 'OK', onPress: () => navigation.goBack() }]
+    );
+  } catch (e) {
+    Alert.alert('❌ Lỗi', 'QR code không đúng định dạng TOTP/HOTP!', [
+      { text: 'Thử lại', onPress: () => setScanned(false) }
+    ]);
+  }
+};
 
   return (
     <View style={styles.container}>

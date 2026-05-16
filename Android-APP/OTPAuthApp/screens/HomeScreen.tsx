@@ -39,6 +39,10 @@ export default function HomeScreen({ navigation }: any) {
     ]);
   };
 
+  const updateAccount = (updated: any) => {
+    setAccounts(prev => prev.map(a => a.id === updated.id ? updated : a));
+  };
+
   return (
     <View style={styles.container}>
       {accounts.length === 0 ? (
@@ -52,7 +56,11 @@ export default function HomeScreen({ navigation }: any) {
           data={accounts}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <OTPCard account={item} onDelete={() => deleteAccount(item.id)} />
+            <OTPCard
+              account={item}
+              onDelete={() => deleteAccount(item.id)}
+              onUpdate={updateAccount}
+            />
           )}
         />
       )}
