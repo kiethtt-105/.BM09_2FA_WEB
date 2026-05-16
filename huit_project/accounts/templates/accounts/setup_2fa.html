@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Xác minh 2FA · HUIT</title>
+<title>Thiết lập 2FA · HUIT</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-<script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+{# ════ KHÔNG CÒN: <script src="https://unpkg.com/@simplewebauthn/browser/..."> ════ #}
+{# Thay bằng WebAuthn Credentials API native của browser — 100% tự code #}
 <style>
 :root {
   --bg:#080c14; --surface:#0f1623; --surface2:#161e2e;
@@ -76,7 +77,6 @@ body::before{
 .method-card.active-email {border-color:var(--green); color:var(--green); background:rgba(16,185,129,.08);}
 .method-card.active-hotp  {border-color:var(--amber); color:var(--amber); background:rgba(245,158,11,.08);}
 .method-card.active-fido2 {border-color:var(--purple);color:var(--purple);background:rgba(168,85,247,.08);}
-.method-card.active-push  {border-color:var(--amber); color:var(--amber); background:rgba(245,158,11,.08);}
 .method-icon{font-size:24px;}
 .method-label{font-size:11px;font-weight:700;font-family:var(--mono);text-align:center;}
 .method-sub{font-size:10px;opacity:.7;text-align:center;}
@@ -112,11 +112,7 @@ body::before{
 .btn:hover:not(:disabled){transform:translateY(-2px);}
 .btn:active:not(:disabled){transform:translateY(0);}
 .btn:disabled{opacity:.35;cursor:not-allowed;}
-.btn-primary{
-  background:linear-gradient(135deg,#0f172a,#1e293b);
-  border:1px solid rgba(255,255,255,.1);color:var(--text);
-  box-shadow:0 4px 20px rgba(0,0,0,.4);
-}
+.btn-indigo{background:linear-gradient(135deg,var(--accent),#818cf8);color:#fff;box-shadow:0 4px 20px rgba(99,102,241,.3);}
 .btn-green {background:linear-gradient(135deg,var(--green),#059669);color:#fff;box-shadow:0 4px 20px rgba(16,185,129,.3);}
 .btn-purple{background:linear-gradient(135deg,var(--purple),#7c3aed);color:#fff;box-shadow:0 4px 20px rgba(168,85,247,.3);}
 .btn-amber {background:linear-gradient(135deg,var(--amber),#d97706); color:#fff;box-shadow:0 4px 20px rgba(245,158,11,.3);}
@@ -135,36 +131,13 @@ body::before{
 .countdown-row .ct{color:var(--green);font-weight:700;}
 
 /* FIDO2 */
-.fido2-status{font-size:13px;margin-top:10px;min-height:20px;text-align:center;}
-
-/* Push */
-.push-box{
-  background:var(--surface2);border:1px solid var(--border);
-  border-radius:16px;padding:20px;text-align:center;margin-top:16px;
+.fido2-status{
+  font-size:13px;margin-top:12px;min-height:20px;text-align:center;
+  padding:8px;border-radius:8px;transition:all .3s;
 }
-.push-spinner{
-  width:48px;height:48px;border:3px solid var(--border);
-  border-top-color:var(--amber);border-radius:50%;
-  animation:spin 1s linear infinite;margin:0 auto 12px;
-}
-@keyframes spin{to{transform:rotate(360deg);}}
-.push-status-text{font-size:13px;color:var(--muted);margin-top:8px;}
-.push-approved{color:var(--green);font-weight:700;}
-.push-denied{color:var(--red);font-weight:700;}
-
-/* Device list */
-.device-list{margin:12px 0;}
-.device-item{
-  display:flex;align-items:center;gap:10px;
-  padding:10px 12px;background:var(--surface2);
-  border:1px solid var(--border);border-radius:10px;margin-bottom:8px;
-  font-size:12px;color:var(--muted);
-}
-.device-dot{
-  width:8px;height:8px;border-radius:50%;background:var(--green);
-  animation:pulse 1.5s infinite;flex-shrink:0;
-}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.fido2-status.ok  {color:var(--green);background:rgba(16,185,129,.1);}
+.fido2-status.err {color:var(--red);  background:rgba(239,68,68,.1);}
+.fido2-status.info{color:var(--muted);}
 </style>
 </head>
 <body>
@@ -172,7 +145,7 @@ body::before{
   <div class="header">
     <div class="shield-icon">🛡️</div>
     <h1>Thiết lập 2FA</h1>
-    <p>Quét QR → xác nhận mã để kích hoạt</p>
+    <p>Chọn phương thức bảo mật phù hợp với bạn</p>
   </div>
 
   {% if messages %}
@@ -184,159 +157,122 @@ body::before{
     {% endfor %}
   {% endif %}
 
-  <!-- Chỉ hiện method user đã bật -->
+  <!-- Method tabs — chỉ hiện các phương thức chưa kích hoạt -->
   <div class="method-grid">
-    {% for m in methods %}
-    <a href="?method={{ m.key }}" class="method-card {% if method == m.key %}active-{{ m.key }}{% endif %}">
-      <div class="method-icon">{{ m.icon }}</div>
-      <div class="method-label">{{ m.name }}</div>
-      <div class="method-sub">
-        {% if m.key == 'app' %}Google Auth
-        {% elif m.key == 'email' %}Nhận qua mail
-        {% elif m.key == 'hotp' %}Mã theo sự kiện
-        {% elif m.key == 'fido2' %}Vân tay/Face
-        {% elif m.key == 'push' %}Từ thiết bị khác
-        {% endif %}
-      </div>
+    <a href="?method=email" class="method-card {% if method == 'email' %}active-email{% endif %}">
+      <div class="method-icon">📧</div>
+      <div class="method-label">Email OTP</div>
+      <div class="method-sub">Nhận qua mail</div>
     </a>
-    {% endfor %}
+    <a href="?method=app" class="method-card {% if method == 'app' %}active-app{% endif %}">
+      <div class="method-icon">📱</div>
+      <div class="method-label">TOTP</div>
+      <div class="method-sub">Google Auth</div>
+    </a>
+    <a href="?method=hotp" class="method-card {% if method == 'hotp' %}active-hotp{% endif %}">
+      <div class="method-icon">🔢</div>
+      <div class="method-label">HOTP</div>
+      <div class="method-sub">Mã sự kiện</div>
+    </a>
+    <a href="?method=fido2" class="method-card {% if method == 'fido2' %}active-fido2{% endif %}">
+      <div class="method-icon">🔑</div>
+      <div class="method-label">Passkey</div>
+      <div class="method-sub">FIDO2/WebAuthn</div>
+    </a>
   </div>
-
-
 
   <!-- Hint -->
   <div class="method-hint">
-    {% if method == 'hotp' %}<i class="fas fa-key"></i> Quét QR bằng Aegis / andOTP → bấm sinh mã → nhập bên dưới
-    {% elif method == 'app' %}<i class="fas fa-mobile-screen-button"></i> Quét QR bằng Google Authenticator → nhập mã xác nhận
-    {% elif method == 'email' %}<i class="fas fa-envelope"></i> Nhập mã OTP gửi qua email
+    {% if method == 'app' %}<i class="fas fa-mobile-screen-button"></i> Quét QR bằng Google Authenticator → nhập mã để kích hoạt
+    {% elif method == 'email' %}<i class="fas fa-envelope"></i> Nhấn gửi OTP → nhập mã 6 số từ email để kích hoạt
+    {% elif method == 'hotp' %}<i class="fas fa-bolt"></i> Quét QR bằng Aegis / andOTP → bấm sinh mã → nhập để kích hoạt
+    {% elif method == 'fido2' %}<i class="fas fa-fingerprint"></i> Dùng vân tay / khuôn mặt / hardware key để đăng ký Passkey
     {% endif %}
   </div>
 
-  <!-- ══ QR CODE (hiện khi setup HOTP hoặc TOTP) ══ -->
-  {% if qr_base64 %}
+  <!-- ══ QR CODE — TOTP hoặc HOTP ══ -->
+  {% if qr_code_base64 %}
   <div style="text-align:center;margin-bottom:20px;">
-    <img src="data:image/png;base64,{{ qr_base64 }}"
+    <img src="data:image/png;base64,{{ qr_code_base64 }}"
          style="width:180px;height:180px;border-radius:12px;border:2px solid rgba(245,158,11,.35);display:inline-block;">
     {% if otp_secret %}
     <div style="margin-top:10px;font-size:11px;color:var(--muted);font-family:var(--mono);">
       Secret: <span style="color:var(--text);letter-spacing:1px;user-select:all;">{{ otp_secret }}</span>
     </div>
     {% endif %}
-    {% if demo_code %}
-    <div style="margin-top:6px;font-size:12px;color:#fcd34d;">
-      Mã demo (counter 0): <strong style="font-family:var(--mono);letter-spacing:2px;">{{ demo_code }}</strong>
-    </div>
-    {% endif %}
   </div>
   {% endif %}
 
-  <!-- ══ OTP INPUT ══ -->
-  {% if method == 'app' or method == 'email' or method == 'hotp' %}
+  <!-- ══ EMAIL / TOTP / HOTP — OTP form ══ -->
+  {% if method == 'email' or method == 'app' or method == 'hotp' %}
 
   {% if method == 'hotp' %}
   <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#fcd34d;display:flex;align-items:center;gap:8px;">
     <i class="fas fa-bolt" style="flex-shrink:0;font-size:14px;"></i>
-    <span>Sau khi quét QR, mở <strong>Aegis / andOTP</strong> → bấm sinh mã HOTP → nhập mã 6 số bên dưới để xác nhận kích hoạt.</span>
+    <span>Sau khi quét QR, mở <strong>Aegis / andOTP</strong> → bấm sinh mã HOTP → nhập mã 6 số bên dưới.</span>
   </div>
   {% endif %}
 
   <form method="POST" id="otp-form">
     {% csrf_token %}
-    {% if setup_token %}
-    <input type="hidden" name="setup_token" value="{{ setup_token }}">
-    {% endif %}
+    <input type="hidden" name="{% if method == 'email' %}verify_email_otp{% elif method == 'app' %}verify_app_otp{% else %}verify_hotp_otp{% endif %}" value="1">
     <div class="otp-row">
-      {% for i in '123456' %}
       <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      {% endfor %}
+      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
     </div>
     <input type="hidden" name="otp_code" id="hidden-otp" required>
-    <button type="submit" class="btn {% if method == 'hotp' %}btn-amber{% elif method == 'app' %}btn-primary{% else %}btn-green{% endif %}" id="confirm-btn" disabled>
+    <button type="submit" class="btn {% if method == 'hotp' %}btn-amber{% elif method == 'app' %}btn-indigo{% else %}btn-green{% endif %}" id="confirm-btn" disabled>
       <i class="fas fa-check-circle"></i>
       {% if method == 'hotp' %}Xác nhận kích hoạt HOTP
       {% elif method == 'app' %}Xác nhận kích hoạt TOTP
-      {% else %}Xác nhận{% endif %}
+      {% else %}Xác nhận kích hoạt Email OTP{% endif %}
     </button>
   </form>
 
   {% if method == 'email' %}
   <div class="divider"></div>
-  <button onclick="sendEmailOTP()" id="send-btn" class="btn btn-green">
-    <i class="fas fa-paper-plane"></i>
-    <span id="send-text">Gửi mã OTP về Email</span>
-  </button>
+  <!-- Form gửi OTP email — POST riêng với flag send_email_otp -->
+  <form method="POST" id="send-form">
+    {% csrf_token %}
+    <input type="hidden" name="send_email_otp" value="1">
+    <button type="submit" class="btn btn-green" id="send-btn">
+      <i class="fas fa-paper-plane"></i>
+      <span id="send-text">Gửi mã OTP về Email</span>
+    </button>
+  </form>
   <div class="resend-row">
     <button id="resend-btn" onclick="resendOTP()" class="resend-btn" disabled>
       <i class="fas fa-rotate-right"></i>
       <span id="resend-text">Gửi lại mã</span>
     </button>
     <div class="countdown-row" id="countdown-container">
-      Gửi lại sau: <span class="ct" id="timer">300</span>s
+      Gửi lại sau: <span class="ct" id="timer">180</span>s
     </div>
   </div>
   {% endif %}
   {% endif %}
 
-  <!-- ══ FIDO2 ══ -->
+  <!-- ══ FIDO2 — WebAuthn API native (không dùng thư viện ngoài) ══ -->
   {% if method == 'fido2' %}
-  <button id="btn-fido2" onclick="startFIDO2Login()" class="btn btn-purple">
-    <i class="fas fa-fingerprint"></i> Xác thực bằng Passkey
+  <button id="btn-fido2-reg" onclick="startPasskeyRegistration()" class="btn btn-purple">
+    <i class="fas fa-fingerprint"></i> Đăng ký Passkey mới
   </button>
-  <div id="fido2-status" class="fido2-status"></div>
-  {% endif %}
+  <div id="fido2-status" class="fido2-status info"></div>
 
-  <!-- ══ PUSH ══ -->
-  {% if method == 'push' %}
-  <div id="push-idle">
-    <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">
-      Gửi thông báo đến thiết bị đang đăng nhập để xác nhận.
-    </p>
-
-    {% if other_devices_list %}
-    <div class="device-list">
-      {% for d in other_devices_list %}
-      <div class="device-item">
-        <div class="device-dot"></div>
-        <div>
-          <div style="color:var(--text);font-weight:600;">{{ d.name|default:"Thiết bị không xác định" }}</div>
-          <div>{{ d.ip_address }} · {{ d.last_seen|timesince }} trước</div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    <button onclick="sendPushRequest()" id="btn-push" class="btn btn-amber">
-      <i class="fas fa-paper-plane"></i> Gửi yêu cầu xác nhận
-    </button>
-  </div>
-
-  <!-- Trạng thái đang chờ -->
-  <div id="push-waiting" style="display:none;">
-    <div class="push-box">
-      <div class="push-spinner"></div>
-      <div style="font-size:14px;font-weight:700;color:var(--amber);">Đang chờ xác nhận...</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px;">
-        Mở thiết bị đang online và bấm <strong style="color:var(--text);">Cho phép</strong>
-      </div>
-      <div id="push-status-text" class="push-status-text">Đang kiểm tra...</div>
-    </div>
-    <button onclick="cancelPush()" class="btn btn-ghost" style="margin-top:12px;">
-      <i class="fas fa-xmark"></i> Hủy
-    </button>
-  </div>
-
-  <!-- Form ẩn -->
-  <form id="push-form" method="POST" style="display:none">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="send_push_request">
-  </form>
+  <div class="divider"></div>
+  <a href="{% url 'manage_passkeys' %}" class="btn btn-ghost">
+    <i class="fas fa-list"></i> Xem các Passkey đã đăng ký
+  </a>
   {% endif %}
 
 </div>
 
 <script>
-// ══ OTP BOXES ══════════════════════════════════════════
+// ══ OTP BOXES ══════════════════════════════════════════════════════════════
 const boxes      = document.querySelectorAll('.otp-box');
 const hidden     = document.getElementById('hidden-otp');
 const confirmBtn = document.getElementById('confirm-btn');
@@ -345,187 +281,192 @@ boxes.forEach((box, idx) => {
   box.addEventListener('input', () => {
     box.value = box.value.replace(/\D/g,'').slice(-1);
     box.classList.toggle('filled', !!box.value);
-    let otp=''; boxes.forEach(b => otp += b.value);
-    if(hidden) hidden.value = otp;
-    if(confirmBtn) confirmBtn.disabled = otp.length < 6;
-    if (box.value && idx < 5) boxes[idx+1].focus();
+    let otp = ''; boxes.forEach(b => otp += b.value);
+    if (hidden) hidden.value = otp;
+    if (confirmBtn) confirmBtn.disabled = otp.length < 6;
+    if (box.value && idx < 5) boxes[idx + 1].focus();
   });
   box.addEventListener('keydown', e => {
-    if (e.key==='Backspace' && !box.value && idx>0) {
-      boxes[idx-1].value=''; boxes[idx-1].classList.remove('filled'); boxes[idx-1].focus();
+    if (e.key === 'Backspace' && !box.value && idx > 0) {
+      boxes[idx - 1].value = ''; boxes[idx - 1].classList.remove('filled'); boxes[idx - 1].focus();
     }
   });
   box.addEventListener('paste', e => {
     e.preventDefault();
-    const p = (e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'');
-    [...p.slice(0,6)].forEach((ch,i)=>{
-      if(boxes[i]){boxes[i].value=ch;boxes[i].classList.add('filled');}
+    const p = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+    [...p.slice(0, 6)].forEach((ch, i) => {
+      if (boxes[i]) { boxes[i].value = ch; boxes[i].classList.add('filled'); }
     });
-    let otp=''; boxes.forEach(b=>otp+=b.value);
-    if(hidden) hidden.value=otp;
-    if(confirmBtn) confirmBtn.disabled=otp.length<6;
-    boxes[Math.min(p.length,5)].focus();
+    let otp = ''; boxes.forEach(b => otp += b.value);
+    if (hidden) hidden.value = otp;
+    if (confirmBtn) confirmBtn.disabled = otp.length < 6;
+    boxes[Math.min(p.length, 5)].focus();
   });
 });
-if(boxes.length) boxes[0].focus();
+if (boxes.length) boxes[0].focus();
 
-// ══ EMAIL OTP ══════════════════════════════════════════
-function sendEmailOTP(){
-  const btn=document.getElementById('send-btn');
-  const txt=document.getElementById('send-text');
-  if(btn) btn.disabled=true;
-  if(txt) txt.innerHTML='<i class="fas fa-spinner fa-spin"></i> Đang gửi...';
-  submitAction('send_email_code');
-}
-function resendOTP(){
-  const btn=document.getElementById('resend-btn');
-  if(btn) btn.disabled=true;
-  submitAction('send_email_code');
-}
-function submitAction(action){
-  const f=document.createElement('form');
-  f.method='POST';f.style.display='none';
-  const csrf=document.createElement('input');
-  csrf.type='hidden';csrf.name='csrfmiddlewaretoken';csrf.value='{{ csrf_token }}';
-  f.appendChild(csrf);
-  const act=document.createElement('input');
-  act.type='hidden';act.name='action';act.value=action;
-  f.appendChild(act);
-  document.body.appendChild(f);f.submit();
+// ══ EMAIL RESEND COUNTDOWN ════════════════════════════════════════════════
+function resendOTP() {
+  const btn = document.getElementById('resend-btn');
+  if (btn) btn.disabled = true;
+  document.getElementById('send-form').submit();
 }
 
-// ══ COUNTDOWN ══════════════════════════════════════════
-let timeLeft=300, tick=null;
-function startCountdown(){
-  const cd=document.getElementById('countdown-container');
-  const tel=document.getElementById('timer');
-  const rbtn=document.getElementById('resend-btn');
-  const rtxt=document.getElementById('resend-text');
-  if(!cd) return;
-  cd.style.display='block';
-  if(rbtn) rbtn.disabled=true;
-  if(rtxt) rtxt.textContent='Đang chờ...';
-  timeLeft=300;
-  if(tick) clearInterval(tick);
-  tick=setInterval(()=>{
+function startCountdown() {
+  const cd   = document.getElementById('countdown-container');
+  const tel  = document.getElementById('timer');
+  const rbtn = document.getElementById('resend-btn');
+  const rtxt = document.getElementById('resend-text');
+  if (!cd) return;
+  cd.style.display = 'block';
+  let timeLeft = 180;
+  const tick = setInterval(() => {
     timeLeft--;
-    if(tel) tel.textContent=timeLeft;
-    if(timeLeft<=60&&tel) tel.style.color='var(--red)';
-    if(timeLeft<=0){
+    if (tel) tel.textContent = timeLeft;
+    if (timeLeft <= 30 && tel) tel.style.color = 'var(--red)';
+    if (timeLeft <= 0) {
       clearInterval(tick);
-      if(cd) cd.style.display='none';
-      if(rbtn) rbtn.disabled=false;
-      if(rtxt) rtxt.textContent='Gửi lại mã';
+      cd.style.display = 'none';
+      if (rbtn) rbtn.disabled = false;
+      if (rtxt) rtxt.textContent = 'Gửi lại mã';
     }
-  },1000);
+  }, 1000);
 }
 
-// ══ FIDO2 ══════════════════════════════════════════════
-async function startFIDO2Login(){
-  const {startAuthentication} = SimpleWebAuthnBrowser;
+// ══ FIDO2 / PASSKEY REGISTRATION — WebAuthn Credentials API native ════════
+// KHÔNG dùng @simplewebauthn/browser — tự implement theo W3C WebAuthn spec.
+// Tham chiếu: https://www.w3.org/TR/webauthn-2/
+
+/**
+ * base64url → ArrayBuffer
+ * Chuẩn hoá padding, thay ký tự url-safe → standard base64, rồi decode.
+ */
+function b64urlToBuffer(b64url) {
+  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
+  const binary = atob(padded);
+  const buf = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+  return buf.buffer;
+}
+
+/**
+ * ArrayBuffer / Uint8Array → base64url (không có padding)
+ * Tương đương websafe_encode() bên Python.
+ */
+function bufferToB64url(buffer) {
+  const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
+  let binary = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+/**
+ * Chuẩn hoá PublicKeyCredentialCreationOptions từ server:
+ *   - challenge: string → ArrayBuffer
+ *   - user.id:   string → ArrayBuffer
+ *   - excludeCredentials[].id: string → ArrayBuffer (nếu có)
+ */
+function prepareCreationOptions(opts) {
+  return {
+    ...opts,
+    challenge: b64urlToBuffer(opts.challenge),
+    user: {
+      ...opts.user,
+      id: b64urlToBuffer(opts.user.id),
+    },
+    excludeCredentials: (opts.excludeCredentials || []).map(c => ({
+      ...c,
+      id: b64urlToBuffer(c.id),
+    })),
+  };
+}
+
+/**
+ * Chuyển PublicKeyCredential response thành JSON để gửi lên server.
+ * Tất cả ArrayBuffer/TypedArray → base64url string.
+ */
+function credentialToJSON(credential) {
+  return {
+    id:   credential.id,
+    type: credential.type,
+    rawId: bufferToB64url(credential.rawId),
+    response: {
+      clientDataJSON:    bufferToB64url(credential.response.clientDataJSON),
+      attestationObject: bufferToB64url(credential.response.attestationObject),
+    },
+  };
+}
+
+async function startPasskeyRegistration() {
+  const btn    = document.getElementById('btn-fido2-reg');
   const status = document.getElementById('fido2-status');
-  const btn    = document.getElementById('btn-fido2');
+
+  // Kiểm tra browser hỗ trợ WebAuthn
+  if (!window.PublicKeyCredential) {
+    _setStatus(status, 'Trình duyệt này không hỗ trợ WebAuthn / Passkey.', 'err');
+    return;
+  }
+
   try {
-    if(btn) btn.disabled=true;
-    status.style.color='var(--text)';
-    status.innerText='Đang khởi tạo...';
+    btn.disabled = true;
+    _setStatus(status, 'Đang khởi tạo...', 'info');
 
-    const resp = await fetch('{% url "fido2_auth_begin" %}');
-    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const options = await resp.json();
-    if(options.status==='error') throw new Error(options.message);
+    // Bước 1: Lấy options từ server
+    const resp = await fetch('{% url "fido2_reg_begin" %}');
+    if (!resp.ok) throw new Error(`Server trả HTTP ${resp.status}`);
+    const opts = await resp.json();
+    if (opts.status === 'error') throw new Error(opts.message);
 
-    status.innerText='Vui lòng xác nhận trên thiết bị...';
-    const result = await startAuthentication({optionsJSON: options});
+    // Bước 2: Chuẩn bị options — chuyển string → ArrayBuffer
+    const creationOptions = prepareCreationOptions(opts);
 
-    status.innerText='Đang xác thực...';
-    const vResp = await fetch('{% url "fido2_auth_complete" %}',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
-      body:JSON.stringify(result)
+    _setStatus(status, 'Vui lòng xác nhận trên thiết bị (vân tay / khuôn mặt / PIN)...', 'info');
+
+    // Bước 3: Gọi WebAuthn Credentials API native
+    const credential = await navigator.credentials.create({ publicKey: creationOptions });
+
+    _setStatus(status, 'Đang gửi xác nhận lên server...', 'info');
+
+    // Bước 4: Chuyển response → JSON, gửi lên server
+    const payload = credentialToJSON(credential);
+    const vResp = await fetch('{% url "fido2_reg_complete" %}', {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken':  '{{ csrf_token }}',
+      },
+      body: JSON.stringify(payload),
     });
-    const r = await vResp.json();
-    if(r.status==='success'){
-      status.style.color='var(--green)';
-      status.innerText='✅ Xác thực thành công! Đang chuyển hướng...';
-      setTimeout(()=>{ window.location.href=r.redirect||'/dashboard/'; },1000);
+    const result = await vResp.json();
+
+    if (result.status === 'success') {
+      _setStatus(status, '✅ Đăng ký Passkey thành công! Đang chuyển hướng...', 'ok');
+      setTimeout(() => { window.location.href = '{% url "dashboard" %}'; }, 1200);
     } else {
-      throw new Error(r.message);
+      throw new Error(result.message || 'Đăng ký thất bại');
     }
-  } catch(err){
-    status.style.color='var(--red)';
-    status.innerText = err.name==='NotAllowedError' ? 'Bạn đã hủy xác thực.' : 'Lỗi: '+err.message;
-    if(btn) btn.disabled=false;
+
+  } catch (err) {
+    const msg = err.name === 'NotAllowedError'
+      ? 'Bạn đã hủy hoặc hết thời gian chờ.'
+      : (err.name === 'InvalidStateError'
+        ? 'Passkey này đã được đăng ký trước đó.'
+        : 'Lỗi: ' + err.message);
+    _setStatus(status, msg, 'err');
+    btn.disabled = false;
   }
 }
 
-// ══ PUSH AUTH ══════════════════════════════════════════
-let pushInterval=null;
-
-function sendPushRequest(){
-  document.getElementById('push-idle').style.display='none';
-  document.getElementById('push-waiting').style.display='block';
-  // Submit form
-  document.getElementById('push-form').submit();
+function _setStatus(el, msg, type) {
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'fido2-status ' + (type || 'info');
 }
 
-function cancelPush(){
-  if(pushInterval) clearInterval(pushInterval);
-  document.getElementById('push-waiting').style.display='none';
-  document.getElementById('push-idle').style.display='block';
-}
-
-function startPushPolling(){
-  const statusEl = document.getElementById('push-status-text');
-  if(!statusEl) return;
-
-  let attempts = 0;
-  pushInterval = setInterval(async()=>{
-    attempts++;
-    try {
-      const resp = await fetch('{% url "check_auth_status" %}');
-      const data = await resp.json();
-
-      if(data.status==='approved'){
-        clearInterval(pushInterval);
-        statusEl.className='push-status-text push-approved';
-        statusEl.innerText='✅ Đã được xác nhận! Đang đăng nhập...';
-        setTimeout(()=>{ window.location.href='/dashboard/'; },1000);
-      } else if(data.status==='denied'){
-        clearInterval(pushInterval);
-        statusEl.className='push-status-text push-denied';
-        statusEl.innerText='❌ Yêu cầu bị từ chối.';
-        setTimeout(cancelPush, 2000);
-      } else {
-        // Pending
-        const dots = '.'.repeat(attempts%4);
-        statusEl.innerText='Đang chờ xác nhận' + dots;
-      }
-
-      // Timeout sau 2 phút
-      if(attempts >= 40){
-        clearInterval(pushInterval);
-        statusEl.className='push-status-text push-denied';
-        statusEl.innerText='⏱ Hết thời gian chờ.';
-        setTimeout(cancelPush, 2000);
-      }
-    } catch(e){
-      console.error('[Push]',e);
-    }
-  }, 3000);
-}
-
-// ══ INIT ═══════════════════════════════════════════════
-window.onload = function(){
-  {% if method == 'email' %} startCountdown(); {% endif %}
-
-  {% if method == 'push' %}
-    {% if push_request_sent %}
-      document.getElementById('push-idle').style.display='none';
-      document.getElementById('push-waiting').style.display='block';
-      startPushPolling();
-    {% endif %}
-  {% endif %}
+// ══ INIT ═══════════════════════════════════════════════════════════════════
+window.onload = function () {
+  {% if method == 'email' and otp_sent %} startCountdown(); {% endif %}
 };
 </script>
 </body>
