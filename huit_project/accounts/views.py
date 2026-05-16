@@ -715,6 +715,13 @@ def setup_2fa(request):
         'method':         method,
         'user_email':     request.user.email or 'Chưa có email',
         'qr_code_base64': None,
+        # otp_sent: True nếu đã có EmailOTP setup_2fa còn hiệu lực → hiện form nhập OTP (email)
+        'otp_sent': EmailOTP.objects.filter(
+            user=request.user, action='setup_2fa', is_used=False, is_active=True,
+            created_at__gt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
+        ).exists() if method == 'email' else False,
+        # FIX-4: hotp_ready = True khi user đang ở bước setup HOTP (đã có QR) → hiện form nhập mã
+        'hotp_ready': bool(request.session.get('temp_hotp_secret')) if method == 'hotp' else False,
     }
 
     if request.method == 'POST':
@@ -1935,47 +1942,46 @@ def export_dtb(request):
 
 @login_required
 @require_POST
+@login_required   # FIX-1: phải đăng nhập mới gọi được
+@require_POST     # FIX-1: tránh sinh mã qua GET/link (counter tăng vô ích)
 def generate_hotp_code(request):
     """
     ════════════════════════════════════════════════════════
     HOTP — Sinh mã theo sự kiện (RFC 4226)
     ════════════════════════════════════════════════════════
     Flow:
-      1. User bấm nút "Tạo mã HOTP" trên dashboard.
-      2. Server lấy hotp_counter hiện tại của user.
-      3. Tính mã = compute_hotp(secret, counter) — tự implement, không thư viện.
-      4. Tăng counter lên 1 và lưu DB.
-      5. Trả JSON {code, counter_used} về frontend.
-      6. Frontend hiển thị mã trong 60 giây, sau đó ẩn đi.
+      1. User bấm nút "Tạo mã HOTP" → POST request.
+      2. Server lấy hotp_counter hiện tại, tính mã = compute_hotp(secret, counter).
+      3. KHÔNG tăng counter ở đây — counter chỉ tăng sau khi verify_2fa xác nhận
+         mã đúng (trong verify_hotp). Tránh desync counter/mã.
+      4. Trả JSON {status, code, counter_used} về frontend để hiển thị.
 
     Bảo mật:
-      - @require_POST: tránh sinh mã bằng GET/link.
-      - @login_required: chỉ user đang đăng nhập mới gọi được.
-      - Mã không lưu server-side — chỉ tính theo counter.
-      - CSRF được Django tự enforce qua middleware.
+      - @require_POST + @login_required: bảo vệ endpoint.
+      - Counter chỉ tăng sau xác thực thành công → không bị lệch khi user
+        bấm "Sinh mã" nhiều lần mà không xác thực.
     """
     profile = request.user.profile
 
     if not profile.has_hotp:
-        return JsonResponse({'error': 'HOTP chưa được kích hoạt.'}, status=400)
+        return JsonResponse({'status': 'error', 'message': 'HOTP chưa được kích hoạt.'}, status=400)
 
-    raw_secret = profile.decrypt_secret()
+    # FIX-3: dùng hotp_secret riêng nếu có, fallback về otp_secret
+    raw_secret = profile.decrypt_hotp_secret() if hasattr(profile, 'decrypt_hotp_secret') else profile.decrypt_secret()
     if not raw_secret:
-        return JsonResponse({'error': 'Không tìm thấy secret. Vui lòng thiết lập lại HOTP.'}, status=400)
+        return JsonResponse({'status': 'error', 'message': 'Không tìm thấy secret. Vui lòng thiết lập lại HOTP.'}, status=400)
 
     counter_used = profile.hotp_counter
     code = compute_hotp(raw_secret, counter_used)
 
-    # Tăng counter ngay — mã chỉ dùng được 1 lần
-    profile.hotp_counter += 1
-    profile.save(update_fields=['hotp_counter'])
-
-    logger.info('HOTP_GEN: user=%s counter=%d', request.user.username, counter_used)
+    # FIX-2: KHÔNG tăng counter ở đây.
+    # Counter sẽ được tăng trong verify_2fa sau khi verify_hotp() xác nhận đúng.
+    logger.info('HOTP_GEN: user=%s counter=%d (chưa tăng)', request.user.username, counter_used)
 
     return JsonResponse({
+        'status':       'ok',
         'code':         code,
         'counter_used': counter_used,
-        'next_counter': profile.hotp_counter,
     })
 
 
@@ -2008,9 +2014,17 @@ def setup_hotp(request):
         ok, new_counter = verify_hotp(temp_secret, 0, code, look_ahead=3)
 
         if ok:
-            profile.otp_secret   = temp_secret   # save() sẽ tự encrypt
+            # FIX-3: lưu vào hotp_secret riêng — không ghi đè otp_secret của TOTP
+            # Nếu model chưa có field hotp_secret, fallback lưu vào otp_secret nhưng chỉ khi TOTP chưa bật
+            if hasattr(profile, 'hotp_secret'):
+                profile.hotp_secret  = temp_secret   # field riêng cho HOTP
+            elif not profile.has_app_otp:
+                profile.otp_secret   = temp_secret   # fallback: chỉ ghi khi TOTP chưa dùng
+            else:
+                messages.error(request, '⚠️ Bạn đang dùng TOTP. Cần thêm field hotp_secret vào model để dùng cả hai cùng lúc.')
+                return redirect('setup_hotp')
             profile.has_hotp     = True
-            profile.hotp_counter = new_counter    # counter sau khi verify (thường là 1)
+            profile.hotp_counter = new_counter
             profile.save()
 
             request.session.pop('temp_hotp_secret', None)
