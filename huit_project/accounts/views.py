@@ -1,7 +1,7 @@
-
 import jwt
 import time
 import hashlib
+import hmac
 import logging
 import io
 import base64
@@ -691,6 +691,13 @@ def setup_2fa(request):
         ).exists() if method == 'email' else False,
         # FIX-4: hotp_ready = True khi user đang ở bước setup HOTP (đã có QR) → hiện form nhập mã
         'hotp_ready': bool(request.session.get('temp_hotp_secret')) if method == 'hotp' else False,
+        # [BUG-SETUP-TABS] Ẩn tab phương thức đã kích hoạt
+        'already_enabled': {
+            'email': profile.has_email_otp,
+            'app':   profile.has_app_otp,
+            'hotp':  profile.has_hotp,
+            'fido2': profile.has_fido2,
+        },
     }
 
     if request.method == 'POST':
@@ -751,15 +758,71 @@ def setup_2fa(request):
                 else:
                     messages.error(request, 'Mã OTP không đúng!')
 
+        elif method == 'hotp':
+            if 'verify_hotp_otp' in request.POST:
+                code          = request.POST.get('otp_code', '').strip()
+                temp_secret   = request.session.get('temp_hotp_secret')
+                post_token    = request.POST.get('setup_token', '')
+                session_token = request.session.get('temp_hotp_token', '')
+
+                # Xác minh setup_token — ngăn race condition
+                if not session_token or not hmac.compare_digest(post_token, session_token):
+                    request.session.pop('temp_hotp_secret', None)
+                    request.session.pop('temp_hotp_token', None)
+                    request.session.modified = True
+                    messages.error(request, 'Phiên thiết lập không hợp lệ. Vui lòng thử lại.')
+                    return redirect('/setup-2fa/?method=hotp')
+
+                if not temp_secret:
+                    messages.error(request, 'Phiên thiết lập đã hết hạn. Vui lòng thử lại.')
+                    return redirect('/setup-2fa/?method=hotp')
+
+                ok, new_counter = verify_hotp(temp_secret, 0, code, look_ahead=5)
+                if ok:
+                    profile.hotp_secret  = temp_secret
+                    profile.has_hotp     = True
+                    profile.hotp_counter = new_counter
+                    profile.save()
+                    request.session.pop('temp_hotp_secret', None)
+                    request.session.pop('temp_hotp_token', None)
+                    request.session.modified = True
+                    ActivityLog.objects.create(
+                        user=request.user, username_attempt=request.user.username,
+                        action='2fa_enable', ip_address=get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+                    )
+                    messages.success(request, '✅ Đã kích hoạt HOTP thành công!')
+                    return redirect('dashboard')
+                else:
+                    request.session.pop('temp_hotp_secret', None)
+                    request.session.pop('temp_hotp_token', None)
+                    request.session.modified = True
+                    messages.error(request, '❌ Mã HOTP không đúng. Vui lòng quét lại QR mới.')
+                    return redirect('/setup-2fa/?method=hotp')
+
     if method == 'app':
         new_secret = request.session.get('temp_otp_secret')
         if not new_secret:
-            new_secret = generate_totp_secret()               # [BUG-A] thay pyotp.random_base32()
+            new_secret = generate_totp_secret()
             request.session['temp_otp_secret']    = new_secret
-            request.session['temp_otp_secret_at'] = time.time()  # [BUG-C] TTL
-            request.session.modified = True   # [SEC] đảm bảo lưu session, tránh sinh secret mới mỗi F5
+            request.session['temp_otp_secret_at'] = time.time()
+            request.session.modified = True
         context['qr_code_base64'] = generate_qr_base64(request.user.username, new_secret)
         context['otp_secret']     = new_secret
+
+    elif method == 'hotp':
+        temp_secret = request.session.get('temp_hotp_secret')
+        if not temp_secret:
+            temp_secret = generate_totp_secret()
+            setup_token = secrets.token_urlsafe(32)
+            request.session['temp_hotp_secret'] = temp_secret
+            request.session['temp_hotp_token']  = setup_token
+            request.session.modified = True
+        else:
+            setup_token = request.session.get('temp_hotp_token', '')
+        context['qr_code_base64'] = generate_qr_base64(request.user.username, temp_secret, otp_type='hotp')
+        context['otp_secret']     = temp_secret
+        context['setup_token']    = setup_token
 
     return render(request, 'accounts/setup_2fa.html', context)
 
@@ -1999,87 +2062,6 @@ def generate_hotp_code(request):
         'counter_used': counter_used,
     })
 
-
-@login_required
-def setup_hotp(request):
-    """
-    ════════════════════════════════════════════════════════
-    Setup HOTP — Thiết lập xác thực HOTP cho user
-    ════════════════════════════════════════════════════════
-    Flow:
-      GET : Sinh secret mới (lưu tạm session), hiển thị QR + secret.
-      POST: User nhập mã HOTP từ counter=0 để xác nhận.
-            Nếu đúng → lưu secret vào profile, bật has_hotp, reset counter=1.
-
-    Secret dùng chung với TOTP (cùng field otp_secret) nếu user đã bật TOTP.
-    Nếu chưa có secret nào → sinh mới bằng generate_totp_secret().
-    """
-    profile, _ = UserProfile.objects.get_or_create(user=request.user)
-
-    if request.method == 'POST':
-        code          = request.POST.get('otp_code', '').strip()
-        temp_secret   = request.session.get('temp_hotp_secret')
-        post_token    = request.POST.get('setup_token', '')
-        session_token = request.session.get('temp_hotp_token', '')
-
-        # [SEC-RACE-1] Xác minh setup_token 1 lần dùng — ngăn hacker submit trước user
-        if not session_token or not hmac.compare_digest(post_token, session_token):
-            messages.error(request, 'Phiên thiết lập không hợp lệ. Vui lòng bắt đầu lại.')
-            request.session.pop('temp_hotp_secret', None)
-            request.session.pop('temp_hotp_token', None)
-            request.session.modified = True
-            return redirect('setup_hotp')
-
-        if not temp_secret:
-            messages.error(request, 'Phiên thiết lập đã hết hạn. Vui lòng thử lại.')
-            return redirect('setup_hotp')
-
-        ok, new_counter = verify_hotp(temp_secret, 0, code, look_ahead=3)
-
-        if ok:
-            profile.otp_secret   = temp_secret   # save() sẽ tự encrypt
-            profile.has_hotp     = True
-            profile.hotp_counter = new_counter
-            profile.save()
-            request.session.pop('temp_hotp_secret', None)
-            request.session.modified = True
-
-            ActivityLog.objects.create(
-                user=request.user, username_attempt=request.user.username,
-                action='2fa_enable', ip_address=get_client_ip(request),
-                user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-            )
-            messages.success(request, '✅ Đã kích hoạt HOTP thành công!')
-            return redirect('dashboard')
-        else:
-            # [SEC-RACE-3] Mã sai → sinh secret mới ngay → vô hiệu bản copy của hacker
-            request.session.pop('temp_hotp_secret', None)
-            request.session.pop('temp_hotp_token', None)
-            request.session.modified = True
-            messages.error(request, '❌ Mã HOTP không đúng. Secret đã được làm mới — vui lòng quét lại QR.')
-
-    # GET — giữ nguyên secret nếu đã có (F5 không sinh mới)
-    temp_secret = request.session.get('temp_hotp_secret')
-    if not temp_secret:
-        temp_secret = generate_totp_secret()                   # [BUG-A] thay pyotp.random_base32()
-        setup_token = secrets.token_urlsafe(32)
-        request.session['temp_hotp_secret'] = temp_secret
-        request.session['temp_hotp_token']  = setup_token
-        request.session.modified = True
-    else:
-        setup_token = request.session.get('temp_hotp_token', '')
-
-    demo_code = compute_hotp(temp_secret, 0)
-    qr_base64 = generate_qr_base64(request.user.username, temp_secret, otp_type='hotp')
-
-    return render(request, 'accounts/setup_2fa.html', {
-        'method':      'hotp',
-        'profile':     profile,
-        'otp_secret':  temp_secret,
-        'qr_base64':   qr_base64,
-        'demo_code':   demo_code,
-        'setup_token': setup_token,
-    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

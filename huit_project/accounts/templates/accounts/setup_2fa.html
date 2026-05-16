@@ -144,8 +144,25 @@ body::before{
 <div class="card">
   <div class="header">
     <div class="shield-icon">🛡️</div>
-    <h1>Thiết lập 2FA</h1>
-    <p>Chọn phương thức bảo mật phù hợp với bạn</p>
+    {% if method in 'email,app,hotp,fido2' and method %}
+      <h1>
+        {% if method == 'email' %}📧 Email OTP
+        {% elif method == 'app' %}📱 TOTP
+        {% elif method == 'hotp' %}🔢 HOTP
+        {% elif method == 'fido2' %}🔑 Passkey
+        {% endif %}
+      </h1>
+      <p>
+        {% if method == 'app' %}Quét QR bằng Google Authenticator → nhập mã để kích hoạt
+        {% elif method == 'email' %}Nhấn gửi OTP → nhập mã 6 số từ email để kích hoạt
+        {% elif method == 'hotp' %}Quét QR bằng Aegis / andOTP → bấm sinh mã → nhập để kích hoạt
+        {% elif method == 'fido2' %}Dùng vân tay / khuôn mặt / hardware key để đăng ký Passkey
+        {% endif %}
+      </p>
+    {% else %}
+      <h1>Thiết lập 2FA</h1>
+      <p>Chọn phương thức bảo mật phù hợp với bạn</p>
+    {% endif %}
   </div>
 
   {% if messages %}
@@ -157,40 +174,43 @@ body::before{
     {% endfor %}
   {% endif %}
 
-  <!-- Method tabs — chỉ hiện các phương thức chưa kích hoạt -->
+  {# ══ PICKER — chỉ hiện khi chưa chọn method (hoặc method không hợp lệ) ══ #}
+  {% if not method or method not in 'email,app,hotp,fido2' %}
   <div class="method-grid">
-    <a href="?method=email" class="method-card {% if method == 'email' %}active-email{% endif %}">
+    {% if not already_enabled.email %}
+    <a href="?method=email" class="method-card">
       <div class="method-icon">📧</div>
       <div class="method-label">Email OTP</div>
       <div class="method-sub">Nhận qua mail</div>
     </a>
-    <a href="?method=app" class="method-card {% if method == 'app' %}active-app{% endif %}">
+    {% endif %}
+    {% if not already_enabled.app %}
+    <a href="?method=app" class="method-card">
       <div class="method-icon">📱</div>
       <div class="method-label">TOTP</div>
       <div class="method-sub">Google Auth</div>
     </a>
-    <a href="?method=hotp" class="method-card {% if method == 'hotp' %}active-hotp{% endif %}">
+    {% endif %}
+    {% if not already_enabled.hotp %}
+    <a href="?method=hotp" class="method-card">
       <div class="method-icon">🔢</div>
       <div class="method-label">HOTP</div>
       <div class="method-sub">Mã sự kiện</div>
     </a>
-    <a href="?method=fido2" class="method-card {% if method == 'fido2' %}active-fido2{% endif %}">
+    {% endif %}
+    {% if not already_enabled.fido2 %}
+    <a href="?method=fido2" class="method-card">
       <div class="method-icon">🔑</div>
       <div class="method-label">Passkey</div>
       <div class="method-sub">FIDO2/WebAuthn</div>
     </a>
-  </div>
-
-  <!-- Hint -->
-  <div class="method-hint">
-    {% if method == 'app' %}<i class="fas fa-mobile-screen-button"></i> Quét QR bằng Google Authenticator → nhập mã để kích hoạt
-    {% elif method == 'email' %}<i class="fas fa-envelope"></i> Nhấn gửi OTP → nhập mã 6 số từ email để kích hoạt
-    {% elif method == 'hotp' %}<i class="fas fa-bolt"></i> Quét QR bằng Aegis / andOTP → bấm sinh mã → nhập để kích hoạt
-    {% elif method == 'fido2' %}<i class="fas fa-fingerprint"></i> Dùng vân tay / khuôn mặt / hardware key để đăng ký Passkey
     {% endif %}
   </div>
 
-  <!-- ══ QR CODE — TOTP hoặc HOTP ══ -->
+  {% else %}
+  {# ══ METHOD DETAIL — chỉ hiện method được chọn ══ #}
+
+  <!-- QR CODE — TOTP hoặc HOTP -->
   {% if qr_code_base64 %}
   <div style="text-align:center;margin-bottom:20px;">
     <img src="data:image/png;base64,{{ qr_code_base64 }}"
@@ -203,7 +223,7 @@ body::before{
   </div>
   {% endif %}
 
-  <!-- ══ EMAIL / TOTP / HOTP — OTP form ══ -->
+  <!-- EMAIL / TOTP / HOTP — OTP form -->
   {% if method == 'email' or method == 'app' or method == 'hotp' %}
 
   {% if method == 'hotp' %}
@@ -216,6 +236,7 @@ body::before{
   <form method="POST" id="otp-form">
     {% csrf_token %}
     <input type="hidden" name="{% if method == 'email' %}verify_email_otp{% elif method == 'app' %}verify_app_otp{% else %}verify_hotp_otp{% endif %}" value="1">
+    {% if setup_token %}<input type="hidden" name="setup_token" value="{{ setup_token }}">{% endif %}
     <div class="otp-row">
       <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
       <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
@@ -235,7 +256,6 @@ body::before{
 
   {% if method == 'email' %}
   <div class="divider"></div>
-  <!-- Form gửi OTP email — POST riêng với flag send_email_otp -->
   <form method="POST" id="send-form">
     {% csrf_token %}
     <input type="hidden" name="send_email_otp" value="1">
@@ -256,7 +276,7 @@ body::before{
   {% endif %}
   {% endif %}
 
-  <!-- ══ FIDO2 — WebAuthn API native (không dùng thư viện ngoài) ══ -->
+  <!-- FIDO2 — WebAuthn API native -->
   {% if method == 'fido2' %}
   <button id="btn-fido2-reg" onclick="startPasskeyRegistration()" class="btn btn-purple">
     <i class="fas fa-fingerprint"></i> Đăng ký Passkey mới
@@ -268,6 +288,14 @@ body::before{
     <i class="fas fa-list"></i> Xem các Passkey đã đăng ký
   </a>
   {% endif %}
+
+  <!-- Nút quay lại picker -->
+  <div class="divider"></div>
+  <a href="{% url 'setup_2fa' %}" class="btn btn-ghost">
+    <i class="fas fa-arrow-left"></i> Chọn phương thức khác
+  </a>
+
+  {% endif %}{# end method detail #}
 
 </div>
 
