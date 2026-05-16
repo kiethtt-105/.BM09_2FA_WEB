@@ -39,7 +39,7 @@ urlpatterns = [
     path('passkeys/delete/<int:pk_id>/', views.delete_passkey,  name='delete_passkey'),
 
     # HOTP Setup
-    path('setup/hotp/', views.setup_hotp, name='setup_hotp'),
+    #path('setup/hotp/', views.setup_hotp, name='setup_hotp'),
     path('api/generate-hotp/', views.generate_hotp_code, name='generate_hotp_code'),
 
     # Test
