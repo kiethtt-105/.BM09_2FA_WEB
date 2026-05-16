@@ -115,10 +115,14 @@ class PendingRegistration(models.Model):
     """
     Lưu thông tin đăng ký tạm thời trước khi OTP xác thực thành công.
     temp_data['password'] = make_password() — không lưu plaintext.
+
+    FIX: otp_code không lưu plaintext mà lưu SHA-256 hash.
+    Xác thực dùng verify_otp() thay vì so sánh trực tiếp.
     """ 
 
     email      = models.EmailField(unique=True)
-    otp_code   = models.CharField(max_length=6)
+    # FIX: đổi max_length=64 để lưu SHA-256 hex digest thay vì plaintext
+    otp_code   = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
     is_used    = models.BooleanField(default=False)
     temp_data  = models.JSONField(default=dict)
@@ -128,6 +132,16 @@ class PendingRegistration(models.Model):
     class Meta:
         verbose_name        = 'Đăng ký tạm chờ xác thực'
         verbose_name_plural = 'Đăng ký tạm chờ xác thực'
+
+    def set_otp(self, plaintext_otp: str):
+        """Lưu hash SHA-256 của OTP — không lưu plaintext."""
+        self.otp_code = hashlib.sha256(plaintext_otp.encode('utf-8')).hexdigest()
+
+    def verify_otp(self, plaintext_otp: str) -> bool:
+        """Xác thực OTP bằng cách so sánh hash — tránh timing attack."""
+        import hmac as _hmac
+        input_hash = hashlib.sha256(plaintext_otp.encode('utf-8')).hexdigest()
+        return _hmac.compare_digest(self.otp_code, input_hash)
 
     def is_valid(self) -> bool:
         expiry = self.created_at + datetime.timedelta(minutes=self.OTP_EXPIRY_MINUTES)
@@ -362,15 +376,27 @@ class RemoteAuthRequest(models.Model):
         ('denied',   'Đã từ chối'),
     ]
 
+    EXPIRY_MINUTES = 5  # Yêu cầu hết hạn sau 5 phút
+
     user        = models.ForeignKey(User, on_delete=models.CASCADE)
     session_key = models.CharField(max_length=40)
     device_info = models.CharField(max_length=255)
     status      = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at  = models.DateTimeField(auto_now_add=True)
+    # FIX: Thêm expires_at để tự động cleanup yêu cầu cũ
+    expires_at  = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name        = 'Yêu cầu xác thực từ xa'
         verbose_name_plural = 'Yêu cầu xác thực từ xa'
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + datetime.timedelta(minutes=self.EXPIRY_MINUTES)
+        super().save(*args, **kwargs)
+
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
 
     def __str__(self):
         return f'RemoteAuth({self.user.username} | {self.status})'

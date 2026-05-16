@@ -1,5 +1,3 @@
-
-
 from django.contrib.auth import logout
 from django.shortcuts import redirect
 
@@ -90,42 +88,65 @@ class UpdateDeviceMiddleware:
     """
     Cập nhật TrustedDevice mỗi request — giữ last_seen và thông tin thiết bị mới nhất.
     Tạo mới nếu session_key chưa có bản ghi.
+
+    FIX: Thêm debounce — chỉ cập nhật khi last_seen cũ hơn 5 phút.
+    Loại trừ các path static/media và AJAX polling để giảm áp lực DB.
     """
+
+    DEBOUNCE_MINUTES = 5
+    # Các path không cần cập nhật device
+    SKIP_PATHS = ('/static/', '/media/', '/api/get-auth-request/', '/api/check-auth-status/')
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         if request.user.is_authenticated:
-            if not request.session.session_key:
-                request.session.create()
-            session_key = request.session.session_key
+            # Bỏ qua các path không cần thiết
+            if not any(request.path.startswith(p) for p in self.SKIP_PATHS):
+                if not request.session.session_key:
+                    request.session.create()
+                session_key = request.session.session_key
 
-            user_agent = request.META.get('HTTP_USER_AGENT', '')
-            ip         = request.META.get('REMOTE_ADDR')
+                user_agent = request.META.get('HTTP_USER_AGENT', '')
+                ip         = request.META.get('REMOTE_ADDR')
 
-            device_type = '📱 Mobile' if 'Mobile' in user_agent else '💻 Desktop'
-            if 'Edg' in user_agent:
-                browser = 'Edge'
-            elif 'Chrome' in user_agent:
-                browser = 'Chrome'
-            elif 'Firefox' in user_agent:
-                browser = 'Firefox'
-            else:
-                browser = 'Unknown'
+                device_type = '📱 Mobile' if 'Mobile' in user_agent else '💻 Desktop'
+                if 'Edg' in user_agent:
+                    browser = 'Edge'
+                elif 'Chrome' in user_agent:
+                    browser = 'Chrome'
+                elif 'Firefox' in user_agent:
+                    browser = 'Firefox'
+                else:
+                    browser = 'Unknown'
 
-            device_name = f'{device_type} - {browser}'
+                device_name = f'{device_type} - {browser}'
 
-            TrustedDevice.objects.update_or_create(
-                session_key = session_key,
-                defaults = {
-                    'user':       request.user,
-                    'user_agent': user_agent,
-                    'ip_address': ip,
-                    'name':       device_name,
-                    'is_active':  True,
-                }
-            )
+                from django.utils import timezone
+                import datetime
+
+                # FIX: Debounce — chỉ UPDATE nếu chưa có hoặc last_seen cũ hơn 5 phút
+                existing = TrustedDevice.objects.filter(session_key=session_key).first()
+                if existing is None:
+                    TrustedDevice.objects.create(
+                        session_key = session_key,
+                        user        = request.user,
+                        user_agent  = user_agent,
+                        ip_address  = ip,
+                        name        = device_name,
+                        is_active   = True,
+                    )
+                else:
+                    threshold = timezone.now() - datetime.timedelta(minutes=self.DEBOUNCE_MINUTES)
+                    if existing.last_seen < threshold:
+                        TrustedDevice.objects.filter(session_key=session_key).update(
+                            user       = request.user,
+                            user_agent = user_agent,
+                            ip_address = ip,
+                            name       = device_name,
+                            is_active  = True,
+                        )
 
         return self.get_response(request)
 

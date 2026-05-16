@@ -84,7 +84,7 @@ from .models import (
     EmailOTP, UserProfile, PendingRegistration,
     ActivityLog, UserPasskey,
 )
-from .utils import get_totp_token, generate_qr_base64, get_client_ip, generate_and_send_email_otp
+from .utils import get_totp_token, verify_totp, generate_qr_base64, get_client_ip, generate_and_send_email_otp
 
 from fido2.server import Fido2Server
 from fido2.webauthn import (
@@ -425,7 +425,8 @@ def login_view(request):
             if profile.force_disable_2fa:
                 profile.has_app_otp   = False
                 profile.has_email_otp = False
-                profile.save(update_fields=['has_app_otp', 'has_email_otp'])
+                profile.otp_secret    = None  # FIX: phải xóa otp_secret (đồng bộ với middleware)
+                profile.save(update_fields=['has_app_otp', 'has_email_otp', 'otp_secret'])
 
             has_fido2 = user.passkeys.exists()
 
@@ -653,6 +654,10 @@ def dashboard(request):
         elif request.POST.get('action') == 'disable_app':
             confirm_disable = 'disable_app'
 
+        # ── Tắt HOTP: yêu cầu nhập mã HOTP để xác nhận ─────────────────────
+        elif request.POST.get('action') == 'disable_hotp':
+            confirm_disable = 'disable_hotp'
+
         # [FIX-4] Xác nhận tắt OTP — nhánh riêng biệt, không lồng trong elif trên
         elif 'confirm_disable_action' in request.POST:
             code    = request.POST.get('disable_otp_code', '').strip()
@@ -666,16 +671,28 @@ def dashboard(request):
                     valid = True
             elif target == 'disable_app':
                 raw_secret = profile.decrypt_secret()
-                if raw_secret and code == get_totp_token(raw_secret):
+                # FIX: dùng verify_totp() với window=1
+                if raw_secret and verify_totp(raw_secret, code):
                     valid = True
+            elif target == 'disable_hotp':
+                # FIX: thêm nhánh xử lý tắt HOTP
+                from .utils import verify_hotp
+                raw_secret = profile.decrypt_secret()
+                if raw_secret:
+                    ok, _ = verify_hotp(raw_secret, profile.hotp_counter, code)
+                    if ok:
+                        valid = True
 
             if valid:
                 if target == 'disable_email':
                     if otp_obj:
                         otp_obj.mark_used()
                     profile.has_email_otp = False
-                else:
+                elif target == 'disable_app':
                     profile.has_app_otp = False
+                    profile.otp_secret  = None
+                elif target == 'disable_hotp':
+                    profile.has_hotp    = False
                     profile.otp_secret  = None
                 profile.save()
                 ActivityLog.objects.create(
@@ -763,7 +780,8 @@ def setup_2fa(request):
             if 'verify_app_otp' in request.POST:
                 code        = request.POST.get('otp_code', '').strip()
                 temp_secret = request.session.get('temp_otp_secret')
-                if temp_secret and code == get_totp_token(temp_secret):
+                # FIX: dùng verify_totp() với window=1 thay vì get_totp_token() chỉ so sánh 1 giây
+                if temp_secret and verify_totp(temp_secret, code):
                     profile.otp_secret  = temp_secret
                     profile.has_app_otp = True
                     profile.save()
@@ -879,7 +897,8 @@ def verify_2fa(request):
 
         if method == 'app' and profile.has_app_otp:
             raw_secret = profile.decrypt_secret()
-            if raw_secret and code == get_totp_token(raw_secret):
+            # FIX: dùng verify_totp() với window=1 thay vì get_totp_token() chỉ khớp 1 giây
+            if raw_secret and verify_totp(raw_secret, code):
                 valid = True
 
         elif method == 'email' and profile.has_email_otp:
@@ -979,10 +998,13 @@ def respond_auth_request(request, req_id):
     return JsonResponse({'status': 'success'})
 
 
+@login_required
 def check_auth_status(request):
     """
     API polling: thiết bị mới kiểm tra kết quả push auth.
 
+    FIX: Thêm @login_required — trước đây ai cũng gọi được endpoint này.
+    FIX: Kiểm tra expires_at của RemoteAuthRequest trước khi xử lý.
     [FIX-10] Thêm backend cho login() để tránh lỗi khi nhiều backend được cấu hình.
     """
     session_key = request.session.session_key
@@ -995,6 +1017,11 @@ def check_auth_status(request):
 
     if not req:
         return JsonResponse({'status': 'pending'})
+
+    # FIX: Kiểm tra expiry — xóa và trả về denied nếu đã hết hạn
+    if req.is_expired():
+        req.delete()
+        return JsonResponse({'status': 'expired'})
 
     if req.status == 'approved':
         uid  = request.session.get('pre_2fa_user_id')
