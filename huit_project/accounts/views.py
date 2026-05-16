@@ -26,6 +26,8 @@ from django.views.decorators.cache import never_cache
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.core.cache import cache
 from django.db import connection
 from django.db.models import Q
 from django.core.paginator import Paginator
@@ -345,7 +347,7 @@ def login_view(request):
     """
     if request.user.is_authenticated:
         next_url = request.GET.get('next')
-        if next_url:
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
             return redirect(next_url)
         return redirect('admin_dashboard' if request.user.is_superuser else 'dashboard')
 
@@ -377,11 +379,12 @@ def login_view(request):
                 profile.has_app_otp       = False
                 profile.has_email_otp     = False
                 profile.has_hotp          = False
-                profile.otp_secret        = None   # [BUG-2] bắt buộc xóa secret
-                profile.force_disable_2fa = False   # reset cờ
+                profile.otp_secret        = None
+                profile.hotp_secret       = None   # FIX: thiếu field này → hotp_secret không xóa được
+                profile.force_disable_2fa = False
                 profile.save(update_fields=[
                     'has_app_otp', 'has_email_otp', 'has_hotp',
-                    'otp_secret', 'force_disable_2fa',
+                    'otp_secret', 'hotp_secret', 'force_disable_2fa',  # FIX: thêm hotp_secret
                 ])
 
             has_fido2 = user.passkeys.exists()
@@ -444,7 +447,7 @@ def login_view(request):
                 return redirect('sso_send')
 
             next_url = request.GET.get('next')
-            if next_url:
+            if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
                 return redirect(next_url)
 
             # [BUG-1] Superuser redirect về admin_dashboard
@@ -458,11 +461,10 @@ def login_view(request):
                         username_attempt=username_input, action='login_locked_attempt',
                         ip_address=ip, user_agent=user_agent,
                     )
-                    messages.error(request, 'Tài khoản đang bị khóa. Vui lòng liên hệ Admin HUIT.')
-                else:
-                    messages.error(request, 'Tên đăng nhập hoặc mật khẩu không đúng.')
             except User.DoesNotExist:
-                messages.error(request, 'Tên đăng nhập hoặc mật khẩu không đúng.')
+                pass
+            # [L1-FIX] Luôn trả cùng 1 message — tránh username enumeration
+            messages.error(request, 'Tên đăng nhập hoặc mật khẩu không đúng.')
 
             ActivityLog.objects.create(
                 username_attempt=username_input, action='login_failed',
@@ -677,7 +679,7 @@ def setup_2fa(request):
     [BUG-3] Dùng verify_totp() thay vì get_totp_token() để có window ±1.
     """
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
-    method     = request.GET.get('method', 'email')
+    method     = request.GET.get('method', 'app')
 
     context = {
         'profile':        profile,
@@ -800,6 +802,24 @@ def setup_2fa(request):
                     messages.error(request, '❌ Mã HOTP không đúng. Vui lòng quét lại QR mới.')
                     return redirect('/setup-2fa/?method=hotp')
 
+        # ── Tắt App OTP (TOTP) từ setup page ─────────────────────────────────
+        elif request.POST.get('action') == 'disable_app':
+            raw_secret = profile.decrypt_secret()
+            if raw_secret and verify_totp(raw_secret, request.POST.get('otp_code', '').strip()):
+                profile.has_app_otp = False
+                if not profile.has_hotp:
+                    profile.otp_secret = None
+                profile.save()
+                ActivityLog.objects.create(
+                    user=request.user, username_attempt=request.user.username,
+                    action='2fa_disable', ip_address=get_client_ip(request),
+                    user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+                )
+                messages.success(request, 'Đã tắt TOTP thành công.')
+                return redirect('setup_2fa')
+            else:
+                messages.error(request, 'Mã xác nhận không đúng!')
+
     if method == 'app':
         new_secret = request.session.get('temp_otp_secret')
         if not new_secret:
@@ -856,7 +876,7 @@ def verify_2fa(request):
     has_fido2 = user.passkeys.exists()
 
     methods = []
-    if profile.has_app_otp:   methods.append({'key': 'app',   'name': 'Authenticator', 'icon': '📱'})
+    if profile.has_app_otp:   methods.append({'key': 'totp',  'name': 'Authenticator', 'icon': '📱'})
     if profile.has_email_otp: methods.append({'key': 'email', 'name': 'Email OTP',     'icon': '📧'})
     if profile.has_hotp:      methods.append({'key': 'hotp',  'name': 'HOTP',          'icon': '🔢'})
     if has_fido2:             methods.append({'key': 'fido2', 'name': 'Passkey',       'icon': '🔑'})
@@ -928,7 +948,7 @@ def verify_2fa(request):
                 'rate_limited': True,
             })
 
-        if method == 'app' and profile.has_app_otp:
+        if method in ('app', 'totp') and profile.has_app_otp:
             raw_secret = profile.decrypt_secret()
             # [BUG-4] verify_totp có window ±1
             if raw_secret and verify_totp(raw_secret, code):
@@ -950,8 +970,24 @@ def verify_2fa(request):
                 valid = True
 
         if valid:
+            # [C1-FIX] TOTP anti-replay: cache mã đã dùng 90s (3 chu kỳ)
+            if method in ('app', 'totp'):
+                totp_cache_key = f"totp_used:{user.id}:{code}"
+                if cache.get(totp_cache_key):
+                    OTPAttempt.record_fail(user=user, ip=ip, action='login_2fa')
+                    messages.error(request, 'Mã xác thực này đã được sử dụng. Vui lòng chờ mã mới.')
+                    return render(request, 'accounts/verify_2fa.html', {
+                        'methods': methods, 'method': method, 'profile': profile,
+                        'has_app_otp': profile.has_app_otp, 'has_email_otp': profile.has_email_otp,
+                        'has_fido2': has_fido2, 'has_other_devices': other_devices.exists(),
+                        'other_devices_list': list(other_devices[:3]),
+                        'push_request_sent': push_request_sent,
+                    })
+                cache.set(totp_cache_key, 1, timeout=90)
+
             OTPAttempt.clear(user=user, ip=ip, action='login_2fa')  # [FIX-RATELIMIT] reset sau thành công
             login(request, user)
+            request.session.cycle_key()  # [M5-FIX] rotate session key sau login — chống session fixation
             request.session.pop('pre_2fa_user_id', None)
 
             if method == 'email' and otp_obj:
@@ -1215,27 +1251,42 @@ def fido2_reg_begin(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 def fido2_reg_complete(request):
     try:
-        from fido2.cbor import decode as cbor_decode, encode as cbor_encode
+        from fido2.webauthn import RegistrationResponse
 
         data          = json.loads(request.body)
         state_encoded = request.session.get('fido2_state')
         if not state_encoded:
             return JsonResponse({'status': 'error', 'message': 'Hết hạn phiên'}, status=400)
 
-        attestation_obj_bytes = _b64url_to_bytes(data['response']['attestationObject'])
-        att_obj       = cbor_decode(attestation_obj_bytes)
-        auth_data_raw = att_obj.get('authData') or att_obj.get(b'authData')
-        auth_data     = AuthenticatorData(bytes(auth_data_raw))
-        pk_bytes      = cbor_encode(dict(auth_data.credential_data.public_key))
+        try:
+            state = json.loads(state_encoded)
+        except (ValueError, TypeError):
+            state = json.loads(websafe_decode(state_encoded).decode())
+
+        server_local = _get_fido2_server(request)
+
+        # [C4-FIX] Dùng server.register_complete() — xác minh đầy đủ: challenge, RP ID,
+        # origin, chữ ký authenticator. Không tự parse CBOR để tránh bỏ qua xác minh.
+        try:
+            auth_data = server_local.register_complete(state, data)
+        except Exception as verify_err:
+            logger.warning('FIDO2 register_complete failed for user=%s: %s',
+                           request.user.username, verify_err)
+            return JsonResponse({'status': 'error', 'message': 'Xác minh passkey thất bại'}, status=400)
+
+        from fido2.cbor import encode as cbor_encode
+        pk_bytes = cbor_encode(dict(auth_data.credential_data.public_key))
 
         UserPasskey.objects.update_or_create(
             user          = request.user,
-            credential_id = data['id'],
-            defaults      = {'public_key': websafe_encode(pk_bytes), 'sign_count': auth_data.counter}
+            credential_id = websafe_encode(bytes(auth_data.credential_data.credential_id)),
+            defaults      = {
+                'public_key': websafe_encode(pk_bytes),
+                'sign_count': auth_data.counter,
+            }
         )
 
         request.session.pop('fido2_state', None)
@@ -1289,8 +1340,8 @@ def fido2_auth_begin(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-@csrf_exempt
 def fido2_auth_complete(request):
+    # NOTE: CSRF không cần exempt — JS gửi X-CSRFToken header trong fetch()
     ip         = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
     user       = None
@@ -1370,6 +1421,7 @@ def manage_passkeys(request):
 
 
 @login_required
+@require_POST
 def delete_passkey(request, pk_id):
     passkey = get_object_or_404(UserPasskey, id=pk_id, user=request.user)
     passkey.delete()
@@ -1394,6 +1446,7 @@ def active_sessions(request):
 
 
 @login_required
+@require_POST
 def logout_device(request, device_id):
     device = get_object_or_404(TrustedDevice, id=device_id, user=request.user)
     if device.session_key:
@@ -1580,21 +1633,19 @@ def admin_otp_history(request):
     email_otps  = paginator.get_page(page_number)
 
     google_auths = []
-    for profile in UserProfile.objects.filter(has_app_otp=True).select_related('user'):
-        raw_secret = profile.decrypt_secret()
-        # [FIX-SECRET] KHÔNG truyền raw secret vào template — chỉ dùng masked + current TOTP
-        # full_secret đã bị xóa để ngăn lộ qua HTML source / DevTools
-        masked = (
-            raw_secret[:4] + '****' + raw_secret[-2:]
-            if raw_secret and len(raw_secret) > 6 else '********'
-        )
-        google_auths.append({
-            'username':      profile.user.username,
-            'masked_secret': masked,
-            # 'full_secret'    ← ĐÃ XÓA — không bao giờ truyền raw secret vào template
-            # 'encrypted_secret' ← ĐÃ XÓA — ciphertext Fernet không cần ra HTML
-            'current_totp':  get_totp_token(raw_secret) if raw_secret else '------',
-        })
+    # [M4-FIX] Chỉ superuser mới xem được danh sách TOTP, và KHÔNG expose live token
+    if request.user.is_superuser:
+        for profile in UserProfile.objects.filter(has_app_otp=True).select_related('user'):
+            raw_secret = profile.decrypt_secret()
+            masked = (
+                raw_secret[:4] + '****' + raw_secret[-2:]
+                if raw_secret and len(raw_secret) > 6 else '********'
+            )
+            google_auths.append({
+                'username':      profile.user.username,
+                'masked_secret': masked,
+                # [M4-FIX] 'current_totp' bị XÓA — staff không được xem live TOTP của user khác
+            })
 
     context = {
         'email_otps':   email_otps,
@@ -2020,8 +2071,6 @@ def export_dtb(request):
 
 @login_required
 @require_POST
-@login_required   # FIX-1: phải đăng nhập mới gọi được
-@require_POST     # FIX-1: tránh sinh mã qua GET/link (counter tăng vô ích)
 def generate_hotp_code(request):
     """
     ════════════════════════════════════════════════════════

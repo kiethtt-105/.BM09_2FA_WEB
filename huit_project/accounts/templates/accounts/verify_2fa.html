@@ -100,6 +100,16 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
 .timer{color:var(--purple2);font-weight:700;}
 .countdown.warning .timer{color:#f59e0b;}
 .countdown.expired .timer{color:#ef4444;}
+
+/* TOTP countdown ring */
+.totp-timer{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;font-family:var(--mono);font-size:12px;color:var(--muted2);}
+.totp-timer svg{width:28px;height:28px;transform:rotate(-90deg);}
+.totp-timer circle{fill:none;stroke-width:3;}
+.totp-ring-bg{stroke:var(--border2);}
+.totp-ring-fg{stroke:var(--purple2);stroke-linecap:round;transition:stroke-dashoffset .9s linear;}
+.totp-timer.warn .totp-ring-fg{stroke:#f59e0b;}
+.totp-timer span{color:var(--purple2);font-weight:700;}
+.totp-timer.warn span{color:#f59e0b;}
 </style>
 </head>
 <body>
@@ -113,33 +123,33 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
   <h2>Xác minh 2FA</h2>
   <p class="sub">Chọn phương thức xác thực</p>
 
-  <!-- Method tabs -->
+  {# ── Method tabs ─────────────────────────────────────────────────────── #}
+  {# FIX: methods là list of dicts [{'key':'totp','name':...,'icon':...}]  #}
+  {# Dùng for loop thay vì methods.totp (dict key lookup — không hoạt động) #}
   <div class="methods">
-    {% if methods.totp %}
-    <a href="?method=totp" class="method {% if method == 'totp' %}active{% endif %}">
-      <i class="fa fa-mobile-screen"></i> TOTP
-    </a>
-    {% endif %}
-    {% if methods.email %}
-    <a href="?method=email" class="method {% if method == 'email' %}active{% endif %}">
-      <i class="fa fa-envelope"></i> Email
-    </a>
-    {% endif %}
-    {% if methods.hotp %}
-    <a href="?method=hotp" class="method {% if method == 'hotp' %}active{% endif %}">
-      <i class="fa fa-ticket"></i> HOTP
-    </a>
-    {% endif %}
-    {% if methods.fido2 %}
-    <a href="?method=fido2" class="method {% if method == 'fido2' %}active{% endif %}">
-      <i class="fa fa-fingerprint"></i> FIDO2
-    </a>
-    {% endif %}
-    {% if methods.push %}
-    <a href="?method=push" class="method {% if method == 'push' %}active{% endif %}">
-      <i class="fa fa-bell"></i> Push
-    </a>
-    {% endif %}
+    {% for m in methods %}
+      {% if m.key == 'totp' %}
+        <a href="?method=totp" class="method {% if method == 'totp' %}active{% endif %}">
+          <i class="fa fa-mobile-screen"></i> TOTP
+        </a>
+      {% elif m.key == 'email' %}
+        <a href="?method=email" class="method {% if method == 'email' %}active{% endif %}">
+          <i class="fa fa-envelope"></i> Email
+        </a>
+      {% elif m.key == 'hotp' %}
+        <a href="?method=hotp" class="method {% if method == 'hotp' %}active{% endif %}">
+          <i class="fa fa-ticket"></i> HOTP
+        </a>
+      {% elif m.key == 'fido2' %}
+        <a href="?method=fido2" class="method {% if method == 'fido2' %}active{% endif %}">
+          <i class="fa fa-fingerprint"></i> FIDO2
+        </a>
+      {% elif m.key == 'push' %}
+        <a href="?method=push" class="method {% if method == 'push' %}active{% endif %}">
+          <i class="fa fa-bell"></i> Push
+        </a>
+      {% endif %}
+    {% endfor %}
   </div>
 
   {% if messages %}
@@ -151,47 +161,90 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
     {% endfor %}
   {% endif %}
 
-  <!-- OTP methods -->
-  {% if method != 'fido2' %}
-  {% if method == 'email' %}<div class="hint-box">Mã đã gửi đến <strong>{{ user.email }}</strong></div>{% endif %}
-  {% if method == 'totp' %}<div class="hint-box">Nhập mã từ ứng dụng Authenticator</div>{% endif %}
-  {% if method == 'hotp' %}<div class="hint-box">Nhập mã HOTP từ token của bạn</div>{% endif %}
+  {# ── OTP input — hiện với mọi method trừ fido2 và push ─────────────── #}
+  {% if method != 'fido2' and method != 'push' %}
 
-  <form method="POST">
-    {% csrf_token %}
-    <input type="hidden" name="method" value="{{ method }}">
-    <div class="otp-row">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-    </div>
-    <input type="hidden" name="otp_code" id="hidden-otp">
-    <button type="submit" class="btn btn-primary" id="confirm-btn" disabled>
-      <i class="fa fa-arrow-right"></i> Xác minh
-    </button>
-  </form>
+    {# Hint box theo method #}
+    {% if method == 'email' %}
+      <div class="hint-box"><i class="fa fa-envelope" style="margin-right:6px"></i>Mã đã gửi đến <strong>{{ profile.user.email|default:user.email }}</strong></div>
+    {% elif method == 'totp' %}
+      {# TOTP: hiển thị countdown 30s #}
+      <div class="totp-timer" id="totp-timer">
+        <svg viewBox="0 0 28 28">
+          <circle class="totp-ring-bg" cx="14" cy="14" r="11"/>
+          <circle class="totp-ring-fg" id="totp-ring" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.1" stroke-dashoffset="0"/>
+        </svg>
+        <span id="totp-sec">30</span>s &nbsp;·&nbsp; Nhập mã từ ứng dụng Authenticator
+      </div>
+    {% elif method == 'hotp' %}
+      <div class="hint-box"><i class="fa fa-hashtag" style="margin-right:6px"></i>Nhập mã HOTP từ token của bạn</div>
+    {% endif %}
 
-  {% if method == 'email' %}
-  <form method="POST" style="margin-top:6px;">
-    {% csrf_token %}
-    <input type="hidden" name="resend_otp" value="1">
-    <button type="submit" class="btn btn-ghost" id="resend-btn" disabled>
-      <i class="fa fa-rotate-right"></i> Gửi lại mã
-    </button>
-  </form>
-  <div class="countdown" id="countdown">Gửi lại sau: <span class="timer" id="timer">60</span>s</div>
+    <form method="POST" id="otp-form">
+      {% csrf_token %}
+      <input type="hidden" name="otp_code" id="hidden-otp">
+      <div class="otp-row">
+        <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric" pattern="\d">
+        <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric" pattern="\d">
+        <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric" pattern="\d">
+        <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric" pattern="\d">
+        <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric" pattern="\d">
+        <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric" pattern="\d">
+      </div>
+      <button type="submit" class="btn btn-primary" id="confirm-btn" disabled>
+        <i class="fa fa-arrow-right"></i> Xác minh
+      </button>
+    </form>
+
+    {# Resend — chỉ với email #}
+    {% if method == 'email' %}
+    <form method="POST" style="margin-top:6px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="send_email_code">
+      <button type="submit" class="btn btn-ghost" id="resend-btn" disabled>
+        <i class="fa fa-rotate-right"></i> Gửi lại mã
+      </button>
+    </form>
+    <div class="countdown" id="countdown">Gửi lại sau: <span class="timer" id="timer">60</span>s</div>
+    {% endif %}
+
   {% endif %}
-  {% endif %}
 
-  <!-- FIDO2 -->
+  {# ── FIDO2 / Passkey ────────────────────────────────────────────────── #}
   {% if method == 'fido2' %}
   <div class="hint-box">Sử dụng passkey đã đăng ký trên thiết bị của bạn</div>
   <button onclick="authenticatePasskey()" class="btn btn-purple">
     <i class="fa fa-fingerprint"></i> Xác thực bằng Passkey
   </button>
+  {% endif %}
+
+  {# ── Push auth ───────────────────────────────────────────────────────── #}
+  {% if method == 'push' %}
+  <div class="hint-box">Phê duyệt đăng nhập từ thiết bị đang online khác</div>
+  {% if not push_request_sent %}
+  <form method="POST">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="send_push_request">
+    <button type="submit" class="btn btn-purple">
+      <i class="fa fa-bell"></i> Gửi yêu cầu xác nhận
+    </button>
+  </form>
+  {% else %}
+  <div class="msg msg-info"><i class="fa fa-circle-info"></i> Đã gửi — chờ phê duyệt từ thiết bị khác...</div>
+  <div class="countdown">Tự động kiểm tra mỗi 3 giây...</div>
+  <script>
+    (function pollPush(){
+      fetch('/api/check-auth-status/')
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.status==='approved') window.location.href=d.redirect||'/dashboard/';
+          else if(d.status==='denied') window.location.reload();
+          else setTimeout(pollPush, 3000);
+        }).catch(()=>setTimeout(pollPush,3000));
+    })();
+  </script>
+  {% endif %}
   {% endif %}
 
   <div class="divider"></div>
@@ -201,74 +254,112 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
 </div>
 
 <script>
+// ── OTP boxes ────────────────────────────────────────────────────────────
 const boxes=[...document.querySelectorAll('.otp-box')];
 const hidden=document.getElementById('hidden-otp');
 const confirmBtn=document.getElementById('confirm-btn');
-if(boxes.length&&hidden&&confirmBtn){
+
+if(boxes.length && hidden && confirmBtn){
   boxes.forEach((box,i)=>{
     box.addEventListener('input',()=>{
       box.value=box.value.replace(/\D/g,'').slice(-1);
       box.classList.toggle('filled',!!box.value);
-      let v='';boxes.forEach(b=>v+=b.value);
-      hidden.value=v;confirmBtn.disabled=v.length<6;
-      if(box.value&&i<5)boxes[i+1].focus();
+      let v=''; boxes.forEach(b=>v+=b.value);
+      hidden.value=v; confirmBtn.disabled=v.length<6;
+      if(box.value && i<5) boxes[i+1].focus();
     });
     box.addEventListener('keydown',e=>{
-      if(e.key==='Backspace'&&!box.value&&i>0){
-        boxes[i-1].value='';boxes[i-1].classList.remove('filled');boxes[i-1].focus();
+      if(e.key==='Backspace' && !box.value && i>0){
+        boxes[i-1].value=''; boxes[i-1].classList.remove('filled'); boxes[i-1].focus();
+        let v=''; boxes.forEach(b=>v+=b.value);
+        hidden.value=v; confirmBtn.disabled=v.length<6;
       }
     });
     box.addEventListener('paste',e=>{
       e.preventDefault();
       const p=(e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'');
-      [...p.slice(0,6)].forEach((c,j)=>{if(boxes[j]){boxes[j].value=c;boxes[j].classList.add('filled');}});
-      let v='';boxes.forEach(b=>v+=b.value);hidden.value=v;confirmBtn.disabled=v.length<6;
+      [...p.slice(0,6)].forEach((c,j)=>{ if(boxes[j]){ boxes[j].value=c; boxes[j].classList.add('filled'); }});
+      let v=''; boxes.forEach(b=>v+=b.value);
+      hidden.value=v; confirmBtn.disabled=v.length<6;
       boxes[Math.min(p.length,5)].focus();
     });
   });
   boxes[0].focus();
 }
 
+// ── Email resend countdown ───────────────────────────────────────────────
 const resendBtn=document.getElementById('resend-btn');
 const timerEl=document.getElementById('timer');
 const cdEl=document.getElementById('countdown');
-if(resendBtn&&timerEl){
+if(resendBtn && timerEl){
   let t=60;
   const tick=setInterval(()=>{
-    t--;timerEl.textContent=t;
-    if(t<=20)cdEl.classList.add('warning');
-    if(t<=0){clearInterval(tick);cdEl.classList.add('expired');resendBtn.disabled=false;timerEl.textContent='0';}
+    t--; timerEl.textContent=t;
+    if(t<=20) cdEl.classList.add('warning');
+    if(t<=0){ clearInterval(tick); cdEl.classList.add('expired'); resendBtn.disabled=false; timerEl.textContent='0'; }
   },1000);
-  setTimeout(()=>{resendBtn.disabled=false;},60000);
 }
 
+// ── TOTP 30s countdown ring ──────────────────────────────────────────────
+const totpTimer=document.getElementById('totp-timer');
+const totpRing=document.getElementById('totp-ring');
+const totpSec=document.getElementById('totp-sec');
+if(totpRing && totpSec){
+  const CIRC=69.1; // 2 * π * 11
+  function updateTotpRing(){
+    const now=Math.floor(Date.now()/1000);
+    const remaining=30-(now%30);
+    const offset=CIRC*(1-remaining/30);
+    totpRing.style.strokeDashoffset=offset;
+    totpSec.textContent=remaining;
+    if(remaining<=10) totpTimer.classList.add('warn');
+    else              totpTimer.classList.remove('warn');
+  }
+  updateTotpRing();
+  setInterval(updateTotpRing,1000);
+}
+
+// ── FIDO2 / Passkey ──────────────────────────────────────────────────────
 async function authenticatePasskey(){
   try{
-    const optRes=await fetch('/passkeys/auth-options/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}});
+    const optRes=await fetch('/fido2/auth/begin/',{
+      method:'POST',
+      headers:{'X-CSRFToken':getCookie('csrftoken')}
+    });
     const opts=await optRes.json();
     opts.challenge=base64url.decode(opts.challenge);
-    if(opts.allowCredentials)opts.allowCredentials=opts.allowCredentials.map(c=>({...c,id:base64url.decode(c.id)}));
+    if(opts.allowCredentials)
+      opts.allowCredentials=opts.allowCredentials.map(c=>({...c,id:base64url.decode(c.id)}));
     const cred=await navigator.credentials.get({publicKey:opts});
     const authData={
-      id:cred.id,rawId:base64url.encode(cred.rawId),
+      id:cred.id,
+      rawId:base64url.encode(cred.rawId),
       response:{
         clientDataJSON:base64url.encode(cred.response.clientDataJSON),
         authenticatorData:base64url.encode(cred.response.authenticatorData),
         signature:base64url.encode(cred.response.signature),
         userHandle:cred.response.userHandle?base64url.encode(cred.response.userHandle):null,
-      },type:cred.type
+      },
+      type:cred.type
     };
-    const vRes=await fetch('/passkeys/auth-verify/',{
+    const vRes=await fetch('/fido2/auth/complete/',{
       method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
       body:JSON.stringify(authData)
     });
     const result=await vRes.json();
-    if(result.status==='ok')window.location.href=result.redirect||'/';
-    else alert('Xác thực thất bại: '+result.message);
-  }catch(e){console.error(e);alert('Lỗi: '+e.message);}
+    if(result.status==='success') window.location.href=result.redirect||'/dashboard/';
+    else alert('Xác thực thất bại: '+(result.message||'Unknown error'));
+  }catch(e){
+    console.error(e);
+    alert('Lỗi passkey: '+e.message);
+  }
 }
-function getCookie(n){const c=document.cookie.split(';').find(c=>c.trim().startsWith(n+'='));return c?c.split('=')[1]:'';}
+
+function getCookie(n){
+  const c=document.cookie.split(';').find(c=>c.trim().startsWith(n+'='));
+  return c?c.split('=')[1]:'';
+}
 const base64url={
   encode:buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''),
   decode:s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;}

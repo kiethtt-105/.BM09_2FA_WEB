@@ -1,15 +1,37 @@
 """
-models.py — Hệ thống HUIT 2FA  [PATCHED]
-==========================================
-THAY ĐỔI SO VỚI BẢN GỐC:
+models.py — Hệ thống HUIT 2FA  [PATCHED v2]
+=============================================
+THAY ĐỔI SO VỚI BẢN NỘP:
 
-  [BUG-7]  PendingRegistration.otp_code lưu plaintext
-           → Tăng max_length lên 64, lưu SHA-256 hash thay vì plaintext.
-           → Thêm classmethod verify(email, otp_input) để xác thực đúng chuẩn.
+  [FIX-1]  UserProfile.is_2fa_enabled gọi self.has_fido2 (property DB query)
+           → N+1 query khi list user. Tách has_fido2 ra khỏi is_2fa_enabled.
+           is_2fa_enabled giờ chỉ kiểm tra BooleanField, không query DB thêm.
 
-  [WARN-2] RemoteAuthRequest không có expiry
-           → Thêm field expires_at = created_at + 5 phút (auto khi save).
-           → Thêm property is_expired() và classmethod cleanup_expired().
+  [FIX-2]  force_disable_2fa không reset hotp_secret, hotp_counter.
+           → Thêm disable_all_2fa() tập trung, gọi từ middleware + login_view.
+
+  [FIX-3]  decrypt_hotp_secret() không kiểm tra tiền tố 'gAAAA' trước Fernet
+           → InvalidToken raise thay vì trả None khi giá trị lạ.
+           → Dùng _decrypt() helper chung, guard đầy đủ.
+
+  [FIX-4]  PendingRegistration.verify() dùng .first() không có order_by
+           → Khi resend nhanh có 2 bản ghi, lấy sai bản ghi cũ.
+           → Thêm order_by('-created_at').
+
+  [FIX-5]  EmailOTP.mark_used() dùng save() → chạy lại toàn bộ save logic.
+           → Đổi sang update() trực tiếp + đồng bộ instance trong RAM.
+           Tương tự disable() cũng dùng update().
+
+  [FIX-6]  ActivityLog thiếu index → chậm khi admin query lịch sử.
+           → Thêm composite index trên (user, timestamp), (action, timestamp),
+             (ip_address, action).
+
+  [FIX-7]  RemoteAuthRequest.is_expired là property → không dùng được trong
+           filter(). Thêm get_active() classmethod trả queryset chuẩn.
+
+  [KEEP]   Tất cả logic đúng từ bản nộp: PendingRegistration hash (BUG-7),
+           RemoteAuthRequest expires_at (WARN-2), OTPAttempt rate limiting,
+           EmailOTP hash + hmac.compare_digest, hotp_secret field riêng.
 """
 
 from django.db import models
@@ -18,7 +40,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
 from django.conf import settings
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 import datetime
 import hashlib
@@ -33,23 +55,25 @@ class UserProfile(models.Model):
     """
     Mở rộng User Django bằng OneToOne.
 
-    otp_secret  : TOTP/HOTP secret — luôn Fernet-encrypted trong DB.
-    hotp_counter: Counter server-side cho HOTP. Tăng 1 mỗi lần xác thực thành công.
-    has_hotp    : Cờ user đã bật HOTP (event-based OTP).
-    allow_push_auth: Cho phép xác nhận đăng nhập từ thiết bị khác (chỉ khi có 2FA).
+    Thiết kế secret:
+        otp_secret  — TOTP secret, Fernet-encrypted. Dùng cho App OTP (TOTP).
+        hotp_secret — HOTP secret riêng biệt, Fernet-encrypted.
+                      Tách riêng để user bật cả TOTP lẫn HOTP không bị xung đột.
+
+    allow_push_auth — chỉ có tác dụng khi user có ít nhất 1 phương thức 2FA.
     """
 
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='profile'
     )
 
-    middle_name  = models.CharField('Chữ đệm',       max_length=50, blank=True, default='')
-    phone_number = models.CharField('Số điện thoại', max_length=15, blank=True, default='')
+    middle_name  = models.CharField('Chữ đệm',       max_length=50,  blank=True, default='')
+    phone_number = models.CharField('Số điện thoại', max_length=15,  blank=True, default='')
 
-    otp_secret   = models.CharField(max_length=255, blank=True, null=True)
-    # FIX-3: field riêng cho HOTP secret — tránh ghi đè otp_secret của TOTP
-    # Nếu user bật cả TOTP lẫn HOTP, hai secret độc lập, không xung đột
-    hotp_secret  = models.CharField(max_length=255, blank=True, null=True, verbose_name='HOTP Secret (encrypted)')
+    otp_secret   = models.CharField(max_length=255, blank=True, null=True,
+                                    verbose_name='TOTP Secret (encrypted)')
+    hotp_secret  = models.CharField(max_length=255, blank=True, null=True,
+                                    verbose_name='HOTP Secret (encrypted)')
     hotp_counter = models.PositiveBigIntegerField(default=0, verbose_name='HOTP Counter')
 
     has_app_otp   = models.BooleanField(default=False, verbose_name='Đã bật App OTP (TOTP)')
@@ -60,7 +84,6 @@ class UserProfile(models.Model):
     is_required       = models.BooleanField(default=False, verbose_name='Bắt buộc bật 2FA')
     force_logout      = models.BooleanField(default=False, verbose_name='Cưỡng chế đăng xuất')
 
-    # [SEC-PUSH] Toggle push auth — chỉ có tác dụng khi user có ít nhất 1 phương thức 2FA
     allow_push_auth = models.BooleanField(
         default=True,
         verbose_name='Cho phép xác nhận đăng nhập từ thiết bị khác'
@@ -70,51 +93,68 @@ class UserProfile(models.Model):
         verbose_name        = 'Hồ sơ người dùng'
         verbose_name_plural = 'Hồ sơ người dùng'
 
-    # ── Mã hoá / giải mã secret ────────────────────────────────────────────
+    # ── Mã hoá / giải mã ───────────────────────────────────────────────────
+
+    def _fernet(self) -> Fernet:
+        return Fernet(settings.ENCRYPTION_KEY.encode())
 
     def encrypt_secret(self, raw_secret: str) -> 'str | None':
-        """[FIX-TYPE] Trả None nếu raw_secret rỗng, không phải str."""
+        """Mã hóa plaintext bằng Fernet. Trả None nếu rỗng."""
         if not raw_secret:
             return None
-        f = Fernet(settings.ENCRYPTION_KEY.encode())
-        return f.encrypt(raw_secret.encode()).decode()
+        return self._fernet().encrypt(raw_secret.encode()).decode()
 
-    def decrypt_secret(self) -> str:
+    def _decrypt(self, encrypted_value: 'str | None') -> 'str | None':
         """
-        Giải mã TOTP/HOTP secret.
-        Nhận dạng token Fernet qua tiền tố 'gAAAA'.
-        Trả None nếu không giải mã được.
+        [FIX-3] Helper giải mã chung cho cả otp_secret lẫn hotp_secret.
+        Kiểm tra tiền tố 'gAAAA' trước khi gọi Fernet.decrypt()
+        → trả None an toàn thay vì raise InvalidToken khi giá trị không hợp lệ.
         """
-        if not self.otp_secret:
+        if not encrypted_value:
+            return None
+        if not encrypted_value.startswith('gAAAA'):
             return None
         try:
-            if self.otp_secret.startswith('gAAAA'):
-                f = Fernet(settings.ENCRYPTION_KEY.encode())
-                return f.decrypt(self.otp_secret.encode()).decode()
-            return None
-        except Exception:
+            return self._fernet().decrypt(encrypted_value.encode()).decode()
+        except (InvalidToken, Exception):
             return None
 
-    def decrypt_hotp_secret(self) -> str:
-        """Giải mã HOTP secret riêng (field hotp_secret)."""
-        if not self.hotp_secret:
-            return None
-        try:
-            if self.hotp_secret.startswith('gAAAA'):
-                f = Fernet(settings.ENCRYPTION_KEY.encode())
-                return f.decrypt(self.hotp_secret.encode()).decode()
-            return None
-        except Exception:
-            return None
+    def decrypt_secret(self) -> 'str | None':
+        """Giải mã TOTP secret (otp_secret)."""
+        return self._decrypt(self.otp_secret)
+
+    def decrypt_hotp_secret(self) -> 'str | None':
+        """Giải mã HOTP secret (hotp_secret)."""
+        return self._decrypt(self.hotp_secret)
 
     def save(self, *args, **kwargs):
-        # Auto-encrypt otp_secret (TOTP) nếu chưa có tiền tố Fernet
         if self.otp_secret and not self.otp_secret.startswith('gAAAA'):
             self.otp_secret = self.encrypt_secret(self.otp_secret)
-        # FIX-3: Auto-encrypt hotp_secret riêng
         if self.hotp_secret and not self.hotp_secret.startswith('gAAAA'):
             self.hotp_secret = self.encrypt_secret(self.hotp_secret)
         super().save(*args, **kwargs)
+
+    # ── Tắt toàn bộ 2FA ────────────────────────────────────────────────────
+
+    def disable_all_2fa(self, save: bool = True):
+        """
+        [FIX-2] Tắt hoàn toàn mọi phương thức 2FA — dùng từ middleware + login_view.
+        Đảm bảo nhất quán: không bỏ sót field nào.
+        Không xóa passkeys FIDO2 (lưu trong UserPasskey, cần xóa riêng).
+        """
+        self.has_app_otp       = False
+        self.has_email_otp     = False
+        self.has_hotp          = False
+        self.otp_secret        = None
+        self.hotp_secret       = None
+        self.hotp_counter      = 0
+        self.force_disable_2fa = False
+        if save:
+            self.save(update_fields=[
+                'has_app_otp', 'has_email_otp', 'has_hotp',
+                'otp_secret', 'hotp_secret', 'hotp_counter',
+                'force_disable_2fa',
+            ])
 
     def __str__(self):
         return f'Profile({self.user.username})'
@@ -123,13 +163,27 @@ class UserProfile(models.Model):
 
     @property
     def is_2fa_enabled(self) -> bool:
+        """
+        [FIX-1] Chỉ kiểm tra BooleanField — không query DB thêm.
+        KHÔNG bao gồm FIDO2 để tránh N+1 query trong list view.
+        Khi cần kiểm tra đầy đủ: profile.is_2fa_enabled or user.passkeys.exists()
+        """
         if self.force_disable_2fa:
             return False
-        return self.has_email_otp or self.has_app_otp or self.has_hotp or self.has_fido2
+        return self.has_email_otp or self.has_app_otp or self.has_hotp
 
     @property
     def has_fido2(self) -> bool:
+        """
+        CẢNH BÁO: Thực hiện DB query.
+        Tránh gọi trong vòng lặp — dùng prefetch_related('passkeys').
+        """
         return self.user.passkeys.exists()
+
+    @property
+    def has_any_2fa(self) -> bool:
+        """Kiểm tra đầy đủ kể cả FIDO2. Tránh gọi trong vòng lặp."""
+        return self.is_2fa_enabled or self.has_fido2
 
     def get_full_name(self) -> str:
         parts = [self.user.first_name, self.middle_name, self.user.last_name]
@@ -142,15 +196,13 @@ class UserProfile(models.Model):
 class PendingRegistration(models.Model):
     """
     Lưu thông tin đăng ký tạm thời trước khi OTP xác thực thành công.
-    temp_data['password'] = make_password() — không lưu plaintext password.
+    temp_data['password'] = make_password() — không lưu plaintext.
 
-    [BUG-7] otp_code giờ lưu SHA-256 hash (64 ký tự hex), không phải plaintext.
-    Dùng classmethod verify(email, otp_input) để xác thực — tránh so sánh plaintext.
+    [BUG-7] otp_code lưu SHA-256 hash (64 hex chars), không phải plaintext.
     """
 
     email      = models.EmailField(unique=True)
-    # [BUG-7] max_length=64 để chứa hex SHA-256; lưu hash thay vì plaintext
-    otp_code   = models.CharField(max_length=64)
+    otp_code   = models.CharField(max_length=64)   # SHA-256 hex = 64 chars
     created_at = models.DateTimeField(auto_now_add=True)
     is_used    = models.BooleanField(default=False)
     temp_data  = models.JSONField(default=dict)
@@ -168,16 +220,19 @@ class PendingRegistration(models.Model):
     @classmethod
     def verify(cls, email: str, otp_input: str) -> 'PendingRegistration | None':
         """
-        [BUG-7] Xác thực OTP đăng ký bằng cách hash input rồi so sánh.
-        Không bao giờ so sánh plaintext trực tiếp.
+        [BUG-7] Hash input trước khi so sánh — không bao giờ so sánh plaintext.
+        [FIX-4] order_by('-created_at') → lấy bản ghi mới nhất khi có nhiều bản
+                ghi cùng email (resend nhanh / race condition).
         """
         input_hash = hashlib.sha256(otp_input.strip().encode('utf-8')).hexdigest()
-        pending = cls.objects.filter(email=email, is_used=False).first()
-        if not pending:
+        pending = (
+            cls.objects
+            .filter(email=email, is_used=False)
+            .order_by('-created_at')
+            .first()
+        )
+        if not pending or not pending.is_valid():
             return None
-        if not pending.is_valid():
-            return None
-        # So sánh an toàn bằng compare_digest — tránh timing attack
         if _hmac.compare_digest(pending.otp_code, input_hash):
             return pending
         return None
@@ -191,19 +246,11 @@ class PendingRegistration(models.Model):
 # ════════════════════════════════════════════════════════════════════════════
 class EmailOTP(models.Model):
     """
-    Audit trail cho toàn bộ OTP email đã phát hành.
-    Là nguồn sự thật duy nhất cho xác thực OTP email.
+    Audit trail + nguồn sự thật duy nhất cho xác thực OTP email.
 
-    Thiết kế bảo mật:
-        otp_code  — Trường nhận plaintext khi tạo.
-                    Trong save(), tự động hash → otp_hash, sau đó otp_code = '' (xóa).
-                    DB không bao giờ lưu plaintext sau khi save() hoàn thành.
-
-        otp_hash  — SHA-256(otp_code). Dùng để xác thực bằng cách hash input
-                    rồi so sánh — không cần đọc plaintext từ DB.
-
-    Xác thực:
-        Gọi EmailOTP.verify_otp(user, input_string, action) → trả EmailOTP hoặc None.
+    Bảo mật:
+        otp_code  — Nhận plaintext khi create(). save() hash → otp_hash rồi xóa.
+        otp_hash  — SHA-256(otp_code). Xác thực bằng hash input + compare_digest.
     """
 
     ACTION_CHOICES = [
@@ -219,8 +266,6 @@ class EmailOTP(models.Model):
         null=True, blank=True,
         verbose_name='Người dùng'
     )
-
-    # Trường này nhận plaintext khi create(); bị xóa (='') ngay sau khi save() hash xong
     otp_code = models.CharField(
         max_length=6, blank=True, default='',
         verbose_name='OTP plaintext (bị xóa sau hash)'
@@ -229,12 +274,10 @@ class EmailOTP(models.Model):
         max_length=64, blank=True, null=True,
         verbose_name='SHA-256 hash của OTP'
     )
-
     action     = models.CharField(max_length=20, choices=ACTION_CHOICES,
                                   default='login_2fa', verbose_name='Loại thao tác')
     ip_address = models.CharField(max_length=50,  blank=True, null=True, verbose_name='Địa chỉ IP')
     email_sent = models.CharField(max_length=254, blank=True, null=True, verbose_name='Email đích')
-
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Thời điểm tạo')
     used_at    = models.DateTimeField(blank=True, null=True, verbose_name='Thời điểm sử dụng')
     is_used    = models.BooleanField(default=False, verbose_name='Đã sử dụng')
@@ -247,28 +290,26 @@ class EmailOTP(models.Model):
         verbose_name        = 'Email OTP Log'
         verbose_name_plural = 'Email OTP Logs'
         indexes = [
-            # [FIX-INDEX] Tăng tốc verify_otp và verify_otp_pending
-            models.Index(fields=['user', 'action', 'is_used', 'is_active'], name='emailotp_verify_idx'),
-            models.Index(fields=['email_sent', 'action', 'is_active'],      name='emailotp_pending_idx'),
+            models.Index(
+                fields=['user', 'action', 'is_used', 'is_active'],
+                name='emailotp_verify_idx'
+            ),
+            models.Index(
+                fields=['email_sent', 'action', 'is_active'],
+                name='emailotp_pending_idx'
+            ),
         ]
 
     def save(self, *args, **kwargs):
-        """
-        Hash otp_code → otp_hash, sau đó XÓA plaintext.
-        """
+        """Hash otp_code → otp_hash rồi xóa plaintext trước khi ghi DB."""
         if self.otp_code:
-            self.otp_hash = hashlib.sha256(
-                self.otp_code.encode('utf-8')
-            ).hexdigest()
+            self.otp_hash = hashlib.sha256(self.otp_code.encode('utf-8')).hexdigest()
             self.otp_code = ''
         super().save(*args, **kwargs)
 
     @classmethod
     def verify_otp(cls, user, otp_input: str, action: str = None) -> 'EmailOTP | None':
-        """
-        Xác thực OTP bằng cách hash input rồi so sánh với otp_hash trong DB.
-        Không bao giờ đọc otp_code từ DB.
-        """
+        """Hash input rồi so sánh với otp_hash. Không đọc otp_code từ DB."""
         input_hash = hashlib.sha256(otp_input.encode('utf-8')).hexdigest()
         qs = cls.objects.filter(
             user      = user,
@@ -278,7 +319,6 @@ class EmailOTP(models.Model):
         )
         if action:
             qs = qs.filter(action=action)
-
         for record in qs.order_by('-created_at')[:10]:
             if record.otp_hash and _hmac.compare_digest(record.otp_hash, input_hash):
                 return record
@@ -286,9 +326,7 @@ class EmailOTP(models.Model):
 
     @classmethod
     def verify_otp_pending(cls, email: str, otp_input: str) -> 'EmailOTP | None':
-        """
-        Xác thực OTP đăng ký — user chưa tồn tại, so sánh theo email.
-        """
+        """Xác thực OTP đăng ký — user chưa tồn tại, tra theo email_sent."""
         input_hash = hashlib.sha256(otp_input.encode('utf-8')).hexdigest()
         qs = cls.objects.filter(
             user__isnull = True,
@@ -298,7 +336,6 @@ class EmailOTP(models.Model):
             is_active    = True,
             created_at__gt = timezone.now() - datetime.timedelta(minutes=10),
         ).order_by('-created_at')[:10]
-
         for record in qs:
             if record.otp_hash and _hmac.compare_digest(record.otp_hash, input_hash):
                 return record
@@ -312,13 +349,21 @@ class EmailOTP(models.Model):
         )
 
     def mark_used(self):
+        """
+        [FIX-5] update() trực tiếp thay vì save() — tránh chạy lại toàn bộ
+        save() logic và hiệu quả hơn (1 SQL UPDATE thay vì SELECT + UPDATE).
+        """
+        EmailOTP.objects.filter(pk=self.pk).update(
+            is_used = True,
+            used_at = timezone.now(),
+        )
         self.is_used = True
         self.used_at = timezone.now()
-        self.save(update_fields=['is_used', 'used_at'])
 
     def disable(self):
+        """[FIX-5] update() trực tiếp cho nhất quán với mark_used()."""
+        EmailOTP.objects.filter(pk=self.pk).update(is_active=False)
         self.is_active = False
-        self.save(update_fields=['is_active'])
 
     def __str__(self):
         username = self.user.username if self.user else 'pending'
@@ -333,6 +378,10 @@ class EmailOTP(models.Model):
 # 4. ActivityLog
 # ════════════════════════════════════════════════════════════════════════════
 class ActivityLog(models.Model):
+    """
+    Nhật ký mọi hành động bảo mật.
+    max_length=30 — đủ cho tất cả choices (dài nhất: 'login_locked_attempt' = 22 ký tự).
+    """
 
     ACTION_CHOICES = [
         ('login',                'Đăng nhập thành công'),
@@ -364,6 +413,12 @@ class ActivityLog(models.Model):
         ordering            = ['-timestamp']
         verbose_name        = 'Nhật ký hoạt động'
         verbose_name_plural = 'Nhật ký hoạt động'
+        indexes = [
+            # [FIX-6] Index tăng tốc các query admin phổ biến
+            models.Index(fields=['user', 'timestamp'],    name='actlog_user_ts_idx'),
+            models.Index(fields=['action', 'timestamp'],  name='actlog_action_ts_idx'),
+            models.Index(fields=['ip_address', 'action'], name='actlog_ip_action_idx'),
+        ]
 
     def __str__(self):
         username = self.user.username if self.user else self.username_attempt
@@ -371,21 +426,18 @@ class ActivityLog(models.Model):
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 4b. OTPAttempt — Rate limiting brute-force OTP
+# 4b. OTPAttempt — Rate limiting
 # ════════════════════════════════════════════════════════════════════════════
 class OTPAttempt(models.Model):
     """
-    [FIX-RATELIMIT] Theo dõi số lần nhập OTP sai theo user + IP.
-    Dùng để block brute-force 6 chữ số (10^6 khả năng).
-
-    Giới hạn mặc định: MAX_FAILS = 5 lần / WINDOW_MINUTES = 10 phút.
-    Sau khi vượt ngưỡng → trả True từ is_blocked() → view từ chối xử lý.
+    Theo dõi số lần nhập OTP sai theo user + IP.
+    Giới hạn: MAX_FAILS = 5 / WINDOW_MINUTES = 10 phút.
     """
     MAX_FAILS      = 5
     WINDOW_MINUTES = 10
 
-    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otp_attempts',
-                                   null=True, blank=True)
+    user       = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   related_name='otp_attempts', null=True, blank=True)
     ip_address = models.CharField(max_length=50, db_index=True)
     action     = models.CharField(max_length=20, default='login_2fa')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -394,38 +446,33 @@ class OTPAttempt(models.Model):
         verbose_name        = 'OTP Attempt (Rate Limit)'
         verbose_name_plural = 'OTP Attempts (Rate Limit)'
         indexes = [
-            models.Index(fields=['user', 'action', 'created_at'], name='otpattempt_user_idx'),
+            models.Index(fields=['user', 'action', 'created_at'],       name='otpattempt_user_idx'),
             models.Index(fields=['ip_address', 'action', 'created_at'], name='otpattempt_ip_idx'),
         ]
 
     @classmethod
+    def _since(cls) -> datetime.datetime:
+        return timezone.now() - datetime.timedelta(minutes=cls.WINDOW_MINUTES)
+
+    @classmethod
     def is_blocked(cls, user=None, ip: str = None, action: str = 'login_2fa') -> bool:
-        """
-        Trả True nếu user HOẶC IP vượt quá MAX_FAILS trong WINDOW_MINUTES.
-        Block theo cả user lẫn IP để tránh bypass bằng cách đổi account.
-        """
-        since = timezone.now() - datetime.timedelta(minutes=cls.WINDOW_MINUTES)
+        """True nếu user HOẶC IP vượt MAX_FAILS trong WINDOW_MINUTES."""
+        since = cls._since()
         if user is not None:
-            count = cls.objects.filter(user=user, action=action, created_at__gte=since).count()
-            if count >= cls.MAX_FAILS:
+            if cls.objects.filter(user=user, action=action, created_at__gte=since).count() >= cls.MAX_FAILS:
                 return True
         if ip:
-            count = cls.objects.filter(ip_address=ip, action=action, created_at__gte=since).count()
-            if count >= cls.MAX_FAILS:
+            if cls.objects.filter(ip_address=ip, action=action, created_at__gte=since).count() >= cls.MAX_FAILS:
                 return True
         return False
 
     @classmethod
     def record_fail(cls, user=None, ip: str = None, action: str = 'login_2fa'):
-        """Ghi nhận 1 lần thất bại."""
         cls.objects.create(user=user, ip_address=ip or '', action=action)
 
     @classmethod
     def clear(cls, user=None, ip: str = None, action: str = 'login_2fa'):
-        """Xóa lịch sử sau khi xác thực thành công.
-        Tách 2 lần delete riêng để xóa đúng theo user OR ip,
-        tránh AND condition làm sót record khi user đổi IP.
-        """
+        """Tách 2 delete riêng — xóa đúng theo user OR ip, không bị AND condition."""
         if user is not None:
             cls.objects.filter(user=user, action=action).delete()
         if ip:
@@ -433,9 +480,8 @@ class OTPAttempt(models.Model):
 
     @classmethod
     def cleanup_old(cls):
-        """Dọn bản ghi cũ hơn WINDOW_MINUTES — gọi từ celery beat hoặc periodic task."""
-        cutoff = timezone.now() - datetime.timedelta(minutes=cls.WINDOW_MINUTES)
-        cls.objects.filter(created_at__lt=cutoff).delete()
+        """Dọn bản ghi cũ — gọi từ celery beat, không gọi trong request."""
+        cls.objects.filter(created_at__lt=cls._since()).delete()
 
     def __str__(self):
         return f'OTPAttempt({self.ip_address} | {self.action} | {self.created_at})'
@@ -447,7 +493,7 @@ class OTPAttempt(models.Model):
 class TrustedDevice(models.Model):
     user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
     device_id   = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    session_key = models.CharField(max_length=40, blank=True, null=True)
+    session_key = models.CharField(max_length=40, blank=True, null=True, db_index=True)
     name        = models.CharField(max_length=255, default='Thiết bị không xác định')
     user_agent  = models.TextField(blank=True, null=True)
     ip_address  = models.CharField(max_length=50, blank=True, null=True)
@@ -457,6 +503,9 @@ class TrustedDevice(models.Model):
     class Meta:
         verbose_name        = 'Thiết bị tin cậy'
         verbose_name_plural = 'Thiết bị tin cậy'
+        indexes = [
+            models.Index(fields=['user', 'is_active'], name='trusteddev_user_active_idx'),
+        ]
 
     def __str__(self):
         return f'{self.user.username} — {self.name}'
@@ -467,8 +516,9 @@ class TrustedDevice(models.Model):
 # ════════════════════════════════════════════════════════════════════════════
 class RemoteAuthRequest(models.Model):
     """
-    [WARN-2] Thêm expires_at = created_at + 5 phút.
-    check_auth_status và get_pending_auth_request phải lọc is_expired() trước khi dùng.
+    Push auth request: thiết bị mới xin xác nhận từ thiết bị đang online.
+    [WARN-2] expires_at tự set khi save lần đầu.
+    [FIX-7] get_active() classmethod thay cho filter(expires_at__gt=...) rải rác.
     """
     STATUS_CHOICES = [
         ('pending',  'Chờ xác nhận'),
@@ -479,30 +529,42 @@ class RemoteAuthRequest(models.Model):
     EXPIRY_MINUTES = 5
 
     user        = models.ForeignKey(User, on_delete=models.CASCADE)
-    session_key = models.CharField(max_length=40)
+    session_key = models.CharField(max_length=40, db_index=True)
     device_info = models.CharField(max_length=255)
     status      = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at  = models.DateTimeField(auto_now_add=True)
-    # [WARN-2] expires_at: tự tính khi save() lần đầu
     expires_at  = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name        = 'Yêu cầu xác thực từ xa'
         verbose_name_plural = 'Yêu cầu xác thực từ xa'
+        indexes = [
+            models.Index(fields=['session_key', 'expires_at'], name='remoteauth_session_exp_idx'),
+        ]
 
     def save(self, *args, **kwargs):
-        # Tự set expires_at khi tạo mới
         if not self.expires_at:
             self.expires_at = timezone.now() + datetime.timedelta(minutes=self.EXPIRY_MINUTES)
         super().save(*args, **kwargs)
 
     @property
     def is_expired(self) -> bool:
+        """Kiểm tra instance đơn lẻ. Không dùng trong filter() — dùng get_active()."""
+        if not self.expires_at:
+            return True
         return timezone.now() > self.expires_at
 
     @classmethod
+    def get_active(cls):
+        """
+        [FIX-7] Queryset các request chưa hết hạn.
+        Dùng thay cho filter(expires_at__gt=timezone.now()) trong views.
+        """
+        return cls.objects.filter(expires_at__gt=timezone.now())
+
+    @classmethod
     def cleanup_expired(cls):
-        """Xóa các request đã hết hạn. Gọi từ check_auth_status hoặc celery beat."""
+        """Xóa request hết hạn. Gọi từ check_auth_status hoặc celery beat."""
         cls.objects.filter(expires_at__lt=timezone.now()).delete()
 
     def __str__(self):

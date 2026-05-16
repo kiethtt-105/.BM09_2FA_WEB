@@ -172,9 +172,12 @@ td{padding:14px 18px;vertical-align:middle;}
                 <span class="dot-pulse"></span> Online
               </span>
             {% else %}
-              <a href="{% url 'logout_device' d.id %}" class="btn-logout-dev">
-                <i class="fa fa-user-slash" style="font-size:11px"></i> Đăng xuất
-              </a>
+              <form method="POST" action="{% url 'logout_device' d.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-logout-dev">
+                  <i class="fa fa-user-slash" style="font-size:11px"></i> Đăng xuất
+                </button>
+              </form>
             {% endif %}
           </td>
         </tr>

@@ -4,304 +4,546 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Thiết lập 2FA · HUIT</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
-:root{
-  --bg:#0a0a0f;--bg1:#0f0f1a;--bg2:#141424;--bg3:#1a1a2e;
-  --border:rgba(120,100,255,0.12);--border2:rgba(120,100,255,0.22);
-  --purple:#7c6fff;--purple2:#a78bfa;
-  --text:#e8e6f0;--muted:#6b6880;--muted2:#9290a0;
-  --font:'Space Grotesk',sans-serif;--mono:'Space Mono',monospace;
+:root {
+  --bg: #09090e;
+  --surface: #111118;
+  --surface2: #18181f;
+  --surface3: #1e1e28;
+  --border: rgba(139,120,255,0.1);
+  --border-active: rgba(139,120,255,0.35);
+  --purple: #8b78ff;
+  --purple-dim: rgba(139,120,255,0.12);
+  --text: #ededf0;
+  --muted: #5a5870;
+  --muted2: #8e8ca0;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --font: 'Inter', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
 }
-*{box-sizing:border-box;margin:0;padding:0;}
-body{
-  font-family:var(--font);background:var(--bg);color:var(--text);
-  min-height:100vh;display:flex;align-items:center;justify-content:center;
-  padding:24px;-webkit-font-smoothing:antialiased;
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  -webkit-font-smoothing: antialiased;
 }
-body::before{
-  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse 600px 400px at 50% 15%,rgba(124,111,255,0.06) 0%,transparent 70%);
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 600px; height: 300px;
+  background: radial-gradient(ellipse at top, rgba(139,120,255,0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
 }
-.card{
-  position:relative;z-index:1;width:100%;max-width:440px;
-  background:var(--bg1);border:1px solid var(--border);border-radius:16px;
-  padding:40px 36px;
-  animation:fadeUp .4s cubic-bezier(.16,1,.3,1) both;
-}
-@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
 
-.brand{display:flex;align-items:center;gap:10px;margin-bottom:28px;}
-.brand-dot{width:8px;height:8px;background:var(--purple);border-radius:50%;}
-.brand-name{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--muted2);text-transform:uppercase;}
-.brand-name strong{color:var(--purple2);}
-
-.header{text-align:center;margin-bottom:28px;}
-.shield{
-  width:58px;height:58px;margin:0 auto 16px;
-  background:rgba(124,111,255,.1);border:1px solid var(--border2);
-  border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;
+/* Card */
+.wrap {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 420px;
+  animation: up .35s cubic-bezier(.16,1,.3,1) both;
 }
-h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:4px;}
-.sub{font-size:13px;color:var(--muted);}
+@keyframes up { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
 
-.msg{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;}
-.msg-success{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.18);color:#86efac;}
-.msg-error{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);color:#fca5a5;}
-.msg-info{background:rgba(124,111,255,.08);border:1px solid rgba(124,111,255,.18);color:var(--purple2);}
-
-/* Method tabs */
-.methods{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:22px;}
-.method{
-  display:flex;flex-direction:column;align-items:center;gap:5px;
-  padding:12px 6px;border-radius:10px;
-  border:1px solid var(--border);background:var(--bg2);
-  color:var(--muted);cursor:pointer;text-decoration:none;
-  transition:all .2s;
+/* Top bar */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 24px;
 }
-.method:hover{border-color:var(--border2);color:var(--text);}
-.method.active{border-color:var(--purple);color:var(--purple2);background:rgba(124,111,255,.08);}
-.method i{font-size:18px;}
-.method-label{font-size:10px;font-weight:700;font-family:var(--mono);text-align:center;letter-spacing:.5px;}
-.method-hint{font-size:9px;color:var(--muted);text-align:center;}
-
-.hint-box{
-  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
-  padding:10px 14px;font-size:12px;color:var(--muted2);font-family:var(--mono);
-  text-align:center;margin-bottom:18px;
+.logo {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--muted2);
 }
+.logo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--purple); }
+.logo span { color: var(--purple); }
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted); text-decoration: none;
+  padding: 6px 10px; border-radius: 7px;
+  border: 1px solid var(--border);
+  transition: color .15s, border-color .15s;
+}
+.back-link:hover { color: var(--text); border-color: var(--border-active); }
+
+/* Method badge */
+.method-badge {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-active);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+.badge-icon {
+  width: 44px; height: 44px; border-radius: 11px;
+  background: var(--purple-dim);
+  border: 1px solid var(--border-active);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: var(--purple); flex-shrink: 0;
+}
+.badge-info { flex: 1; }
+.badge-name {
+  font-size: 15px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.badge-desc { font-size: 12px; color: var(--muted2); margin-top: 3px; }
+.badge-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-family: var(--mono); font-weight: 600;
+  padding: 3px 8px; border-radius: 5px;
+}
+.badge-status.on {
+  background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.2); color: #86efac;
+}
+.badge-status.off {
+  background: rgba(139,120,255,.1); border: 1px solid rgba(139,120,255,.2); color: var(--purple);
+}
+
+/* Panel */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.panel-body { padding: 20px; }
+.panel-hint {
+  font-size: 12px; color: var(--muted2);
+  font-family: var(--mono);
+  padding: 11px 20px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* QR */
+.qr-block {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+.qr-block img { width: 160px; height: 160px; border-radius: 8px; }
+.qr-label { font-size: 11px; color: var(--muted); margin: 10px 0 6px; font-family: var(--mono); }
+.secret-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--surface3); border: 1px solid var(--border);
+  border-radius: 7px; padding: 6px 12px;
+  font-family: var(--mono); font-size: 12px; color: var(--purple);
+  cursor: pointer; transition: border-color .15s;
+}
+.secret-chip:hover { border-color: var(--border-active); }
+.secret-chip i { font-size: 11px; color: var(--muted); }
 
 /* OTP inputs */
-.otp-row{display:flex;justify-content:center;gap:8px;margin:16px 0;}
-.otp-box{
-  width:48px;height:58px;
-  background:var(--bg2);border:1px solid var(--border);border-radius:12px;
-  font-size:1.7rem;font-weight:700;font-family:var(--mono);
-  text-align:center;color:var(--text);outline:none;
-  transition:border-color .2s,box-shadow .2s;
+.otp-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
+.otp-box {
+  width: 48px; height: 54px; flex: none;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 22px; font-weight: 600; font-family: var(--mono);
+  text-align: center; color: var(--text); outline: none;
+  transition: border-color .15s, box-shadow .15s;
 }
-.otp-box:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,111,255,.12);}
-.otp-box.filled{border-color:rgba(124,111,255,.35);}
+.otp-box:focus {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgba(139,120,255,.12);
+}
+.otp-box.filled { border-color: var(--border-active); }
 
-/* QR code area */
-.qr-wrap{
-  background:var(--bg2);border:1px solid var(--border);border-radius:10px;
-  padding:20px;text-align:center;margin:16px 0;
+/* Info row */
+.info-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--muted2);
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px;
+  margin-bottom: 18px;
 }
-.qr-wrap img{max-width:160px;border-radius:6px;}
-.secret-key{
-  margin-top:10px;font-family:var(--mono);font-size:12px;color:var(--purple2);
-  background:var(--bg1);border:1px solid var(--border);border-radius:6px;
-  padding:6px 12px;display:inline-block;letter-spacing:1px;
-}
+.info-row i { color: var(--purple); font-size: 13px; }
 
-.btn{
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  width:100%;padding:12px 18px;border:none;border-radius:10px;
-  font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;
-  text-decoration:none;transition:opacity .15s,transform .15s;margin-bottom:8px;
+/* Buttons */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 12px; border: none; border-radius: 10px;
+  font-family: var(--font); font-size: 14px; font-weight: 500;
+  cursor: pointer; text-decoration: none;
+  transition: opacity .15s, transform .1s;
 }
-.btn:hover:not(:disabled){opacity:.85;transform:translateY(-1px);}
-.btn:active:not(:disabled){transform:translateY(0);}
-.btn:disabled{opacity:.35;cursor:not-allowed;}
-.btn-primary{background:var(--purple);color:#fff;border:none;}
-.btn-ghost{background:var(--bg2);border:1px solid var(--border);color:var(--muted2);}
-.btn-ghost:hover:not(:disabled){border-color:var(--border2);color:var(--text);}
-.btn-danger{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);color:#fca5a5;}
-.btn-danger:hover:not(:disabled){background:rgba(239,68,68,.14);}
+.btn + .btn { margin-top: 8px; }
+.btn:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: scale(.99); }
+.btn:disabled { opacity: .3; cursor: not-allowed; }
+.btn-primary { background: var(--purple); color: #fff; }
+.btn-ghost {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted2);
+}
+.btn-ghost:hover:not(:disabled) { border-color: var(--border-active); color: var(--text); }
+.btn-danger {
+  background: rgba(239,68,68,.08);
+  border: 1px solid rgba(239,68,68,.18);
+  color: #fca5a5;
+}
+.btn-danger:hover:not(:disabled) { background: rgba(239,68,68,.14); }
 
-.divider{height:1px;background:var(--border);margin:14px 0;}
+/* Alert */
+.alert {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: 9px;
+  font-size: 13px; margin-bottom: 14px;
+}
+.alert-success { background: rgba(34,197,94,.07); border: 1px solid rgba(34,197,94,.15); color: #86efac; }
+.alert-error { background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.15); color: #fca5a5; }
+.alert-info { background: rgba(139,120,255,.07); border: 1px solid rgba(139,120,255,.15); color: var(--purple); }
+
+/* Divider */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* Enabled state chip */
+.enabled-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(34,197,94,.05);
+  border: 1px solid rgba(34,197,94,.12);
+  border-radius: 9px; margin-bottom: 16px;
+}
+.enabled-row span { font-size: 13px; color: #86efac; display: flex; align-items: center; gap: 6px; }
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="brand">
-    <div class="brand-dot"></div>
-    <div class="brand-name">HUIT<strong>.auth</strong></div>
+<div class="wrap">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      HUIT<span>.auth</span>
+    </div>
+    <a href="{% url 'dashboard' %}" class="back-link">
+      <i class="fa fa-arrow-left" style="font-size:11px"></i> Dashboard
+    </a>
   </div>
 
-  <div class="header">
-    <div class="shield"><i class="fa fa-shield-halved" style="color:var(--purple2)"></i></div>
-    <h2>Thiết lập 2FA</h2>
-    <p class="sub">Chọn phương thức xác thực hai lớp</p>
-  </div>
-
+  <!-- Messages -->
   {% if messages %}
     {% for message in messages %}
-    <div class="msg {% if 'success' in message.tags %}msg-success{% elif 'info' in message.tags %}msg-info{% else %}msg-error{% endif %}">
-      <i class="fas {% if 'success' in message.tags %}fa-check-circle{% elif 'info' in message.tags %}fa-circle-info{% else %}fa-circle-xmark{% endif %}"></i>
-      {{ message }}
+    <div class="alert {% if 'success' in message.tags %}alert-success{% elif 'info' in message.tags %}alert-info{% else %}alert-error{% endif %}">
+      <i class="fa {% if 'success' in message.tags %}fa-circle-check{% elif 'info' in message.tags %}fa-circle-info{% else %}fa-circle-xmark{% endif %}" style="margin-top:1px;flex-shrink:0"></i>
+      <span>{{ message }}</span>
     </div>
     {% endfor %}
   {% endif %}
 
-  <!-- Method selector -->
-  <div class="methods">
-    <a href="?method=totp" class="method {% if method == 'totp' %}active{% endif %}">
-      <i class="fa fa-mobile-screen"></i>
-      <span class="method-label">TOTP</span>
-      <span class="method-hint">App</span>
-    </a>
-    <a href="?method=email" class="method {% if method == 'email' %}active{% endif %}">
-      <i class="fa fa-envelope"></i>
-      <span class="method-label">Email</span>
-      <span class="method-hint">OTP</span>
-    </a>
-    <a href="?method=hotp" class="method {% if method == 'hotp' %}active{% endif %}">
-      <i class="fa fa-ticket"></i>
-      <span class="method-label">HOTP</span>
-      <span class="method-hint">Counter</span>
-    </a>
-    <a href="?method=fido2" class="method {% if method == 'fido2' %}active{% endif %}">
-      <i class="fa fa-fingerprint"></i>
-      <span class="method-label">FIDO2</span>
-      <span class="method-hint">Passkey</span>
-    </a>
-  </div>
-
-  <!-- TOTP -->
-  {% if method == 'totp' or not method %}
-  <div class="hint-box">Quét mã QR bằng Google Authenticator hoặc Authy</div>
-  {% if qr_code %}
-  <div class="qr-wrap">
-    <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code">
-    <div>
-      <span class="secret-key">{{ secret_key }}</span>
+  <!-- Method badge — hiển thị method được chọn -->
+  {% if method == 'totp' or method == 'app' or not method %}
+  <div class="method-badge">
+    <div class="badge-icon"><i class="fa fa-mobile-screen"></i></div>
+    <div class="badge-info">
+      <div class="badge-name">
+        Authenticator App
+        {% if profile.has_app_otp %}
+        <span class="badge-status on"><i class="fa fa-circle" style="font-size:6px"></i> Đang bật</span>
+        {% else %}
+        <span class="badge-status off"><i class="fa fa-circle" style="font-size:6px"></i> Chưa kích hoạt</span>
+        {% endif %}
+      </div>
+      <div class="badge-desc">TOTP · Google Authenticator, Authy, iCloud Keychain</div>
     </div>
   </div>
-  {% endif %}
-  <form method="POST">
-    {% csrf_token %}
-    <input type="hidden" name="method" value="totp">
-    <div class="otp-row" id="otp-row">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+
+  <!-- TOTP content -->
+  <div class="panel">
+    <div class="panel-hint">
+      <i class="fa fa-qrcode" style="color:var(--purple)"></i>
+      Quét mã QR bằng ứng dụng Authenticator
     </div>
-    <input type="hidden" name="otp_code" id="hidden-otp">
-    <button type="submit" class="btn btn-primary" id="confirm-btn" disabled>
-      <i class="fa fa-check"></i> Xác nhận kích hoạt
-    </button>
-  </form>
-  {% if profile.totp_enabled %}
-  <div class="divider"></div>
-  <form method="POST">
-    {% csrf_token %}
-    <input type="hidden" name="disable_totp" value="1">
-    <button type="submit" class="btn btn-danger">
-      <i class="fa fa-xmark"></i> Tắt TOTP
-    </button>
-  </form>
-  {% endif %}
-  {% endif %}
+    <div class="panel-body">
+      {% if profile.has_app_otp %}
+      <div class="enabled-row">
+        <span><i class="fa fa-shield-halved"></i> TOTP đang được bảo vệ tài khoản của bạn</span>
+      </div>
+      {% endif %}
 
-  <!-- EMAIL OTP -->
-  {% if method == 'email' %}
-  <div class="hint-box">Mã OTP sẽ được gửi đến <strong>{{ user.email }}</strong></div>
-  <form method="POST">
-    {% csrf_token %}
-    <input type="hidden" name="method" value="email">
-    {% if waiting_otp %}
-    <div class="otp-row" id="otp-row">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-      <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+      {% if qr_code_base64 %}
+      <div class="qr-block">
+        <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code TOTP">
+        <div class="qr-label">Hoặc nhập thủ công secret key</div>
+        <div class="secret-chip" onclick="copySecret(this,'{{ otp_secret }}')">
+          <i class="fa fa-key"></i>
+          <span>{{ otp_secret }}</span>
+          <i class="fa fa-copy" id="copy-icon"></i>
+        </div>
+      </div>
+      {% endif %}
+
+      <form method="POST" id="totp-form">
+        {% csrf_token %}
+        <input type="hidden" name="method" value="app">
+        <div class="otp-row">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+        </div>
+        <input type="hidden" name="otp_code" id="hidden-otp">
+        <button type="submit" name="verify_app_otp" class="btn btn-primary" id="confirm-btn" disabled>
+          <i class="fa fa-check"></i> Xác nhận kích hoạt
+        </button>
+      </form>
+
+      {% if profile.has_app_otp %}
+      <div class="divider"></div>
+      <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="disable_app">
+        <button type="submit" class="btn btn-danger">
+          <i class="fa fa-shield-xmark"></i> Tắt TOTP
+        </button>
+      </form>
+      {% endif %}
     </div>
-    <input type="hidden" name="otp_code" id="hidden-otp">
-    <button type="submit" class="btn btn-primary" id="confirm-btn" disabled>
-      <i class="fa fa-check"></i> Xác nhận
-    </button>
-    {% else %}
-    <button type="submit" name="send_otp" class="btn btn-primary">
-      <i class="fa fa-paper-plane"></i> Gửi mã OTP
-    </button>
-    {% endif %}
-  </form>
-  {% if profile.email_otp_enabled %}
-  <div class="divider"></div>
-  <form method="POST">
-    {% csrf_token %}
-    <input type="hidden" name="disable_email_otp" value="1">
-    <button type="submit" class="btn btn-danger"><i class="fa fa-xmark"></i> Tắt Email OTP</button>
-  </form>
-  {% endif %}
+  </div>
+
+  {% elif method == 'email' %}
+  <div class="method-badge">
+    <div class="badge-icon"><i class="fa fa-envelope"></i></div>
+    <div class="badge-info">
+      <div class="badge-name">
+        Email OTP
+        {% if profile.has_email_otp %}
+        <span class="badge-status on"><i class="fa fa-circle" style="font-size:6px"></i> Đang bật</span>
+        {% else %}
+        <span class="badge-status off"><i class="fa fa-circle" style="font-size:6px"></i> Chưa kích hoạt</span>
+        {% endif %}
+      </div>
+      <div class="badge-desc">Mã OTP gửi qua email mỗi lần đăng nhập</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hint">
+      <i class="fa fa-envelope" style="color:var(--purple)"></i>
+      Gửi mã OTP đến <strong style="color:var(--text)">{{ user.email }}</strong>
+    </div>
+    <div class="panel-body">
+      {% if profile.has_email_otp %}
+      <div class="enabled-row">
+        <span><i class="fa fa-shield-halved"></i> Email OTP đang bảo vệ tài khoản của bạn</span>
+      </div>
+      {% endif %}
+
+      <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="method" value="email">
+        {% if otp_sent %}
+        <div class="info-row">
+          <i class="fa fa-paper-plane"></i>
+          Mã đã gửi · kiểm tra hộp thư {{ user.email }}
+        </div>
+        <div class="otp-row">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+        </div>
+        <input type="hidden" name="otp_code" id="hidden-otp">
+        <button type="submit" name="verify_email_otp" class="btn btn-primary" id="confirm-btn" disabled>
+          <i class="fa fa-check"></i> Xác nhận kích hoạt
+        </button>
+        {% else %}
+        <button type="submit" name="send_email_otp" class="btn btn-primary">
+          <i class="fa fa-paper-plane"></i> Gửi mã OTP
+        </button>
+        {% endif %}
+      </form>
+
+      {% if profile.has_email_otp %}
+      <div class="divider"></div>
+      <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="disable_email">
+        <button type="submit" class="btn btn-danger">
+          <i class="fa fa-shield-xmark"></i> Tắt Email OTP
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% elif method == 'hotp' %}
+  <div class="method-badge">
+    <div class="badge-icon"><i class="fa fa-ticket"></i></div>
+    <div class="badge-info">
+      <div class="badge-name">
+        HOTP
+        {% if profile.has_hotp %}
+        <span class="badge-status on"><i class="fa fa-circle" style="font-size:6px"></i> Đang bật</span>
+        {% else %}
+        <span class="badge-status off"><i class="fa fa-circle" style="font-size:6px"></i> Chưa kích hoạt</span>
+        {% endif %}
+      </div>
+      <div class="badge-desc">Counter-based OTP · mã thay đổi theo số lần dùng</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hint">
+      <i class="fa fa-qrcode" style="color:var(--purple)"></i>
+      Quét mã QR bằng ứng dụng hỗ trợ HOTP
+    </div>
+    <div class="panel-body">
+      {% if profile.has_hotp %}
+      <div class="enabled-row">
+        <span><i class="fa fa-shield-halved"></i> HOTP đang bảo vệ tài khoản · counter: {{ profile.hotp_counter }}</span>
+      </div>
+      {% endif %}
+
+      {% if qr_code_base64 %}
+      <div class="qr-block">
+        <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code HOTP">
+        <div class="qr-label">Hoặc nhập thủ công</div>
+        <div class="secret-chip" onclick="copySecret(this,'{{ otp_secret }}')">
+          <i class="fa fa-key"></i>
+          <span>{{ otp_secret }}</span>
+          <i class="fa fa-copy"></i>
+        </div>
+      </div>
+      {% endif %}
+
+      <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="method" value="hotp">
+        <input type="hidden" name="setup_token" value="{{ setup_token }}">
+        <div class="otp-row">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+        </div>
+        <input type="hidden" name="otp_code" id="hidden-otp">
+        <button type="submit" name="verify_hotp_otp" class="btn btn-primary" id="confirm-btn" disabled>
+          <i class="fa fa-check"></i> Xác nhận kích hoạt
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% elif method == 'fido2' %}
+  <div class="method-badge">
+    <div class="badge-icon"><i class="fa fa-fingerprint"></i></div>
+    <div class="badge-info">
+      <div class="badge-name">Passkey · FIDO2</div>
+      <div class="badge-desc">Vân tay, Face ID hoặc khóa bảo mật phần cứng</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hint">
+      <i class="fa fa-fingerprint" style="color:var(--purple)"></i>
+      Dùng sinh trắc học hoặc security key để xác thực
+    </div>
+    <div class="panel-body">
+      <button onclick="registerPasskey()" class="btn btn-primary">
+        <i class="fa fa-fingerprint"></i> Đăng ký Passkey mới
+      </button>
+      <a href="{% url 'manage_passkeys' %}" class="btn btn-ghost" style="margin-top:8px">
+        <i class="fa fa-key"></i> Quản lý passkeys đã đăng ký
+      </a>
+    </div>
+  </div>
   {% endif %}
 
-  <!-- FIDO2 -->
-  {% if method == 'fido2' %}
-  <div class="hint-box">Sử dụng vân tay, Face ID hoặc khóa bảo mật</div>
-  <button onclick="registerPasskey()" class="btn btn-primary">
-    <i class="fa fa-fingerprint"></i> Đăng ký Passkey
-  </button>
-  <a href="{% url 'manage_passkeys' %}" class="btn btn-ghost">
-    <i class="fa fa-key"></i> Xem passkeys đã đăng ký
-  </a>
-  {% endif %}
-
-  <div class="divider"></div>
-  <a href="{% url 'dashboard' %}" class="btn btn-ghost">
-    <i class="fa fa-arrow-left"></i> Quay lại Dashboard
-  </a>
 </div>
 
 <script>
-const boxes=[...document.querySelectorAll('.otp-box')];
-const hidden=document.getElementById('hidden-otp');
-const confirmBtn=document.getElementById('confirm-btn');
-if(boxes.length&&hidden&&confirmBtn){
-  boxes.forEach((box,i)=>{
-    box.addEventListener('input',()=>{
-      box.value=box.value.replace(/\D/g,'').slice(-1);
-      box.classList.toggle('filled',!!box.value);
-      let v='';boxes.forEach(b=>v+=b.value);
-      hidden.value=v;confirmBtn.disabled=v.length<6;
-      if(box.value&&i<5)boxes[i+1].focus();
+const boxes = [...document.querySelectorAll('.otp-box')];
+const hidden = document.getElementById('hidden-otp');
+const confirmBtn = document.getElementById('confirm-btn');
+
+if (boxes.length && hidden && confirmBtn) {
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', () => {
+      box.value = box.value.replace(/\D/g, '').slice(-1);
+      box.classList.toggle('filled', !!box.value);
+      let v = ''; boxes.forEach(b => v += b.value);
+      hidden.value = v; confirmBtn.disabled = v.length < 6;
+      if (box.value && i < 5) boxes[i + 1].focus();
     });
-    box.addEventListener('keydown',e=>{
-      if(e.key==='Backspace'&&!box.value&&i>0){
-        boxes[i-1].value='';boxes[i-1].classList.remove('filled');boxes[i-1].focus();
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !box.value && i > 0) {
+        boxes[i - 1].value = ''; boxes[i - 1].classList.remove('filled'); boxes[i - 1].focus();
       }
     });
+    box.addEventListener('paste', e => {
+      e.preventDefault();
+      const p = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+      [...p.slice(0, 6)].forEach((c, j) => { if (boxes[j]) { boxes[j].value = c; boxes[j].classList.add('filled'); } });
+      let v = ''; boxes.forEach(b => v += b.value);
+      hidden.value = v; confirmBtn.disabled = v.length < 6;
+      boxes[Math.min(p.length, 5)].focus();
+    });
   });
-  if(boxes[0])boxes[0].focus();
+  boxes[0].focus();
 }
 
-async function registerPasskey(){
-  try{
-    const optRes=await fetch('/passkeys/register-options/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}});
-    const opts=await optRes.json();
-    opts.challenge=base64url.decode(opts.challenge);
-    opts.user.id=base64url.decode(opts.user.id);
-    const cred=await navigator.credentials.create({publicKey:opts});
-    const regData={
-      id:cred.id,
-      rawId:base64url.encode(cred.rawId),
-      response:{
-        clientDataJSON:base64url.encode(cred.response.clientDataJSON),
-        attestationObject:base64url.encode(cred.response.attestationObject),
-      },type:cred.type
-    };
-    const vRes=await fetch('/passkeys/register-verify/',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
-      body:JSON.stringify(regData)
-    });
-    const result=await vRes.json();
-    if(result.status==='ok')location.reload();
-    else alert('Đăng ký thất bại: '+result.message);
-  }catch(e){console.error(e);alert('Lỗi: '+e.message);}
+function copySecret(el, secret) {
+  navigator.clipboard.writeText(secret).then(() => {
+    const icon = el.querySelector('.fa-copy');
+    icon.className = 'fa fa-check';
+    icon.style.color = '#22c55e';
+    setTimeout(() => { icon.className = 'fa fa-copy'; icon.style.color = ''; }, 1500);
+  });
 }
-function getCookie(n){const c=document.cookie.split(';').find(c=>c.trim().startsWith(n+'='));return c?c.split('=')[1]:'';}
-const base64url={
-  encode:buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''),
-  decode:s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;}
+
+async function registerPasskey() {
+  try {
+    const optRes = await fetch('/passkeys/register-options/', { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+    const opts = await optRes.json();
+    opts.challenge = base64url.decode(opts.challenge);
+    opts.user.id = base64url.decode(opts.user.id);
+    const cred = await navigator.credentials.create({ publicKey: opts });
+    const regData = {
+      id: cred.id, rawId: base64url.encode(cred.rawId),
+      response: {
+        clientDataJSON: base64url.encode(cred.response.clientDataJSON),
+        attestationObject: base64url.encode(cred.response.attestationObject),
+      }, type: cred.type
+    };
+    const vRes = await fetch('/passkeys/register-verify/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify(regData)
+    });
+    const result = await vRes.json();
+    if (result.status === 'ok') location.reload();
+    else alert('Đăng ký thất bại: ' + result.message);
+  } catch (e) { console.error(e); alert('Lỗi: ' + e.message); }
+}
+function getCookie(n) { const c = document.cookie.split(';').find(c => c.trim().startsWith(n + '=')); return c ? c.split('=')[1] : ''; }
+const base64url = {
+  encode: buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+  decode: s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer; }
 };
 </script>
 </body>
