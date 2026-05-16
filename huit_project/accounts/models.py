@@ -47,6 +47,9 @@ class UserProfile(models.Model):
     phone_number = models.CharField('Số điện thoại', max_length=15, blank=True, default='')
 
     otp_secret   = models.CharField(max_length=255, blank=True, null=True)
+    # FIX-3: field riêng cho HOTP secret — tránh ghi đè otp_secret của TOTP
+    # Nếu user bật cả TOTP lẫn HOTP, hai secret độc lập, không xung đột
+    hotp_secret  = models.CharField(max_length=255, blank=True, null=True, verbose_name='HOTP Secret (encrypted)')
     hotp_counter = models.PositiveBigIntegerField(default=0, verbose_name='HOTP Counter')
 
     has_app_otp   = models.BooleanField(default=False, verbose_name='Đã bật App OTP (TOTP)')
@@ -92,10 +95,25 @@ class UserProfile(models.Model):
         except Exception:
             return None
 
+    def decrypt_hotp_secret(self) -> str:
+        """Giải mã HOTP secret riêng (field hotp_secret)."""
+        if not self.hotp_secret:
+            return None
+        try:
+            if self.hotp_secret.startswith('gAAAA'):
+                f = Fernet(settings.ENCRYPTION_KEY.encode())
+                return f.decrypt(self.hotp_secret.encode()).decode()
+            return None
+        except Exception:
+            return None
+
     def save(self, *args, **kwargs):
-        # Auto-encrypt secret nếu chưa có tiền tố Fernet
+        # Auto-encrypt otp_secret (TOTP) nếu chưa có tiền tố Fernet
         if self.otp_secret and not self.otp_secret.startswith('gAAAA'):
             self.otp_secret = self.encrypt_secret(self.otp_secret)
+        # FIX-3: Auto-encrypt hotp_secret riêng
+        if self.hotp_secret and not self.hotp_secret.startswith('gAAAA'):
+            self.hotp_secret = self.encrypt_secret(self.hotp_secret)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -107,7 +125,7 @@ class UserProfile(models.Model):
     def is_2fa_enabled(self) -> bool:
         if self.force_disable_2fa:
             return False
-        return self.has_email_otp or self.has_app_otp or self.has_hotp
+        return self.has_email_otp or self.has_app_otp or self.has_hotp or self.has_fido2
 
     @property
     def has_fido2(self) -> bool:
