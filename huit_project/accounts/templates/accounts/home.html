@@ -3,228 +3,110 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trang chủ · HUIT</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>HUIT · Auth</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
 :root {
-  --bg:        #080c14;
-  --surface:   #0f1623;
-  --surface2:  #161e2e;
-  --border:    rgba(255,255,255,0.07);
-  --accent:    #6366f1;
-  --accent2:   #22d3ee;
-  --green:     #10b981;
-  --red:       #ef4444;
-  --text:      #e2e8f0;
-  --muted:     #64748b;
-  --font:      'Outfit', sans-serif;
-  --mono:      'DM Mono', monospace;
+  --bg:#0a0a0f; --bg1:#0f0f1a; --bg2:#141424; --bg3:#1a1a2e;
+  --border:rgba(120,100,255,0.12); --border2:rgba(120,100,255,0.22);
+  --purple:#7c6fff; --purple2:#a78bfa; --purple3:rgba(124,111,255,0.08);
+  --text:#e8e6f0; --muted:#6b6880; --muted2:#9290a0;
+  --danger:#ef4444; --success:#22c55e;
+  --font:'Space Grotesk',sans-serif; --mono:'Space Mono',monospace;
 }
-* { box-sizing:border-box; margin:0; padding:0; }
-body {
-  font-family: var(--font);
-  background: var(--bg);
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text);
-  overflow: hidden;
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:24px;-webkit-font-smoothing:antialiased;
 }
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 600px 400px at 20% 10%,rgba(124,111,255,0.07) 0%,transparent 70%),
+    radial-gradient(ellipse 400px 300px at 80% 90%,rgba(100,80,220,0.04) 0%,transparent 70%);
+}
+.card{
+  position:relative;z-index:1;
+  width:100%;max-width:380px;
+  background:var(--bg1);border:1px solid var(--border);border-radius:16px;
+  padding:40px 36px;
+}
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(16px);}
+  to{opacity:1;transform:translateY(0);}
+}
+.fade-up{animation:fadeUp .4s cubic-bezier(.16,1,.3,1) both;}
 
-/* Ambient glow */
-body::before, body::after {
-  content:'';
-  position:fixed;
-  border-radius:50%;
-  filter:blur(120px);
-  pointer-events:none;
-  z-index:0;
-}
-body::before {
-  width:500px; height:500px;
-  background: rgba(99,102,241,0.12);
-  top:-100px; left:-100px;
-}
-body::after {
-  width:400px; height:400px;
-  background: rgba(34,211,238,0.08);
-  bottom:-80px; right:-80px;
-}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:40px;}
+.brand-dot{width:8px;height:8px;background:var(--purple);border-radius:50%;}
+.brand-name{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--muted2);text-transform:uppercase;}
+.brand-name strong{color:var(--purple2);}
 
-.card {
-  position:relative; z-index:1;
-  width:100%; max-width:420px;
-  background: var(--surface);
-  border:1px solid var(--border);
-  border-radius:24px;
-  padding:44px 40px;
-  box-shadow:
-    0 0 0 1px rgba(99,102,241,0.1),
-    0 40px 80px rgba(0,0,0,0.5);
-  animation: rise .5s cubic-bezier(.16,1,.3,1) both;
+.user-badge{
+  display:flex;align-items:center;gap:12px;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;padding:12px 14px;margin-bottom:24px;
 }
-@keyframes rise {
-  from { opacity:0; transform:translateY(24px) scale(.97); }
-  to   { opacity:1; transform:translateY(0)    scale(1); }
-}
-
-.logo {
-  display:flex; align-items:center; gap:10px;
-  margin-bottom:36px;
-}
-.logo-icon {
-  width:40px; height:40px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  border-radius:10px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:18px;
-}
-.logo-text {
-  font-family: var(--mono);
-  font-size:18px;
-  font-weight:500;
-  color: var(--text);
-  letter-spacing:1px;
-}
-.logo-text span { color: var(--accent2); }
-
-h1 {
-  font-size:28px; font-weight:700;
-  line-height:1.2;
-  margin-bottom:8px;
-}
-.subtitle {
-  font-size:14px;
-  color: var(--muted);
-  margin-bottom:32px;
-  line-height:1.6;
-}
-
-/* User badge */
-.user-badge {
-  display:flex; align-items:center; gap:10px;
-  background: var(--surface2);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:12px 16px;
-  margin-bottom:24px;
-}
-.avatar {
-  width:36px; height:36px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  border-radius:10px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:15px;
+.avatar{
+  width:38px;height:38px;border-radius:8px;
+  background:var(--bg3);border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:14px;font-weight:700;color:var(--purple2);
   flex-shrink:0;
 }
-.user-info { flex:1; min-width:0; }
-.user-name {
-  font-size:14px; font-weight:600;
-  color: var(--text);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.user-role {
-  font-size:11px; color: var(--muted);
-  font-family: var(--mono);
-  margin-top:1px;
-}
-.online-dot {
-  width:8px; height:8px;
-  background: var(--green);
-  border-radius:50%;
-  box-shadow:0 0 6px var(--green);
+.user-info{flex:1;min-width:0;}
+.user-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.user-role{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:1px;letter-spacing:.5px;}
+.dot-live{
+  width:6px;height:6px;border-radius:50%;background:var(--success);
+  box-shadow:0 0 0 3px rgba(34,197,94,.15);flex-shrink:0;
 }
 
-/* Buttons */
-.btn {
-  display:flex; align-items:center; justify-content:center; gap:9px;
-  width:100%; padding:13px 20px;
-  border:none; border-radius:12px;
-  font-size:14px; font-weight:600;
-  font-family: var(--font);
-  cursor:pointer;
-  text-decoration:none;
-  transition: transform .15s, box-shadow .15s, opacity .15s;
-  margin-bottom:10px;
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:11px 18px;border:none;border-radius:10px;
+  font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;
+  text-decoration:none;transition:opacity .15s,transform .15s;
+  letter-spacing:.01em;margin-bottom:8px;
 }
-.btn:last-child { margin-bottom:0; }
-.btn:hover { transform:translateY(-2px); }
-.btn:active { transform:translateY(0); }
+.btn:last-child{margin-bottom:0;}
+.btn:hover{opacity:.85;transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn-primary{background:var(--purple);color:#fff;}
+.btn-secondary{background:var(--bg2);border:1px solid var(--border);color:var(--muted2);}
+.btn-secondary:hover{border-color:var(--border2);color:var(--text);}
+.btn-danger{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);color:#fca5a5;}
 
-.btn-primary {
-  background: linear-gradient(135deg, var(--accent), #818cf8);
-  color:#fff;
-  box-shadow:0 4px 20px rgba(99,102,241,0.35);
-}
-.btn-primary:hover { box-shadow:0 8px 28px rgba(99,102,241,0.5); }
+h1{font-size:22px;font-weight:600;line-height:1.2;letter-spacing:-.01em;margin-bottom:4px;}
+.sub{font-size:13px;color:var(--muted);margin-bottom:28px;line-height:1.6;}
 
-.btn-success {
-  background: linear-gradient(135deg, var(--green), #059669);
-  color:#fff;
-  box-shadow:0 4px 20px rgba(16,185,129,0.3);
-}
-.btn-success:hover { box-shadow:0 8px 28px rgba(16,185,129,0.45); }
-
-.btn-amber {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color:#fff;
-  box-shadow:0 4px 20px rgba(245,158,11,0.3);
-}
-.btn-amber:hover { box-shadow:0 8px 28px rgba(245,158,11,0.45); }
-
-.btn-ghost {
-  background: var(--surface2);
-  border:1px solid var(--border);
-  color: var(--text);
-}
-.btn-ghost:hover { border-color: rgba(255,255,255,0.15); }
-
-.btn-danger {
-  background: rgba(239,68,68,0.12);
-  border:1px solid rgba(239,68,68,0.2);
-  color: #fca5a5;
-}
-.btn-danger:hover { background: rgba(239,68,68,0.2); }
-
-.divider {
-  height:1px;
-  background: var(--border);
-  margin:16px 0;
-}
-
-footer {
-  margin-top:28px;
-  text-align:center;
-  font-size:12px;
-  color: var(--muted);
-  font-family: var(--mono);
-}
+.divider{height:1px;background:var(--border);margin:16px 0;}
+footer{margin-top:28px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.5px;}
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="logo">
-    <div class="logo-icon">🚀</div>
-    <div class="logo-text">HUIT<span>.auth</span></div>
+<div class="card fade-up">
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div class="brand-name">HUIT<strong>.auth</strong></div>
   </div>
 
   {% if user.is_authenticated %}
-    <h1>Xin chào trở lại!</h1>
-    <p class="subtitle">Bạn đã đăng nhập thành công vào hệ thống.</p>
+    <h1>Xin chào trở lại</h1>
+    <p class="sub">Bạn đã đăng nhập vào hệ thống.</p>
 
     <div class="user-badge">
-      <div class="avatar">👤</div>
+      <div class="avatar">{{ user.username|first|upper }}</div>
       <div class="user-info">
         <div class="user-name">{{ user.username }}</div>
-        <div class="user-role">authenticated user</div>
+        <div class="user-role">authenticated</div>
       </div>
-      <div class="online-dot"></div>
+      <div class="dot-live"></div>
     </div>
 
-    <a href="{% url 'dashboard' %}" class="btn btn-amber">
+    <a href="{% url 'dashboard' %}" class="btn btn-primary">
       <i class="fa fa-user-gear"></i> Quản lý tài khoản
     </a>
     <form method="post" action="{% url 'logout' %}" style="margin:0;">
@@ -236,17 +118,17 @@ footer {
 
   {% else %}
     <h1>Django Auth<br>System</h1>
-    <p class="subtitle">Nền tảng xác thực bảo mật với 2FA và OTP qua email.</p>
+    <p class="sub">Xác thực bảo mật đa lớp với 2FA và OTP.</p>
 
     <a href="{% url 'login' %}" class="btn btn-primary">
       <i class="fa fa-right-to-bracket"></i> Đăng nhập
     </a>
-    <a href="{% url 'register' %}" class="btn btn-success">
-      <i class="fa fa-user-plus"></i> Tạo tài khoản mới
+    <a href="{% url 'register' %}" class="btn btn-secondary">
+      <i class="fa fa-user-plus"></i> Tạo tài khoản
     </a>
   {% endif %}
 
-  <footer>Django Auth UI · Bảo mật đa lớp</footer>
+  <footer>HUIT Auth · Bảo mật đa lớp</footer>
 </div>
 </body>
 </html>

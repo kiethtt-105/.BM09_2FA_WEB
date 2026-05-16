@@ -1,141 +1,201 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lịch Sử Đăng Nhập</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phiên đăng nhập · HUIT</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg:#0a0a0f;--bg1:#0f0f1a;--bg2:#141424;--bg3:#1a1a2e;
+  --border:rgba(120,100,255,0.12);--border2:rgba(120,100,255,0.22);
+  --purple:#7c6fff;--purple2:#a78bfa;
+  --text:#e8e6f0;--muted:#6b6880;--muted2:#9290a0;
+  --danger:#ef4444;--success:#22c55e;
+  --font:'Space Grotesk',sans-serif;--mono:'Space Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100vh;padding:32px 24px;-webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 600px 400px at 20% 10%,rgba(124,111,255,0.05) 0%,transparent 70%);
+}
+.page{position:relative;z-index:1;max-width:860px;margin:0 auto;}
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;gap:12px;flex-wrap:wrap;}
+.back-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:8px 14px;border-radius:8px;
+  background:var(--bg1);border:1px solid var(--border);
+  color:var(--muted2);font-size:13px;font-weight:500;text-decoration:none;
+  transition:border-color .15s,color .15s;
+}
+.back-btn:hover{border-color:var(--border2);color:var(--text);}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-.01em;}
+.page-sub{font-size:13px;color:var(--muted);margin-top:2px;}
 
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(229, 231, 235, 0.5);
-        }
-    </style>
+.btn-logout-all{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;
+  background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);
+  color:#fca5a5;cursor:pointer;text-decoration:none;
+  transition:background .15s,border-color .15s;
+  font-family:var(--font);
+}
+.btn-logout-all:hover{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);}
+
+/* Table card */
+.table-card{
+  background:var(--bg1);border:1px solid var(--border);border-radius:14px;overflow:hidden;
+}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--bg2);border-bottom:1px solid var(--border);}
+th{
+  padding:12px 18px;font-family:var(--mono);font-size:9px;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;color:var(--muted);text-align:left;
+}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(124,111,255,.04);}
+td{padding:14px 18px;vertical-align:middle;}
+
+.device-cell{display:flex;align-items:center;gap:12px;}
+.dev-icon{
+  width:36px;height:36px;border-radius:8px;
+  background:var(--bg2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--purple2);flex-shrink:0;
+}
+.dev-name{font-size:14px;font-weight:500;}
+.dev-ua{font-size:11px;color:var(--muted);font-family:var(--mono);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+.ip-badge{
+  display:inline-block;padding:3px 8px;border-radius:5px;
+  background:var(--bg2);border:1px solid var(--border);
+  font-family:var(--mono);font-size:12px;color:var(--muted2);
+}
+
+.time-cell .t{font-size:13px;font-weight:500;}
+.time-cell .d{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:1px;}
+
+.badge-online{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;font-family:var(--mono);
+  background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.18);color:#86efac;
+}
+.dot-pulse{width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;}
+
+.btn-logout-dev{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;
+  background:var(--bg2);border:1px solid var(--border);color:var(--muted2);
+  cursor:pointer;text-decoration:none;transition:all .15s;font-family:var(--font);
+}
+.btn-logout-dev:hover{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);color:#fca5a5;}
+
+/* Empty state */
+.empty{text-align:center;padding:60px 20px;}
+.empty-icon{font-size:36px;color:var(--bg3);margin-bottom:12px;}
+.empty-text{font-size:14px;color:var(--muted);}
+
+/* Info note */
+.note{
+  display:flex;align-items:center;gap:8px;
+  margin-top:16px;font-size:12px;color:var(--muted);
+  font-family:var(--mono);
+}
+</style>
 </head>
-
-<body class="bg-[#f8fafc] min-h-screen p-4 md:p-10">
-
-<div class="max-w-6xl mx-auto">
-    
-    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-        <div>
-            <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
-                <span class="bg-blue-600 text-white p-2 rounded-lg shadow-blue-200 shadow-lg">
-                    <i class="fa-solid fa-shield-halved text-xl"></i>
-                </span>
-                Lịch Sử Đăng Nhập
-            </h2>
-            <p class="text-gray-500 mt-1 ml-14"> Danh sách các phiên đăng nhập</p>
-        </div>
-
-        {% if devices|length > 1 %}
-        <a href="{% url 'logout_all_devices' %}" 
-           onclick="return confirm('Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị khác không?')"
-           class="inline-flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 px-6 py-3 rounded-xl font-semibold hover:bg-red-600 hover:text-white transition-all duration-300 shadow-sm active:scale-95">
-            <i class="fa-solid fa-right-from-bracket"></i>
-            Đăng xuất tất cả thiết bị khác
-        </a>
-        {% endif %}
+<body>
+<div class="page">
+  <div class="top">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <a href="{% url 'dashboard' %}" class="back-btn"><i class="fa fa-arrow-left"></i></a>
+      <div>
+        <div class="page-title">Phiên đăng nhập</div>
+        <div class="page-sub">Danh sách thiết bị đã đăng nhập</div>
+      </div>
     </div>
+    {% if devices|length > 1 %}
+    <a href="{% url 'logout_all_devices' %}"
+       onclick="return confirm('Đăng xuất tất cả thiết bị khác?')"
+       class="btn-logout-all">
+      <i class="fa fa-right-from-bracket"></i> Đăng xuất tất cả thiết bị khác
+    </a>
+    {% endif %}
+  </div>
 
-    <div class="glass-card shadow-2xl rounded-[2rem] overflow-hidden border border-gray-100">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-gray-50/50 text-gray-400 uppercase text-xs font-bold tracking-widest border-b border-gray-100">
-                        <th class="p-6">Thiết bị </th>
-                        <th class="p-6">Địa chỉ IP</th>
-                        <th class="p-6">Hoạt động cuối</th>
-                        <th class="p-6 text-center">Trạng thái / Thao tác</th>
-                    </tr>
-                </thead>
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Thiết bị</th>
+          <th>Địa chỉ IP</th>
+          <th>Hoạt động cuối</th>
+          <th>Trạng thái</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in devices %}
+        <tr>
+          <td>
+            <div class="device-cell">
+              <div class="dev-icon">
+                {% if 'Mobile' in d.user_agent or 'Android' in d.user_agent or 'iPhone' in d.user_agent %}
+                  <i class="fa fa-mobile-screen"></i>
+                {% else %}
+                  <i class="fa fa-laptop"></i>
+                {% endif %}
+              </div>
+              <div>
+                <div class="dev-name">{{ d.name }}</div>
+                <div class="dev-ua" title="{{ d.user_agent }}">{{ d.user_agent }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <span class="ip-badge">{{ d.ip_address }}</span>
+          </td>
+          <td>
+            <div class="time-cell">
+              <div class="t">{{ d.last_seen|date:"H:i" }}</div>
+              <div class="d">{{ d.last_seen|date:"d/m/Y" }}</div>
+            </div>
+          </td>
+          <td>
+            {% if d.session_key == request.session.session_key %}
+              <span class="badge-online">
+                <span class="dot-pulse"></span> Online
+              </span>
+            {% else %}
+              <a href="{% url 'logout_device' d.id %}" class="btn-logout-dev">
+                <i class="fa fa-user-slash" style="font-size:11px"></i> Đăng xuất
+              </a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4">
+            <div class="empty">
+              <div class="empty-icon"><i class="fa fa-box-open"></i></div>
+              <div class="empty-text">Không có dữ liệu phiên đăng nhập</div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-                <tbody class="divide-y divide-gray-50">
-                    {% for d in devices %}
-                    <tr class="group hover:bg-blue-50/40 transition-colors duration-200">
-                        
-                        <td class="p-6">
-                            <div class="flex items-center gap-4">
-                                <div class="w-12 h-12 rounded-2xl bg-white shadow-sm border border-gray-100 flex items-center justify-center text-2xl transition-transform group-hover:scale-110">
-                                    {% if 'Mobile' in d.user_agent or 'Android' in d.user_agent or 'iPhone' in d.user_agent %}
-                                        <i class="fa-solid fa-mobile-screen-button text-indigo-500"></i>
-                                    {% else %}
-                                        <i class="fa-solid fa-laptop text-blue-500"></i>
-                                    {% endif %}
-                                </div>
-                                <div class="flex flex-col">
-                                    <span class="font-bold text-gray-800 text-lg">{{ d.name }}</span>
-                                    <span class="text-xs text-gray-400 font-medium max-w-[250px] truncate" title="{{ d.user_agent }}">
-                                        {{ d.user_agent }}
-                                    </span>
-                                </div>
-                            </div>
-                        </td>
-
-                        <td class="p-6">
-                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-md font-mono text-sm border border-gray-200">
-                                {{ d.ip_address }}
-                            </span>
-                        </td>
-
-                        <td class="p-6 text-gray-500 font-medium">
-                            <div class="flex flex-col">
-                                <span class="text-gray-700">{{ d.last_seen|date:"H:i" }}</span>
-                                <span class="text-xs text-gray-400">{{ d.last_seen|date:"d/m/Y" }}</span>
-                            </div>
-                        </td>
-
-                        <td class="p-6">
-                            <div class="flex justify-center">
-                                {% if d.session_key == request.session.session_key %}
-                                    <div class="flex items-center gap-2 bg-green-50 text-green-600 px-4 py-2 rounded-full border border-green-100">
-                                        <span class="relative flex h-2 w-2">
-                                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                        </span>
-                                        <span class="text-sm font-bold uppercase tracking-tight">Đang online</span>
-                                    </div>
-                                {% else %}
-                                    <a href="{% url 'logout_device' d.id %}"
-                                       class="inline-flex items-center gap-2 bg-white text-gray-700 border border-gray-200 px-5 py-2 rounded-xl text-sm font-semibold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 shadow-sm active:scale-95">
-                                        <i class="fa-solid fa-user-slash text-xs"></i>
-                                        Đăng xuất
-                                    </a>
-                                {% endif %}
-                            </div>
-                        </td>
-
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="4" class="text-center p-20">
-                            <div class="flex flex-col items-center">
-                                <div class="bg-gray-50 p-6 rounded-full mb-4">
-                                    <i class="fa-solid fa-box-open text-5xl text-gray-200"></i>
-                                </div>
-                                <h3 class="text-gray-400 font-medium">Không tìm thấy dữ liệu thiết bị</h3>
-                                <p class="text-gray-300 text-sm">Các phiên đăng nhập của bạn sẽ xuất hiện tại đây.</p>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="mt-8 flex items-center gap-3 justify-center text-gray-400 text-sm">
-        <i class="fa-solid fa-circle-info"></i>
-        <span>Nếu bạn thấy thiết bị lạ, hãy đăng xuất ngay lập tức và đổi mật khẩu.</span>
-    </div>
+  <div class="note">
+    <i class="fa fa-circle-info"></i>
+    <span>Nếu thấy thiết bị lạ, hãy đăng xuất ngay và đổi mật khẩu.</span>
+  </div>
 </div>
-
 </body>
 </html>

@@ -1,147 +1,208 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý Passkey · HUIT</title>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background: #f8fafc; }
-        .animate-fade-in { animation: fadeIn .3s ease-out; }
-        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Passkeys · HUIT</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg:#0a0a0f;--bg1:#0f0f1a;--bg2:#141424;
+  --border:rgba(120,100,255,0.12);--border2:rgba(120,100,255,0.22);
+  --purple:#7c6fff;--purple2:#a78bfa;
+  --text:#e8e6f0;--muted:#6b6880;--muted2:#9290a0;
+  --font:'Space Grotesk',sans-serif;--mono:'Space Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100vh;padding:32px 24px;-webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 600px 400px at 20% 10%,rgba(124,111,255,0.05) 0%,transparent 70%);
+}
+.page{position:relative;z-index:1;max-width:700px;margin:0 auto;}
+
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:12px;flex-wrap:wrap;}
+.top-left{display:flex;align-items:center;gap:14px;}
+.back-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:8px 14px;border-radius:8px;
+  background:var(--bg1);border:1px solid var(--border);
+  color:var(--muted2);font-size:13px;font-weight:500;text-decoration:none;
+  transition:border-color .15s,color .15s;
+}
+.back-btn:hover{border-color:var(--border2);color:var(--text);}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-.01em;}
+.page-sub{font-size:13px;color:var(--muted);margin-top:2px;}
+
+/* Stats row */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;}
+.stat-card{
+  background:var(--bg1);border:1px solid var(--border);border-radius:12px;
+  padding:16px;text-align:center;
+}
+.stat-val{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--purple2);}
+.stat-label{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+
+/* Passkey list */
+.list-card{
+  background:var(--bg1);border:1px solid var(--border);border-radius:14px;overflow:hidden;
+}
+.list-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;border-bottom:1px solid var(--border);
+}
+.list-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.list-title i{color:var(--purple2);}
+
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:8px 14px;border:none;border-radius:8px;
+  font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;
+  text-decoration:none;transition:opacity .15s,transform .15s;
+}
+.btn:hover{opacity:.85;transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn-primary{background:var(--purple);color:#fff;}
+.btn-ghost{background:var(--bg2);border:1px solid var(--border);color:var(--muted2);}
+.btn-danger{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);color:#fca5a5;}
+.btn-sm{padding:6px 12px;font-size:12px;}
+
+.pk-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  transition:background .15s;
+}
+.pk-item:last-child{border-bottom:none;}
+.pk-item:hover{background:rgba(124,111,255,.03);}
+
+.pk-info{display:flex;align-items:center;gap:12px;}
+.pk-icon{
+  width:38px;height:38px;border-radius:8px;
+  background:rgba(124,111,255,.1);border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;color:var(--purple2);flex-shrink:0;
+}
+.pk-name{font-size:13px;font-weight:500;}
+.pk-id{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px;}
+.pk-meta{display:flex;align-items:center;gap:12px;margin-top:3px;}
+.pk-meta span{font-size:11px;color:var(--muted);font-family:var(--mono);}
+
+/* Empty state */
+.empty{text-align:center;padding:50px 20px;}
+.empty i{font-size:32px;color:var(--bg2);margin-bottom:12px;display:block;}
+.empty p{font-size:14px;color:var(--muted);}
+
+/* Modal backdrop */
+.modal-backdrop{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;
+  align-items:center;justify-content:center;
+}
+.modal-backdrop.open{display:flex;}
+.modal{
+  background:var(--bg1);border:1px solid var(--border2);border-radius:14px;
+  padding:28px;max-width:360px;width:100%;text-align:center;
+}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:8px;}
+.modal p{font-size:13px;color:var(--muted);margin-bottom:20px;}
+.modal code{background:var(--bg2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:12px;color:var(--purple2);}
+.modal-btns{display:flex;gap:8px;justify-content:center;}
+</style>
 </head>
-<body class="min-h-screen p-4 md:p-10">
+<body>
+<div class="page">
+  <div class="top">
+    <div class="top-left">
+      <a href="{% url 'dashboard' %}" class="back-btn"><i class="fa fa-arrow-left"></i></a>
+      <div>
+        <div class="page-title">Passkeys</div>
+        <div class="page-sub">Quản lý khóa FIDO2 đã đăng ký</div>
+      </div>
+    </div>
+    <a href="{% url 'setup_2fa' %}?method=fido2" class="btn btn-primary btn-sm">
+      <i class="fa fa-plus"></i> Thêm passkey
+    </a>
+  </div>
 
-    <div class="max-w-3xl mx-auto space-y-6 animate-fade-in">
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-val">{{ passkeys.count }}</div>
+      <div class="stat-label">Tổng khóa</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="font-size:14px;padding-top:4px;">{{ user.username }}</div>
+      <div class="stat-label">Tài khoản</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val"><i class="fa fa-shield-halved" style="font-size:20px;"></i></div>
+      <div class="stat-label">Bảo mật cao</div>
+    </div>
+  </div>
 
-        <!-- Header -->
-        <div class="flex items-center gap-4 mb-2">
-            <a href="{% url 'dashboard' %}"
-               class="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition shadow-sm">
-                <i class="fas fa-arrow-left"></i>
-            </a>
-            <div>
-                <h1 class="text-3xl font-black text-slate-800">Quản lý Passkey</h1>
-                <p class="text-slate-400 text-sm">Xem và xóa các khóa FIDO2 đã đăng ký</p>
-            </div>
-        </div>
-
-        <!-- Thống kê -->
-        <div class="grid grid-cols-3 gap-4">
-            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm text-center">
-                <div class="text-3xl font-black text-purple-600">{{ passkeys.count }}</div>
-                <div class="text-xs text-slate-400 font-semibold mt-1 uppercase tracking-wide">Tổng khóa</div>
-            </div>
-            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm text-center">
-                <div class="text-3xl font-black text-indigo-600">{{ user.username }}</div>
-                <div class="text-xs text-slate-400 font-semibold mt-1 uppercase tracking-wide">Tài khoản</div>
-            </div>
-            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm text-center">
-                <div class="text-3xl font-black text-emerald-600">
-                    <i class="fas fa-shield-check text-2xl"></i>
-                </div>
-                <div class="text-xs text-slate-400 font-semibold mt-1 uppercase tracking-wide">Bảo mật cao</div>
-            </div>
-        </div>
-
-        <!-- Danh sách passkeys -->
-        <div class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-            <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
-                <h2 class="text-lg font-black text-slate-800 flex items-center gap-2">
-                    <i class="fas fa-fingerprint text-purple-500"></i>
-                    Danh sách thiết bị đã đăng ký
-                </h2>
-                <a href="{% url 'setup_2fa' %}?method=fido2"
-                   class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 transition shadow-sm">
-                    <i class="fas fa-plus"></i> Thêm thiết bị
-                </a>
-            </div>
-
-            {% if passkeys %}
-            <ul class="divide-y divide-slate-100">
-                {% for pk in passkeys %}
-                <li class="px-8 py-5 flex items-center justify-between hover:bg-slate-50 transition group">
-                    <div class="flex items-center gap-4">
-                        <!-- Icon -->
-                        <div class="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-600 text-xl flex-shrink-0">
-                            <i class="fas fa-key"></i>
-                        </div>
-                        <!-- Info -->
-                        <div>
-                            <div class="font-bold text-slate-800 text-sm">
-                                Passkey #{{ forloop.counter }}
-                            </div>
-                            <div class="text-xs text-slate-400 mt-0.5 font-mono">
-                                ID: {{ pk.credential_id|truncatechars:24 }}
-                            </div>
-                            <div class="flex items-center gap-3 mt-1">
-                                <span class="text-xs text-slate-400">
-                                    <i class="fas fa-clock mr-1"></i>
-                                    Đăng ký: {{ pk.created_at|date:"d/m/Y H:i" }}
-                                </span>
-                                <span class="text-xs text-slate-400">
-                                    <i class="fas fa-sync mr-1"></i>
-                                    Đã dùng: {{ pk.sign_count }} lần
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Xóa -->
-                    <button onclick="confirmDelete({{ pk.id }}, '{{ pk.credential_id|truncatechars:16 }}')"
-                            class="opacity-0 group-hover:opacity-100 transition w-9 h-9 rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 flex items-center justify-center">
-                        <i class="fas fa-trash text-sm"></i>
-                    </button>
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <div class="px-8 py-16 text-center">
-                <i class="fas fa-fingerprint text-5xl text-slate-200 mb-4"></i>
-                <p class="text-slate-400 font-semibold">Chưa có passkey nào</p>
-                <a href="{% url 'setup_2fa' %}?method=fido2"
-                   class="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 transition">
-                    <i class="fas fa-plus"></i> Thêm passkey đầu tiên
-                </a>
-            </div>
-            {% endif %}
-        </div>
-
-        
-
+  <div class="list-card">
+    <div class="list-header">
+      <div class="list-title">
+        <i class="fa fa-fingerprint"></i> Thiết bị đã đăng ký
+      </div>
     </div>
 
-    <!-- Form xóa ẩn -->
-    <form id="delete-form" method="POST" action="{% url 'delete_passkey' 0 %}" style="display:none">
+    {% if passkeys %}
+    {% for pk in passkeys %}
+    <div class="pk-item">
+      <div class="pk-info">
+        <div class="pk-icon"><i class="fa fa-key"></i></div>
+        <div>
+          <div class="pk-name">Passkey #{{ forloop.counter }}</div>
+          <div class="pk-id">{{ pk.credential_id|truncatechars:28 }}</div>
+          <div class="pk-meta">
+            <span><i class="fa fa-clock" style="margin-right:3px"></i>{{ pk.created_at|date:"d/m/Y H:i" }}</span>
+            <span><i class="fa fa-rotate" style="margin-right:3px"></i>{{ pk.sign_count }} lần dùng</span>
+          </div>
+        </div>
+      </div>
+      <button onclick="confirmDelete({{ pk.id }},'{{ pk.credential_id|truncatechars:18 }}')" class="btn btn-danger btn-sm">
+        <i class="fa fa-trash" style="font-size:11px"></i>
+      </button>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty">
+      <i class="fa fa-fingerprint"></i>
+      <p>Chưa có passkey nào được đăng ký</p>
+      <a href="{% url 'setup_2fa' %}?method=fido2" class="btn btn-primary" style="margin-top:14px;">
+        <i class="fa fa-plus"></i> Thêm passkey đầu tiên
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Delete modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <h3>Xóa passkey?</h3>
+    <p>Thiết bị <code id="modal-pk-label"></code> sẽ không thể đăng nhập bằng passkey nữa.</p>
+    <div class="modal-btns">
+      <form id="delete-form" method="POST" style="display:contents;">
         {% csrf_token %}
-    </form>
+        <button type="submit" class="btn btn-danger"><i class="fa fa-trash"></i> Xóa</button>
+      </form>
+      <button onclick="closeModal()" class="btn btn-ghost">Hủy</button>
+    </div>
+  </div>
+</div>
 
-    <script>
-        function confirmDelete(pkId, pkLabel) {
-            Swal.fire({
-                title: 'Xóa Passkey?',
-                html: `<p style="color:#64748b">Bạn sắp xóa khóa <code style="background:#f1f5f9;padding:2px 6px;border-radius:6px;font-size:12px">${pkLabel}...</code></p>
-                       <p style="color:#ef4444;font-size:13px;margin-top:8px">Thiết bị này sẽ không thể đăng nhập bằng passkey nữa!</p>`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#6366f1',
-                confirmButtonText: '<i class="fas fa-trash mr-1"></i> Xóa',
-                cancelButtonText: 'Hủy',
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    const form = document.getElementById('delete-form');
-                    // Cập nhật action URL với đúng ID
-                    form.action = `/passkeys/delete/${pkId}/`;
-                    form.submit();
-                }
-            });
-        }
-    </script>
-
+<script>
+function confirmDelete(id,label){
+  document.getElementById('modal-pk-label').textContent=label+'...';
+  document.getElementById('delete-form').action='/passkeys/delete/'+id+'/';
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal(){document.getElementById('modal').classList.remove('open');}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+</script>
 </body>
 </html>

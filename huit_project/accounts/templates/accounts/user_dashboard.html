@@ -1,567 +1,376 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard | {{ user.username }}</title>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        .card { border-radius: 2.5rem; box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.08); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard · HUIT</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg:#0a0a0f;--bg1:#0f0f1a;--bg2:#141424;--bg3:#1a1a2e;
+  --border:rgba(120,100,255,0.12);--border2:rgba(120,100,255,0.22);
+  --purple:#7c6fff;--purple2:#a78bfa;
+  --text:#e8e6f0;--muted:#6b6880;--muted2:#9290a0;
+  --danger:#ef4444;--success:#22c55e;
+  --font:'Space Grotesk',sans-serif;--mono:'Space Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100vh;padding:24px;-webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 800px 500px at 10% 0%,rgba(124,111,255,0.05) 0%,transparent 60%);
+}
+
+/* Layout */
+.layout{
+  position:relative;z-index:1;
+  max-width:1000px;margin:0 auto;
+  display:grid;grid-template-columns:220px 1fr;gap:16px;
+  align-items:start;
+}
+@media(max-width:700px){.layout{grid-template-columns:1fr;}}
+
+/* Sidebar */
+.sidebar{
+  background:var(--bg1);border:1px solid var(--border);border-radius:16px;
+  padding:28px 20px;
+}
+.avatar-block{text-align:center;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border);}
+.avatar{
+  width:60px;height:60px;border-radius:14px;
+  background:var(--bg3);border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:22px;font-weight:700;color:var(--purple2);
+  margin:0 auto 12px;
+}
+.uname{font-size:15px;font-weight:600;}
+.uemail{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  width:100%;padding:10px 12px;border-radius:10px;
+  font-size:13px;font-weight:500;color:var(--muted2);
+  background:none;border:none;cursor:pointer;text-decoration:none;
+  transition:color .15s,background .15s;margin-bottom:4px;
+  font-family:var(--font);text-align:left;
+}
+.nav-item:hover{background:var(--bg2);color:var(--text);}
+.nav-item.active{background:rgba(124,111,255,.1);color:var(--purple2);border:1px solid rgba(124,111,255,.15);}
+.nav-item i{width:16px;text-align:center;font-size:13px;}
+.nav-sep{margin:12px 0;border:none;height:1px;background:var(--border);}
+.nav-danger{color:#fca5a5!important;}
+.nav-danger:hover{background:rgba(239,68,68,.08)!important;color:#fca5a5!important;}
+
+/* Main panel */
+.main{background:var(--bg1);border:1px solid var(--border);border-radius:16px;padding:36px 32px;min-height:520px;}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;animation:fadeUp .3s cubic-bezier(.16,1,.3,1) both;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+
+.panel-title{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:4px;}
+.panel-sub{font-size:13px;color:var(--muted);margin-bottom:28px;}
+.panel-divider{height:1px;background:var(--border);margin-bottom:24px;}
+
+/* Profile grid */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.info-item .ilabel{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.info-item .ivalue{font-size:15px;font-weight:500;}
+.ivalue.empty{color:var(--muted);font-style:italic;font-size:13px;}
+
+/* Edit form */
+.edit-box{
+  background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:24px;margin-top:20px;
+}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field{margin-bottom:12px;}
+.flabel{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px;}
+input[type=text],input[type=email],input[type=tel]{
+  width:100%;padding:10px 12px;
+  background:var(--bg1);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-family:var(--font);font-size:13px;outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+input:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,111,255,.1);}
+input::placeholder{color:var(--muted);}
+
+.btn-row{display:flex;gap:8px;margin-top:16px;}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:10px 18px;border:none;border-radius:8px;
+  font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;
+  text-decoration:none;transition:opacity .15s,transform .15s;
+}
+.btn:hover{opacity:.85;transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn-primary{background:var(--purple);color:#fff;}
+.btn-ghost{background:var(--bg2);border:1px solid var(--border);color:var(--muted2);}
+.btn-sm{padding:7px 14px;font-size:12px;}
+.btn-outline{background:none;border:1px solid var(--border2);color:var(--purple2);}
+
+/* 2FA section */
+.method-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 0;border-bottom:1px solid var(--border);
+}
+.method-row:last-child{border-bottom:none;}
+.method-info{display:flex;align-items:center;gap:12px;}
+.method-icon{
+  width:36px;height:36px;border-radius:8px;
+  background:var(--bg2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--purple2);flex-shrink:0;
+}
+.method-name{font-size:13px;font-weight:500;}
+.method-desc{font-size:11px;color:var(--muted);margin-top:2px;}
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--mono);
+}
+.badge-on{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:#86efac;}
+.badge-off{background:var(--bg3);border:1px solid var(--border);color:var(--muted);}
+
+/* OTP input (confirm update) */
+.otp-confirm{
+  background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:24px;text-align:center;
+}
+.otp-big{
+  width:100%;padding:14px;text-align:center;
+  font-family:var(--mono);font-size:28px;font-weight:700;letter-spacing:10px;
+  background:var(--bg1);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);outline:none;margin:14px 0;
+}
+.otp-big:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,111,255,.1);}
+
+/* Toast */
+#toast{
+  position:fixed;top:20px;right:20px;z-index:100;
+  background:var(--bg2);border:1px solid var(--border2);
+  color:var(--text);padding:12px 18px;border-radius:10px;
+  font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;
+  transform:translateX(120%);transition:transform .3s;
+}
+#toast.show{transform:translateX(0);}
+</style>
 </head>
-<body class="min-h-screen text-slate-900 p-4 md:p-10">
+<body>
 
-    <!-- Toast -->
-    <div id="toast" class="fixed top-5 right-5 translate-x-full transition-transform duration-300 z-50">
-        <div class="bg-indigo-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center border border-indigo-400">
-            <i class="fas fa-bell mr-3"></i>
-            <span id="toast-msg" class="font-bold text-sm"></span>
-        </div>
+<div id="toast"><i class="fa fa-bell"></i><span id="toast-msg"></span></div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="avatar-block">
+      <div class="avatar">{{ user.username|first|upper }}</div>
+      <div class="uname">{{ user.username }}</div>
+      <div class="uemail">{{ user.email|default:"—" }}</div>
     </div>
 
-    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <button onclick="switchTab('info')" id="btn-info" class="nav-item active">
+      <i class="fa fa-user"></i> Hồ sơ
+    </button>
+    <button onclick="switchTab('security')" id="btn-security" class="nav-item">
+      <i class="fa fa-shield-halved"></i> Bảo mật 2FA
+    </button>
+    <a href="{% url 'active_sessions' %}" class="nav-item">
+      <i class="fa fa-laptop"></i> Phiên đăng nhập
+    </a>
+    <hr class="nav-sep">
+    <a href="{% url 'logout' %}" class="nav-item nav-danger">
+      <i class="fa fa-right-from-bracket"></i> Đăng xuất
+    </a>
+  </div>
 
-        <!-- ── Sidebar ── -->
-        <div class="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 text-center space-y-6 h-fit card">
-            <div class="w-24 h-24 bg-indigo-600 rounded-3xl flex items-center justify-center text-white text-4xl font-black mx-auto shadow-lg">
-                {{ user.username|first|upper }}
-            </div>
-            <h2 class="text-2xl font-bold">{{ user.username }}</h2>
-            <p class="text-slate-400 text-sm italic">{{ user.email|default:"Chưa cập nhật email" }}</p>
+  <!-- Main -->
+  <div class="main">
 
-            <div class="space-y-2 text-left pt-4 border-t border-slate-100">
-                <button onclick="switchTab('info')" id="btn-info"
-                        class="w-full py-3 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center px-6 transition">
-                    <i class="fas fa-user-circle mr-4"></i> Hồ sơ
-                </button>
-                <button onclick="switchTab('security')" id="btn-security"
-                        class="w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50">
-                    <i class="fas fa-shield-alt mr-4"></i> Bảo mật 2FA
-                </button>
-                <a href="{% url 'active_sessions' %}"
-                   class="w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50">
-                    <i class="fas fa-laptop mr-4"></i> Lịch Sử Đăng Nhập
-                </a>
-                <a href="{% url 'logout' %}"
-                   class="w-full py-3 rounded-2xl text-red-400 font-bold flex items-center px-6 mt-4 hover:bg-red-50 transition">
-                    <i class="fas fa-sign-out-alt mr-4"></i> Đăng xuất
-                </a>
-            </div>
+    <!-- TAB: HỒ SƠ -->
+    <div id="tab-info" class="tab-pane active">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+        <div>
+          <div class="panel-title">Hồ sơ cá nhân</div>
+          <div class="panel-sub">Thông tin tài khoản của bạn</div>
         </div>
+        <button onclick="toggleEdit()" class="btn btn-outline btn-sm" id="edit-btn">
+          <i class="fa fa-pen"></i> Chỉnh sửa
+        </button>
+      </div>
+      <div class="panel-divider"></div>
 
-        <!-- ── Main content ── -->
-        <div class="lg:col-span-2 bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8 md:p-12 min-h-[550px] card">
-
-            <!-- TAB: HỒ SƠ -->
-            <div id="tab-info" class="space-y-10 animate-fade-in text-left">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-6">
-                    <h3 class="text-3xl font-black text-slate-800 tracking-tight">Hồ sơ cá nhân</h3>
-                    <button onclick="toggleEditForm()" class="text-indigo-600 font-bold text-sm hover:underline">
-                        <i class="fas fa-edit mr-1"></i> Chỉnh sửa
-                    </button>
-                </div>
-
-                <div id="info-display" class="grid grid-cols-1 md:grid-cols-2 gap-10">
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Username</label>
-                        <p class="text-lg font-bold text-slate-800">{{ user.username }}</p>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Họ và tên</label>
-                        <p class="text-lg font-bold text-slate-800">{{ user.first_name }} {{ profile.middle_name }} {{ user.last_name }}</p>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email liên kết</label>
-                        <p class="text-lg font-bold {% if not user.email %}text-red-400 italic{% endif %}">
-                            {{ user.email|default:"Vui lòng cập nhật email" }}
-                        </p>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Số điện thoại</label>
-                        <p class="text-lg font-bold text-slate-800">{{ profile.phone_number|default:"Chưa cập nhật" }}</p>
-                    </div>
-                </div>
-
-                <div id="info-edit" class="hidden animate-fade-in bg-slate-50 p-8 rounded-3xl border-2 border-dashed border-slate-200">
-                    {% if pending_update %}
-                    <div class="mb-6">
-                        <h4 class="text-xl font-bold text-slate-800 mb-4">Xác nhận cập nhật thông tin</h4>
-                        <p class="text-slate-600">Chúng tôi đã gửi mã OTP xác nhận.</p>
-                    </div>
-                    <form method="POST" class="space-y-6">
-                        {% csrf_token %}
-                        <input type="hidden" name="confirm_update" value="1">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-2">Nhập mã OTP</label>
-                            <input type="text" name="otp_code" maxlength="6" required
-                                   class="w-full p-5 text-center text-3xl font-mono tracking-widest border-2 border-slate-300 rounded-2xl focus:border-indigo-500 outline-none"
-                                   placeholder="000000">
-                        </div>
-                        <div class="flex gap-3">
-                            <button type="submit" class="flex-1 bg-emerald-600 text-white py-3 rounded-2xl font-bold hover:bg-emerald-700 transition">Xác nhận</button>
-                            <a href="{% url 'dashboard' %}" class="flex-1 bg-white border border-slate-300 text-slate-600 py-3 rounded-2xl font-bold text-center hover:bg-slate-50 transition">Hủy bỏ</a>
-                        </div>
-                    </form>
-                    {% else %}
-                    <form method="POST" class="space-y-4">
-                        {% csrf_token %}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-xs font-bold text-slate-500 ml-2">Họ</label>
-                                <input type="text" name="first_name" value="{{ user.first_name }}" class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-slate-500 ml-2">Chữ đệm</label>
-                                <input type="text" name="middle_name" value="{{ profile.middle_name }}" class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-slate-500 ml-2">Tên</label>
-                                <input type="text" name="last_name" value="{{ user.last_name }}" class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-slate-500 ml-2">Số điện thoại</label>
-                                <input type="text" name="phone_number" value="{{ profile.phone_number }}" class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="text-xs font-bold text-slate-500 ml-2">Email</label>
-                                <input type="email" name="email" value="{{ user.email }}" required class="w-full p-3 rounded-xl border focus:ring-2 focus:ring-indigo-400 outline-none">
-                            </div>
-                        </div>
-                        <div class="flex gap-3 pt-4">
-                            <button type="submit" name="update_profile" class="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg hover:bg-indigo-700 transition">Lưu thay đổi</button>
-                            <button type="button" onclick="toggleEditForm()" class="bg-white px-8 py-3 rounded-2xl border font-bold text-slate-500">Hủy</button>
-                        </div>
-                    </form>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- TAB: BẢO MẬT 2FA -->
-            <div id="tab-security" class="hidden space-y-8 animate-fade-in text-left">
-                <div class="border-b border-slate-100 pb-6">
-                    <h3 class="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-                        <i class="fas fa-shield-alt text-indigo-600"></i> Các tính năng bảo mật                    </h3>
-                </div>
-
-                {% if confirm_disable %}
-                <div class="p-6 border-2 border-red-300 rounded-2xl bg-red-50 animate-fade-in">
-                    <h4 class="text-lg font-bold text-red-600 mb-4">Xác nhận tắt bảo mật</h4>
-                    <form method="POST" class="space-y-4">
-                        {% csrf_token %}
-                        <input type="hidden" name="confirm_disable_action" value="{{ confirm_disable }}">
-                        <input type="text" name="disable_otp_code" maxlength="6" required
-                               placeholder="Nhập mã OTP..."
-                               class="w-full p-4 text-center text-xl font-mono border-2 border-red-300 rounded-xl">
-                        <button class="w-full bg-red-500 text-white py-3 rounded-xl font-bold">Xác nhận tắt</button>
-                    </form>
-                </div>
-                {% endif %}
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                    <!-- EMAIL OTP -->
-                    <div class="p-6 rounded-3xl border-2 transition-all hover:shadow-xl flex flex-col items-center text-center
-                        {% if profile.has_email_otp %}border-emerald-500 bg-emerald-50{% else %}border-slate-200 bg-white{% endif %}">
-                        <i class="fas fa-envelope text-4xl mb-4 {% if profile.has_email_otp %}text-emerald-500{% else %}text-slate-400{% endif %}"></i>
-                        <h4 class="font-bold text-lg">EMAIL OTP</h4>
-                        {% if profile.has_email_otp %}
-                            <span class="mt-3 inline-flex items-center px-4 py-1 bg-emerald-100 text-emerald-700 text-xs font-black rounded-3xl">ĐÃ KÍCH HOẠT</span>
-                            <form method="POST" class="mt-auto pt-6 w-full">
-                                {% csrf_token %}
-                                <button name="action" value="disable_email" class="text-red-500 text-sm font-bold underline">TẮT EMAIL OTP</button>
-                            </form>
-                        {% else %}
-                            <span class="mt-3 inline-flex items-center px-4 py-1 bg-slate-100 text-slate-500 text-xs font-black rounded-3xl">CHƯA KÍCH HOẠT</span>
-                            <a href="{% url 'setup_2fa' %}?method=email"
-                               class="mt-6 w-full py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold text-center hover:bg-indigo-700 transition">Thiết lập</a>
-                        {% endif %}
-                    </div>
-
-                    <!-- GOOGLE AUTHENTICATOR -->
-                    <div class="p-6 rounded-3xl border-2 transition-all hover:shadow-xl flex flex-col items-center text-center
-                        {% if profile.has_app_otp %}border-indigo-500 bg-indigo-50{% else %}border-slate-200 bg-white{% endif %}">
-                        <i class="fas fa-qrcode text-4xl mb-4 {% if profile.has_app_otp %}text-indigo-600{% else %}text-slate-400{% endif %}"></i>
-                        <h4 class="font-bold text-lg">GOOGLE AUTHENTICATOR</h4>
-                        {% if profile.has_app_otp %}
-                            <span class="mt-3 inline-flex items-center px-4 py-1 bg-indigo-100 text-indigo-700 text-xs font-black rounded-3xl">ĐÃ KÍCH HOẠT</span>
-                            <form method="POST" class="mt-auto pt-6 w-full">
-                                {% csrf_token %}
-                                <button name="action" value="disable_app" class="text-red-500 text-sm font-bold underline">TẮT GOOGLE AUTH</button>
-                            </form>
-                        {% else %}
-                            <span class="mt-3 inline-flex items-center px-4 py-1 bg-slate-100 text-slate-500 text-xs font-black rounded-3xl">CHƯA KÍCH HOẠT</span>
-                            <a href="{% url 'setup_2fa' %}?method=app"
-                               class="mt-6 w-full py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold text-center hover:bg-indigo-700 transition">Thiết lập QR</a>
-                        {% endif %}
-                    </div>
-
-                    <!-- FIDO2 / PASSKEY — dùng related_name="passkeys" -->
-                    {% with has_passkey=request.user.passkeys.exists %}
-                    <div class="p-6 rounded-3xl border-2 transition-all hover:shadow-xl flex flex-col items-center text-center
-                        {% if has_passkey %}border-purple-500 bg-purple-50{% else %}border-slate-200 bg-white{% endif %}">
-                        <i class="fas fa-fingerprint text-4xl mb-4 {% if has_passkey %}text-purple-500{% else %}text-slate-400{% endif %}"></i>
-                        <h4 class="font-bold text-lg">FIDO2 / PASSKEY</h4>
-                        {% if has_passkey %}
-                            <span class="mt-3 inline-flex items-center px-4 py-1 bg-purple-100 text-purple-700 text-xs font-black rounded-3xl">
-                                ĐÃ KÍCH HOẠT
-                            </span>
-                            <span class="mt-1 text-xs text-purple-500 font-semibold">
-                                {{ request.user.passkeys.count }} thiết bị
-                            </span>
-                            <a href="{% url 'manage_passkeys' %}"
-                               class="mt-auto pt-4 w-full py-3 bg-purple-600 text-white rounded-2xl text-sm font-bold text-center hover:bg-purple-700 transition">
-                                <i class="fas fa-list mr-1"></i> Quản lý Passkey
-                            </a>
-                        {% else %}
-                            <span class="mt-3 inline-flex items-center px-4 py-1 bg-slate-100 text-slate-500 text-xs font-black rounded-3xl">CHƯA KÍCH HOẠT</span>
-                            <a href="{% url 'setup_2fa' %}?method=fido2"
-                               class="mt-6 w-full py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold text-center hover:bg-indigo-700 transition">
-                                <i class="fas fa-plus mr-1"></i> Thiết lập Passkey
-                            </a>
-                        {% endif %}
-                    </div>
-                    {% endwith %}
-
-                    <!-- HOTP — Mã theo sự kiện -->
-                    <div class="p-6 rounded-3xl border-2 transition-all hover:shadow-xl flex flex-col items-center text-center
-                        {% if profile.has_hotp %}border-amber-500 bg-amber-50{% else %}border-slate-200 bg-white{% endif %}">
-                        <i class="fas fa-key text-4xl mb-4 {% if profile.has_hotp %}text-amber-500{% else %}text-slate-400{% endif %}"></i>
-                        <h4 class="font-bold text-lg">HOTP</h4>
-                        <p class="text-xs text-slate-400 mt-1 mb-1">Mã theo sự kiện (RFC 4226)</p>
-                        {% if profile.has_hotp %}
-                            <span class="mt-2 inline-flex items-center px-4 py-1 bg-amber-100 text-amber-700 text-xs font-black rounded-3xl">ĐÃ KÍCH HOẠT</span>
-                            <span class="mt-1 text-xs text-amber-500 font-semibold font-mono">Counter: {{ profile.hotp_counter }}</span>
-
-                            <!-- Nút sinh mã HOTP -->
-                            <button onclick="generateHOTP()"
-                                    id="hotp-gen-btn"
-                                    class="mt-4 w-full py-2.5 bg-amber-500 text-white rounded-2xl text-sm font-bold hover:bg-amber-600 transition flex items-center justify-center gap-2">
-                                <i class="fas fa-bolt"></i> Tạo mã HOTP
-                            </button>
-
-                            <!-- Khu vực hiển thị mã -->
-                            <div id="hotp-code-display" class="hidden mt-3 w-full bg-amber-50 border-2 border-amber-300 rounded-2xl p-3 text-center">
-                                <div class="text-xs text-amber-600 font-bold mb-1">MÃ OTP</div>
-                                <div id="hotp-code-value" class="text-3xl font-black font-mono tracking-widest text-amber-700"></div>
-                                <div class="text-xs text-slate-400 mt-1 font-mono" id="hotp-counter-used"></div>
-                                <div id="hotp-countdown-bar" class="mt-2 h-1 bg-amber-200 rounded-full overflow-hidden">
-                                    <div id="hotp-countdown-fill" class="h-full bg-amber-500 transition-all duration-1000" style="width:100%"></div>
-                                </div>
-                                <div class="text-xs text-amber-500 mt-1 font-mono" id="hotp-countdown-text">Mã ẩn sau 60s</div>
-                            </div>
-
-                            <form method="POST" class="mt-auto pt-4 w-full">
-                                {% csrf_token %}
-                                <button name="action" value="disable_hotp" class="text-red-500 text-sm font-bold underline">TẮT HOTP</button>
-                            </form>
-                        {% else %}
-                            <span class="mt-2 inline-flex items-center px-4 py-1 bg-slate-100 text-slate-500 text-xs font-black rounded-3xl">CHƯA KÍCH HOẠT</span>
-                            <a href="{% url 'setup_hotp' %}"
-                               class="mt-6 w-full py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold text-center hover:bg-indigo-700 transition">
-                                <i class="fas fa-key mr-1"></i> Thiết lập HOTP
-                            </a>
-                        {% endif %}
-                    </div>
-            {% if profile.is_2fa_enabled or request.user.passkeys.exists %}
-            <div class="mt-6 p-6 rounded-3xl border-2 transition-all
-                {% if profile.allow_push_auth %}border-sky-400 bg-sky-50{% else %}border-slate-200 bg-white{% endif %}
-                flex items-center justify-between gap-6">
-                
-                <div class="flex items-center gap-4">
-                    <i class="fas fa-mobile-screen-button text-3xl
-                        {% if profile.allow_push_auth %}text-sky-500{% else %}text-slate-400{% endif %}"></i>
-                    <div>
-                        <h4 class="font-bold text-base text-slate-800">Xác nhận đăng nhập từ thiết bị khác</h4>
-                    </div>
-                </div>
-                
-                <!-- Toggle switch -->
-                <button id="push-auth-btn"
-                        onclick="togglePushAuth()"
-                        class="relative inline-flex h-8 w-14 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none
-                            {% if profile.allow_push_auth %}bg-sky-500{% else %}bg-slate-300{% endif %}"
-                        role="switch"
-                        aria-checked="{{ profile.allow_push_auth|yesno:'true,false' }}"
-                        title="{% if profile.allow_push_auth %}Tắt xác nhận từ thiết bị khác{% else %}Bật xác nhận từ thiết bị khác{% endif %}">
-                    <span id="push-auth-knob"
-                        class="pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out
-                            {% if profile.allow_push_auth %}translate-x-6{% else %}translate-x-0{% endif %}">
-                    </span>
-                </button>
-            </div>
-            {% endif %}
-                </div>
-            </div>
-            <!-- Popup xác nhận từ xa — thêm vào cuối <body> của user_dashboard.html -->
-            {% comment %} <div id="push-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:9999; display:none; align-items:center; justify-content:center;">                <div style="background:#0f1623; border:1px solid rgba(255,255,255,.1); border-radius:24px; padding:32px; max-width:380px; width:90%; text-align:center; box-shadow:0 40px 80px rgba(0,0,0,.6);">
-                    <div style="font-size:40px; margin-bottom:16px;">🔔</div>
-                    <h3 style="color:#e2e8f0; font-size:18px; font-weight:700; margin-bottom:8px;">Yêu cầu đăng nhập mới</h3>
-                    <p style="color:#64748b; font-size:13px; margin-bottom:8px;">Thiết bị đang yêu cầu xác nhận:</p>
-                    <div id="push-device-info" style="background:#161e2e; border-radius:10px; padding:10px 14px; font-size:12px; color:#94a3b8; margin-bottom:20px; font-family:monospace; word-break:break-all;"></div>
-                    <div style="display:flex; gap:10px;">
-                        <button onclick="respondPush('approved')" style="flex:1; padding:12px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;">
-                    ✅ Cho phép
-                </button>
-                        <button onclick="respondPush('denied')" style="flex:1; padding:12px; background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;">
-                    ❌ Từ chối
-                </button>
-                    </div>
-                </div>
-            </div> {% endcomment %}
+      <!-- Display -->
+      <div id="info-display" class="info-grid">
+        <div class="info-item">
+          <div class="ilabel">Username</div>
+          <div class="ivalue">{{ user.username }}</div>
         </div>
+        <div class="info-item">
+          <div class="ilabel">Họ và tên</div>
+          <div class="ivalue">{{ user.first_name }} {{ profile.middle_name }} {{ user.last_name }}</div>
+        </div>
+        <div class="info-item">
+          <div class="ilabel">Email</div>
+          <div class="ivalue {% if not user.email %}empty{% endif %}">{{ user.email|default:"Chưa cập nhật" }}</div>
+        </div>
+        <div class="info-item">
+          <div class="ilabel">Điện thoại</div>
+          <div class="ivalue {% if not profile.phone_number %}empty{% endif %}">{{ profile.phone_number|default:"Chưa cập nhật" }}</div>
+        </div>
+      </div>
+
+      <!-- Edit form -->
+      <div id="info-edit" class="edit-box" style="display:none;">
+        {% if pending_update %}
+        <div style="text-align:center;">
+          <div class="panel-title" style="font-size:16px;margin-bottom:6px;">Xác nhận cập nhật</div>
+          <div class="panel-sub">Nhập mã OTP đã gửi đến email của bạn</div>
+          <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="confirm_update" value="1">
+            <input type="text" name="otp_code" maxlength="6" class="otp-big" placeholder="000000">
+            <div class="btn-row" style="justify-content:center;">
+              <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Xác nhận</button>
+              <a href="{% url 'dashboard' %}" class="btn btn-ghost">Hủy</a>
+            </div>
+          </form>
+        </div>
+        {% else %}
+        <form method="POST">
+          {% csrf_token %}
+          <div class="row2">
+            <div class="field">
+              <label class="flabel">Họ</label>
+              <input type="text" name="first_name" value="{{ user.first_name }}" placeholder="Họ">
+            </div>
+            <div class="field">
+              <label class="flabel">Chữ đệm</label>
+              <input type="text" name="middle_name" value="{{ profile.middle_name }}" placeholder="Chữ đệm">
+            </div>
+            <div class="field">
+              <label class="flabel">Tên</label>
+              <input type="text" name="last_name" value="{{ user.last_name }}" placeholder="Tên">
+            </div>
+            <div class="field">
+              <label class="flabel">Điện thoại</label>
+              <input type="tel" name="phone_number" value="{{ profile.phone_number }}" placeholder="0900000000">
+            </div>
+            <div class="field" style="grid-column:1/-1;">
+              <label class="flabel">Email</label>
+              <input type="email" name="email" value="{{ user.email }}" required placeholder="email@example.com">
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="submit" name="update_profile" class="btn btn-primary"><i class="fa fa-floppy-disk"></i> Lưu thay đổi</button>
+            <button type="button" onclick="toggleEdit()" class="btn btn-ghost">Hủy</button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
     </div>
 
-        <script>
-        function switchTab(tab) {
-            const tInfo = document.getElementById('tab-info');
-            const tSec  = document.getElementById('tab-security');
-            const bInfo = document.getElementById('btn-info');
-            const bSec  = document.getElementById('btn-security');
-            if (tab === 'info') {
-                tInfo.classList.remove('hidden'); tSec.classList.add('hidden');
-                bInfo.className = "w-full py-3 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center px-6 transition";
-                bSec.className  = "w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50";
-            } else {
-                tInfo.classList.add('hidden'); tSec.classList.remove('hidden');
-                bSec.className  = "w-full py-3 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center px-6 transition";
-                bInfo.className = "w-full py-3 rounded-2xl text-slate-500 font-bold flex items-center px-6 transition hover:bg-slate-50";
-            }
-        }
+    <!-- TAB: BẢO MẬT 2FA -->
+    <div id="tab-security" class="tab-pane">
+      <div class="panel-title">Bảo mật 2FA</div>
+      <div class="panel-sub">Quản lý phương thức xác thực hai lớp</div>
+      <div class="panel-divider"></div>
 
-        function toggleEditForm() {
-            document.getElementById('info-display').classList.toggle('hidden');
-            document.getElementById('info-edit').classList.toggle('hidden');
-        }
+      <div class="method-row">
+        <div class="method-info">
+          <div class="method-icon"><i class="fa fa-mobile-screen"></i></div>
+          <div>
+            <div class="method-name">Authenticator App (TOTP)</div>
+            <div class="method-desc">Google Authenticator, Authy...</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          {% if profile.totp_enabled %}
+            <span class="badge badge-on"><i class="fa fa-circle" style="font-size:6px"></i> Bật</span>
+          {% else %}
+            <span class="badge badge-off">Tắt</span>
+          {% endif %}
+          <a href="{% url 'setup_2fa' %}?method=totp" class="btn btn-outline btn-sm"><i class="fa fa-gear"></i> Cài đặt</a>
+        </div>
+      </div>
 
-        function showToast(msg) {
-            const t = document.getElementById('toast');
-            const m = document.getElementById('toast-msg');
-            if (m) m.innerText = msg;
-            t.classList.remove('translate-x-full');
-            setTimeout(() => t.classList.add('translate-x-full'), 4000);
-        }
+      <div class="method-row">
+        <div class="method-info">
+          <div class="method-icon"><i class="fa fa-envelope"></i></div>
+          <div>
+            <div class="method-name">Email OTP</div>
+            <div class="method-desc">Mã OTP gửi qua email</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          {% if profile.email_otp_enabled %}
+            <span class="badge badge-on"><i class="fa fa-circle" style="font-size:6px"></i> Bật</span>
+          {% else %}
+            <span class="badge badge-off">Tắt</span>
+          {% endif %}
+          <a href="{% url 'setup_2fa' %}?method=email" class="btn btn-outline btn-sm"><i class="fa fa-gear"></i> Cài đặt</a>
+        </div>
+      </div>
 
-        // ==================== GENERATE HOTP ====================
-        function generateHOTP() {
-            const btn      = document.getElementById('hotp-gen-btn');
-            const display  = document.getElementById('hotp-code-display');
-            const codeEl   = document.getElementById('hotp-code-value');
-            const ctEl     = document.getElementById('hotp-counter-used');
-            const fillEl   = document.getElementById('hotp-countdown-fill');
-            const textEl   = document.getElementById('hotp-countdown-text');
-            if (!btn) return;
+      <div class="method-row">
+        <div class="method-info">
+          <div class="method-icon"><i class="fa fa-fingerprint"></i></div>
+          <div>
+            <div class="method-name">Passkey (FIDO2)</div>
+            <div class="method-desc">Vân tay, Face ID, khóa cứng</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <a href="{% url 'manage_passkeys' %}" class="btn btn-outline btn-sm"><i class="fa fa-key"></i> Quản lý</a>
+        </div>
+      </div>
 
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang tạo...';
+      <div class="method-row">
+        <div class="method-info">
+          <div class="method-icon"><i class="fa fa-ticket"></i></div>
+          <div>
+            <div class="method-name">HOTP (Counter-based)</div>
+            <div class="method-desc">Mã OTP theo lần sử dụng</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          {% if profile.hotp_enabled %}
+            <span class="badge badge-on"><i class="fa fa-circle" style="font-size:6px"></i> Bật</span>
+          {% else %}
+            <span class="badge badge-off">Tắt</span>
+          {% endif %}
+          <a href="{% url 'setup_2fa' %}?method=hotp" class="btn btn-outline btn-sm"><i class="fa fa-gear"></i> Cài đặt</a>
+        </div>
+      </div>
+    </div>
 
-            fetch('{% url "generate_hotp_code" %}', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCsrfToken() },
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.error) {
-                    showToast('⚠️ ' + data.error);
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-bolt"></i> Tạo mã HOTP';
-                    return;
-                }
+  </div>
+</div>
 
-                // Hiện mã
-                codeEl.textContent  = data.code;
-                ctEl.textContent    = 'Counter dùng: ' + data.counter_used + ' → tiếp theo: ' + data.next_counter;
-                display.classList.remove('hidden');
-
-                // Countdown 60s rồi ẩn
-                let left = 60;
-                fillEl.style.width = '100%';
-                textEl.textContent = 'Mã ẩn sau ' + left + 's';
-
-                const tick = setInterval(() => {
-                    left--;
-                    fillEl.style.width = (left / 60 * 100) + '%';
-                    textEl.textContent = 'Mã ẩn sau ' + left + 's';
-                    if (left <= 0) {
-                        clearInterval(tick);
-                        display.classList.add('hidden');
-                        codeEl.textContent = '';
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-bolt"></i> Tạo mã HOTP';
-                    }
-                }, 1000);
-            })
-            .catch(() => {
-                showToast('Lỗi kết nối');
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-bolt"></i> Tạo mã HOTP';
-            });
-        }
-
-        function getCsrfToken() {
-            return document.cookie.split(';')
-                .find(c => c.trim().startsWith('csrftoken='))
-                ?.split('=')[1] ?? '';
-        }
-
-        // ==================== THIẾT BỊ MỚI ALERT ====================
-        {% if show_device_alert %}
-        Swal.fire({
-            title: 'Thiết bị mới!',
-            html: '<p style="color:#64748b">Phát hiện đăng nhập từ thiết bị lạ. Xác nhận đây là bạn?</p>',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#6366f1',
-            cancelButtonColor: '#ef4444',
-            confirmButtonText: 'Đúng, là tôi',
-            cancelButtonText: 'Không phải tôi',
-        }).then((result) => {
-            if (result.isConfirmed) {
-                fetch('/confirm-device/', {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-                }).then(r => {
-                    if (r.ok) {
-                        Swal.fire({ 
-                            title: 'Thành công!', 
-                            icon: 'success', 
-                            confirmButtonColor: '#10b981' 
-                        }).then(() => location.reload());
-                    }
-                }).catch(() => {
-                    Swal.fire('Lỗi', 'Không thể xác nhận thiết bị.', 'error');
-                });
-            } else {
-                window.location.href = "{% url 'logout' %}";
-            }
-        });
-        {% endif %}
-
-        // ==================== CHECK APPROVAL (Push Auth) ====================
-        function checkApproval() {
-            fetch('/api/get-auth-request/')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.has_request) {
-                        Swal.fire({
-                            title: 'Xác nhận đăng nhập?',
-                            text: 'Thiết bị: ' + (data.device_info || 'Không xác định') + ' đang muốn vào.',
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonText: 'Cho phép',
-                            cancelButtonText: 'Từ chối',
-                            confirmButtonColor: '#6366f1',
-                            cancelButtonColor: '#ef4444',
-                            allowOutsideClick: false
-                        }).then(result => {
-                            let status = result.isConfirmed ? 'approved' : 'denied';
-                            fetch(`/api/respond-auth/${data.request_id}/`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRFToken': getCsrfToken(),
-                                },
-                                body: JSON.stringify({ status })
-                            });
-                        });
-                    }
-                });
-        }
-
-        // Push Modal
-        let currentRequestId = null;
-
-        function showPushModal(reqId, deviceInfo) {
-            const ua = deviceInfo || 'Thiết bị không xác định';
-            currentRequestId = reqId;
-            Swal.fire({
-                title: 'Xác nhận đăng nhập?',
-                html: `<p>Thiết bị: <strong>${ua}</strong></p><p style="font-size:13px;color:#64748b">Đang yêu cầu truy cập tài khoản của bạn</p>`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: '✅ Cho phép',
-                cancelButtonText: '❌ Từ chối',
-                confirmButtonColor: '#10b981',
-                cancelButtonColor: '#ef4444',
-                allowOutsideClick: false
-            }).then((result) => {
-                const status = result.isConfirmed ? 'approved' : 'denied';
-                fetch(`/api/respond-auth/${reqId}/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCsrfToken(),
-                    },
-                    body: JSON.stringify({ status }),
-                });
-            });
-        }
-
-        function checkForPushRequest() {
-            fetch('/api/get-auth-request/')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.has_request && data.request_id !== currentRequestId) {
-                        showPushModal(data.request_id, data.device_info);
-                    }
-                })
-                .catch(e => console.error('[Push check]', e));
-        }
-
-        // Toggle Push Auth
-        function togglePushAuth() {
-            const btn  = document.getElementById('push-auth-btn');
-            const knob = document.getElementById('push-auth-knob');
-            if (!btn) return;
-            btn.disabled = true;
-
-            fetch('{% url "toggle_push_auth" %}', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCsrfToken() },
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.error) {
-                    showToast('⚠️ ' + data.error);
-                    return;
-                }
-                const on = data.allow_push_auth;
-                btn.setAttribute('aria-checked', on ? 'true' : 'false');
-                btn.classList.toggle('bg-sky-500', on);
-                btn.classList.toggle('bg-slate-300', !on);
-                knob.classList.toggle('translate-x-6', on);
-                knob.classList.toggle('translate-x-0', !on);
-
-                const card = btn.closest('div[class*="rounded-3xl"]');
-                if (card) {
-                    card.classList.toggle('border-sky-400', on);
-                    card.classList.toggle('bg-sky-50', on);
-                    card.classList.toggle('border-slate-200', !on);
-                    card.classList.toggle('bg-white', !on);
-                }
-                showToast(on ? '🔔 Đã bật' : '🔕 Đã tắt');
-            })
-            .catch(() => showToast('Lỗi kết nối'))
-            .finally(() => btn.disabled = false);
-        }
-
-        // Khởi chạy
-        setInterval(checkApproval, 5000);
-        setInterval(checkForPushRequest, 5000);
-
-        {% if messages %}
-            {% for m in messages %}showToast("{{ m }}");{% endfor %}
-        {% endif %}
-        {% if pending_update %}toggleEditForm();{% endif %}
-    </script>
-
+<script>
+function switchTab(name){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item[id^="btn-"]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.getElementById('btn-'+name).classList.add('active');
+}
+function toggleEdit(){
+  const d=document.getElementById('info-display');
+  const e=document.getElementById('info-edit');
+  const b=document.getElementById('edit-btn');
+  const show=e.style.display==='none';
+  e.style.display=show?'block':'none';
+  d.style.display=show?'none':'grid';
+  b.innerHTML=show?'<i class="fa fa-xmark"></i> Đóng':'<i class="fa fa-pen"></i> Chỉnh sửa';
+}
+function toast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+</script>
 </body>
 </html>
