@@ -1,39 +1,3 @@
-"""
-views.py — Hệ thống HUIT 2FA  [PATCHED]
-=========================================
-THAY ĐỔI SO VỚI BẢN GỐC:
-
-  [BUG-1]  Superuser bỏ qua 2FA hoàn toàn
-           → Superuser đi qua luồng 2FA bình thường nếu đã bật.
-             Nếu chưa bật → login thẳng nhưng ghi warning vào log.
-
-  [BUG-2]  force_disable_2fa trong login_view không xóa otp_secret
-           → Thêm otp_secret=None, has_hotp=False, reset cờ force_disable_2fa.
-
-  [BUG-3]  setup_2fa dùng get_totp_token() chỉ khớp đúng 1 giây
-           → Đổi sang verify_totp(secret, code) — có window ±1 (±30 giây).
-
-  [BUG-4]  verify_2fa dùng get_totp_token() thay vì verify_totp()
-           → Đổi sang verify_totp(raw_secret, code).
-           → Tương tự trong dashboard nhánh disable_app/disable_hotp.
-
-  [BUG-5]  check_auth_status thiếu kiểm tra user, không có expiry
-           → Kiểm tra pre_2fa_user_id trong session, lọc expires_at.
-             Xác minh req.user_id == uid tránh session confusion.
-
-  [BUG-6]  dashboard tắt HOTP không có nhánh xử lý
-           → Thêm nhánh disable_hotp và confirm_disable_action cho HOTP.
-
-  [BUG-7]  PendingRegistration lưu OTP plaintext
-           → Dùng PendingRegistration.verify(email, otp_input) (hash-based).
-             Lưu hash khi tạo PendingRegistration.
-
-  [BUG-8]  SSO token không có jti → có thể replay
-           → Thêm 'jti': str(uuid.uuid4()) vào payload.
-
-  [WARN-1] utils.py đã tự invalidate OTP cũ khi gửi mới.
-  [WARN-2] check_auth_status lọc theo expires_at (RemoteAuthRequest.EXPIRY_MINUTES = 5).
-"""
 
 import jwt
 import time
@@ -80,7 +44,6 @@ from .models import (
     ActivityLog, UserPasskey,
     OTPAttempt,   # [FIX-RATELIMIT]
 )
-# [BUG-3][BUG-4] Import verify_totp thay vì chỉ get_totp_token
 from .utils import (
     get_totp_token, verify_totp,
     compute_hotp, verify_hotp,          # HOTP — tự implement RFC 4226
