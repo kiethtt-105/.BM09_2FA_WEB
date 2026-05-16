@@ -160,6 +160,16 @@ class DeviceAlertMiddleware:
     Đặt request.is_new_device = True nếu session hiện tại chưa có TrustedDevice is_active.
     Template dùng flag này để hiển thị popup cảnh báo thiết bị mới.
 
+    [FIX-ORDER] QUAN TRỌNG: Middleware này PHẢI đứng SAU UpdateDeviceMiddleware
+    trong settings.MIDDLEWARE, nếu không TrustedDevice chưa được tạo khi
+    DeviceAlertMiddleware chạy → is_new_device luôn True cho request đầu tiên.
+
+    Thứ tự đúng trong settings.MIDDLEWARE:
+        ...
+        'accounts.middleware.UpdateDeviceMiddleware',   # tạo/cập nhật TrustedDevice
+        'accounts.middleware.DeviceAlertMiddleware',    # đọc TrustedDevice vừa tạo
+        ...
+
     FIX-3: is_recognized không tồn tại trong TrustedDevice
            → dùng is_active=True (UpdateDeviceMiddleware sẽ tạo/cập nhật record,
              nên nếu is_active=True tức thiết bị đã được ghi nhận).

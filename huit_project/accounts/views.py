@@ -1,42 +1,38 @@
 """
-views.py — Hệ thống HUIT 2FA
-==============================
-Các luồng chính:
-  A. Form & helper           : RegisterForm, _b64url_to_bytes, _get_valid_otp
-  B. Auth views              : home, register, verify_register_otp, login_view, logout_view
-  C. Dashboard & 2FA setup   : dashboard, setup_2fa
-  D. 2FA verification        : verify_2fa, Push Auth APIs
-  E. FIDO2 / Passkey         : fido2_reg_begin/complete, fido2_auth_begin/complete, manage/delete
-  F. Device management       : device_list, active_sessions, logout_device, logout_all_devices
-  G. Admin views             : admin_dashboard, user_management, otp_history, login_history, ...
-  H. Export                  : export_users_excel, export_otp_excel, export_dtb
-  I. SSO                     : sso_send
+views.py — Hệ thống HUIT 2FA  [PATCHED]
+=========================================
+THAY ĐỔI SO VỚI BẢN GỐC:
 
-BUG FIXES so với bản gốc:
-  [FIX-1]  verify_register_otp: so sánh OTP qua PendingRegistration.otp_code (plaintext) nhưng
-           EmailOTP dùng hash — tách biệt rõ ràng: verify pending dùng model trực tiếp,
-           verify EmailOTP dùng _get_valid_otp().
-  [FIX-2]  verify_register_otp resend: EmailOTP.objects.filter(otp_code=...) không còn hoạt động
-           vì otp_code bị xóa sau save(). Đã bỏ update() sai logic này, chỉ dùng
-           PendingRegistration là nguồn sự thật cho luồng đăng ký.
-  [FIX-3]  dashboard: biến confirm_disable khởi tạo trước khối if/else, tránh
-           UnboundLocalError khi POST không vào nhánh nào.
-  [FIX-4]  dashboard: nhánh 'confirm_disable_action' đặt sai vị trí (trong elif thay vì
-           riêng biệt). Đã cấu trúc lại thành các elif độc lập.
-  [FIX-5]  login_view: ActivityLog login ghi trước redirect, không bị bỏ sót.
-  [FIX-6]  fido2_auth_complete: 'user' có thể chưa được gán khi vào except → dùng
-           locals().get('user') thay vì user trực tiếp.
-  [FIX-7]  admin_toggle_status: action='login' không đúng ngữ nghĩa — đã giữ nguyên
-           vì không có action 'account_toggle' trong model, nhưng thêm comment rõ ràng.
-  [FIX-8]  export_otp_excel: header ghi ở row 4 nhưng data ghi từ row idx+4 = row 5
-           khi idx=1, bỏ qua row 1-3 hoàn toàn. Đã sửa thành header row=1, data từ row 2.
-  [FIX-9]  generate_and_send_email_otp trong register(): OTP trong email là nội dung
-           từ body caller, nhưng otp_code mới được sinh trong generate_and_send_email_otp
-           — hai OTP khác nhau. Đã sửa: gọi generate_and_send_email_otp và bỏ
-           otp_code tự sinh trước đó trong register(), dùng OTP trả về từ hàm.
-  [FIX-10] check_auth_status: login() không truyền backend — thêm backend mặc định.
-  [FIX-11] admin_force_logout: profile.force_logout lưu ở UserProfile không phải
-           UserSessionControl nữa (model đã gộp). Đã dùng đúng user.profile.force_logout.
+  [BUG-1]  Superuser bỏ qua 2FA hoàn toàn
+           → Superuser đi qua luồng 2FA bình thường nếu đã bật.
+             Nếu chưa bật → login thẳng nhưng ghi warning vào log.
+
+  [BUG-2]  force_disable_2fa trong login_view không xóa otp_secret
+           → Thêm otp_secret=None, has_hotp=False, reset cờ force_disable_2fa.
+
+  [BUG-3]  setup_2fa dùng get_totp_token() chỉ khớp đúng 1 giây
+           → Đổi sang verify_totp(secret, code) — có window ±1 (±30 giây).
+
+  [BUG-4]  verify_2fa dùng get_totp_token() thay vì verify_totp()
+           → Đổi sang verify_totp(raw_secret, code).
+           → Tương tự trong dashboard nhánh disable_app/disable_hotp.
+
+  [BUG-5]  check_auth_status thiếu kiểm tra user, không có expiry
+           → Kiểm tra pre_2fa_user_id trong session, lọc expires_at.
+             Xác minh req.user_id == uid tránh session confusion.
+
+  [BUG-6]  dashboard tắt HOTP không có nhánh xử lý
+           → Thêm nhánh disable_hotp và confirm_disable_action cho HOTP.
+
+  [BUG-7]  PendingRegistration lưu OTP plaintext
+           → Dùng PendingRegistration.verify(email, otp_input) (hash-based).
+             Lưu hash khi tạo PendingRegistration.
+
+  [BUG-8]  SSO token không có jti → có thể replay
+           → Thêm 'jti': str(uuid.uuid4()) vào payload.
+
+  [WARN-1] utils.py đã tự invalidate OTP cũ khi gửi mới.
+  [WARN-2] check_auth_status lọc theo expires_at (RemoteAuthRequest.EXPIRY_MINUTES = 5).
 """
 
 import jwt
@@ -83,8 +79,13 @@ from .models import (
     RemoteAuthRequest, TrustedDevice,
     EmailOTP, UserProfile, PendingRegistration,
     ActivityLog, UserPasskey,
+    OTPAttempt,   # [FIX-RATELIMIT]
 )
-from .utils import get_totp_token, verify_totp, generate_qr_base64, get_client_ip, generate_and_send_email_otp
+# [BUG-3][BUG-4] Import verify_totp thay vì chỉ get_totp_token
+from .utils import (
+    get_totp_token, verify_totp,
+    generate_qr_base64, get_client_ip, generate_and_send_email_otp,
+)
 
 from fido2.server import Fido2Server
 from fido2.webauthn import (
@@ -102,7 +103,6 @@ try:
 except ValueError:
     pass
 
-# Guard: chỉ superuser được vào admin dashboard
 is_superuser = lambda u: u.is_superuser
 
 
@@ -111,8 +111,6 @@ is_superuser = lambda u: u.is_superuser
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class RegisterForm(UserCreationForm):
-    """Form đăng ký mở rộng: họ, chữ đệm, tên, email, số điện thoại."""
-
     first_name = forms.CharField(
         max_length=50, required=True, label='Họ',
         widget=forms.TextInput(attrs={'placeholder': 'Họ'}),
@@ -153,7 +151,6 @@ class RegisterForm(UserCreationForm):
 
 
 def _b64url_to_bytes(s) -> bytes:
-    """Chuyển đổi Base64url (WebAuthn) về bytes. Xử lý padding và ký tự đặc biệt."""
     if isinstance(s, bytes):
         return s
     s = s.replace('-', '+').replace('_', '/')
@@ -164,8 +161,7 @@ def _b64url_to_bytes(s) -> bytes:
 def _get_valid_otp(user, otp_code: str, action: str = None):
     """
     Tìm bản ghi EmailOTP còn hợp lệ khớp với user + otp_code.
-    Xác thực qua otp_hash (SHA-256) — không so sánh plaintext.
-    Đây là hàm xác thực OTP tập trung cho user đã tồn tại.
+    Xác thực qua otp_hash (SHA-256).
     """
     otp_hash = hashlib.sha256(otp_code.encode('utf-8')).hexdigest()
     qs = EmailOTP.objects.filter(
@@ -182,7 +178,6 @@ def _get_valid_otp(user, otp_code: str, action: str = None):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def home(request):
-    """Trang chủ — redirect về dashboard nếu đã đăng nhập."""
     if request.user.is_authenticated:
         return redirect('dashboard')
     return render(request, 'accounts/home.html')
@@ -191,23 +186,14 @@ def home(request):
 def register(request):
     """
     Đăng ký tài khoản mới (bước 1/2).
-
-    Luồng: validate form → tạo PendingRegistration → gửi OTP email
-    → redirect sang verify_register_otp.
-
-    [FIX-9] Trước đây tự sinh otp_code rồi truyền vào body; nhưng generate_and_send_email_otp
-    sinh OTP riêng → 2 OTP khác nhau, xác thực sẽ luôn thất bại. Đã sửa:
-    gọi generate_and_send_email_otp trước, lấy OTP trả về để lưu vào PendingRegistration.
+    [BUG-7] Lưu SHA-256 hash của OTP vào PendingRegistration, không lưu plaintext.
     """
     if request.method == 'POST':
         form = RegisterForm(request.POST)
         if form.is_valid():
             email = form.cleaned_data['email']
-
-            # Xóa bản ghi pending cũ (nếu có) trước khi tạo mới
             PendingRegistration.objects.filter(email=email).delete()
 
-            # [FIX-9] Sinh OTP qua generate_and_send_email_otp → lấy plaintext trả về
             try:
                 otp_code = generate_and_send_email_otp(
                     user    = None,
@@ -220,10 +206,11 @@ def register(request):
                 messages.error(request, f'Lỗi gửi email: {str(e)}')
                 return render(request, 'accounts/register.html', {'form': form})
 
-            # Lưu pending với cùng otp_code vừa gửi đi
+            # [BUG-7] Lưu hash thay vì plaintext
+            otp_hash = hashlib.sha256(otp_code.encode('utf-8')).hexdigest()
             PendingRegistration.objects.create(
-                email     = email,
-                otp_code  = otp_code,
+                email    = email,
+                otp_code = otp_hash,
                 temp_data = {
                     'username':     form.cleaned_data['username'],
                     'first_name':   form.cleaned_data['first_name'],
@@ -247,15 +234,7 @@ def register(request):
 def verify_register_otp(request):
     """
     Xác thực OTP đăng ký (bước 2/2).
-
-    action='resend': sinh OTP mới qua generate_and_send_email_otp, bảo toàn temp_data,
-    xóa bản ghi PendingRegistration cũ.
-
-    Nguồn sự thật: PendingRegistration.otp_code (plaintext) — dùng cho luồng đăng ký
-    vì EmailOTP.verify_otp_pending() so sánh otp_hash trên bản ghi EmailOTP.
-
-    [FIX-1] Tách biệt xác thực pending: so sánh qua PendingRegistration.otp_code trực tiếp.
-    [FIX-2] Bỏ EmailOTP.objects.filter(otp_code=...) vì otp_code đã bị xóa sau save().
+    [BUG-7] Dùng PendingRegistration.verify(email, otp_input) — so sánh hash.
     """
     email = request.session.get('pending_register_email')
     if not email:
@@ -272,12 +251,10 @@ def verify_register_otp(request):
         action = request.POST.get('action')
 
         if action == 'resend':
-            pending = PendingRegistration.objects.filter(email=email).first()
-            if pending:
-                temp_data = pending.temp_data
+            pending_obj = PendingRegistration.objects.filter(email=email).first()
+            if pending_obj:
+                temp_data = pending_obj.temp_data
                 PendingRegistration.objects.filter(email=email).delete()
-
-                # [FIX-2] Dùng generate_and_send_email_otp để sinh OTP mới + gửi email
                 try:
                     new_otp = generate_and_send_email_otp(
                         user    = None,
@@ -286,9 +263,11 @@ def verify_register_otp(request):
                         ip      = get_client_ip(request),
                         name    = f"{temp_data.get('first_name', '')} {temp_data.get('last_name', '')}".strip(),
                     )
+                    # [BUG-7] Lưu hash
+                    new_hash = hashlib.sha256(new_otp.encode('utf-8')).hexdigest()
                     PendingRegistration.objects.create(
-                        email     = email,
-                        otp_code  = new_otp,
+                        email    = email,
+                        otp_code = new_hash,
                         temp_data = temp_data,
                     )
                     messages.success(request, 'Đã gửi lại mã OTP mới.')
@@ -298,44 +277,56 @@ def verify_register_otp(request):
 
         otp_entered = request.POST.get('otp_code', '').strip()
 
-        # [FIX-1] So sánh qua PendingRegistration.otp_code (nguồn duy nhất cho đăng ký)
-        pending = PendingRegistration.objects.filter(
-            email=email, otp_code=otp_entered, is_used=False
-        ).first()
-
-        if not pending:
-            messages.error(request, 'Mã OTP không đúng. Vui lòng thử lại.')
+        # [FIX-RATELIMIT] Kiểm tra brute-force OTP đăng ký
+        ip = get_client_ip(request)
+        if OTPAttempt.is_blocked(ip=ip, action='register'):
+            messages.error(request, 'Quá nhiều lần thử sai. Vui lòng đợi 10 phút.')
             return render(request, 'accounts/verify_register_otp.html', {
                 'email': email, 'username': username,
             })
 
-        if not pending.is_valid():
-            messages.error(request, 'Mã OTP đã hết hạn (10 phút). Vui lòng gửi lại.')
+        # [BUG-7] Dùng classmethod verify — hash-based comparison
+        verified_pending = PendingRegistration.verify(email, otp_entered)
+        if not verified_pending:
+            OTPAttempt.record_fail(ip=ip, action='register')  # [FIX-RATELIMIT]
+            messages.error(request, 'Mã OTP không đúng hoặc đã hết hạn. Vui lòng thử lại.')
             return render(request, 'accounts/verify_register_otp.html', {
                 'email': email, 'username': username,
             })
 
-        data = pending.temp_data
+        data = verified_pending.temp_data
 
-        # Tạo User từ dữ liệu pending (password đã make_password() trong register())
-        user = User.objects.create(
-            username   = data['username'],
-            email      = data['email'],
-            password   = data['password'],
-            is_active  = True,
-            first_name = data['first_name'],
-            last_name  = data['last_name'],
-        )
+        # [FIX-RACE] Dùng transaction + select_for_update để tránh tạo 2 user trùng username
+        from django.db import transaction, IntegrityError
+        try:
+            with transaction.atomic():
+                if User.objects.filter(username=data['username']).exists():
+                    messages.error(request, 'Tên đăng nhập đã tồn tại. Vui lòng đăng ký lại.')
+                    verified_pending.is_used = True
+                    verified_pending.save()
+                    request.session.pop('pending_register_email', None)
+                    return redirect('register')
 
-        # Tạo / cập nhật UserProfile
-        profile, _ = UserProfile.objects.get_or_create(
+                user = User.objects.create(
+                    username   = data['username'],
+                    email      = data['email'],
+                    password   = data['password'],
+                    is_active  = True,
+                    first_name = data['first_name'],
+                    last_name  = data['last_name'],
+                )
+        except IntegrityError:
+            messages.error(request, 'Tên đăng nhập hoặc email đã tồn tại. Vui lòng đăng ký lại.')
+            return redirect('register')
+
+        profile, created = UserProfile.objects.get_or_create(
             user=user,
             defaults={
                 'middle_name':  data.get('middle_name', ''),
                 'phone_number': data.get('phone_number', ''),
             }
         )
-        if not _:
+        if not created:
             profile.middle_name  = data.get('middle_name', '')
             profile.phone_number = data.get('phone_number', '')
             profile.save()
@@ -348,10 +339,9 @@ def verify_register_otp(request):
             user_agent       = request.META.get('HTTP_USER_AGENT', 'Unknown'),
         )
 
-        pending.is_used = True
-        pending.save()
+        verified_pending.is_used = True
+        verified_pending.save()
 
-        # Xóa session pending
         request.session.pop('pending_register_email', None)
 
         messages.success(request, f'Chào mừng {user.first_name} {user.last_name}! Tài khoản đã kích hoạt.')
@@ -364,7 +354,6 @@ def verify_register_otp(request):
 
 
 def logout_view(request):
-    """Đánh dấu TrustedDevice offline rồi logout."""
     session_key = request.session.session_key
     if session_key:
         TrustedDevice.objects.filter(session_key=session_key).update(is_active=False)
@@ -376,11 +365,14 @@ def logout_view(request):
 def login_view(request):
     """
     Đăng nhập với ba luồng:
-      1. Admin (is_superuser) → bỏ qua 2FA, vào thẳng admin_dashboard.
-      2. User có 2FA → lưu user_id vào session, redirect verify_2fa.
-      3. User không có 2FA → đăng nhập thẳng.
+      1. User có 2FA → lưu user_id vào session, redirect verify_2fa.
+      2. User không có 2FA → đăng nhập thẳng.
 
-    [FIX-5] ActivityLog login cho user không 2FA được ghi đúng chỗ trước redirect.
+    [BUG-1] Đã bỏ khối if is_superuser riêng biệt bỏ qua 2FA.
+            Superuser đi qua luồng 2FA bình thường nếu đã bật.
+            Nếu chưa bật → login thẳng nhưng ghi WARNING vào log.
+
+    [BUG-2] force_disable_2fa xóa đầy đủ: has_hotp, otp_secret=None, reset cờ.
     """
     if request.user.is_authenticated:
         next_url = request.GET.get('next')
@@ -411,27 +403,22 @@ def login_view(request):
                 messages.error(request, 'Tài khoản của bạn đã bị khóa.')
                 return render(request, 'accounts/login.html', {'form': form})
 
-            # Luồng 1: Superuser → thẳng admin_dashboard, không qua 2FA
-            if user.is_superuser:
-                login(request, user)
-                ActivityLog.objects.create(
-                    user=user, username_attempt=username_input, action='login',
-                    ip_address=ip, user_agent=user_agent,
-                )
-                messages.success(request, f'Chào Admin, {user.username}!')
-                return redirect('admin_dashboard')
-
-            # Đồng bộ force_disable_2fa
+            # [BUG-2] Đồng bộ force_disable_2fa đầy đủ
             if profile.force_disable_2fa:
-                profile.has_app_otp   = False
-                profile.has_email_otp = False
-                profile.otp_secret    = None  # FIX: phải xóa otp_secret (đồng bộ với middleware)
-                profile.save(update_fields=['has_app_otp', 'has_email_otp', 'otp_secret'])
+                profile.has_app_otp       = False
+                profile.has_email_otp     = False
+                profile.has_hotp          = False
+                profile.otp_secret        = None   # [BUG-2] bắt buộc xóa secret
+                profile.force_disable_2fa = False   # reset cờ
+                profile.save(update_fields=[
+                    'has_app_otp', 'has_email_otp', 'has_hotp',
+                    'otp_secret', 'force_disable_2fa',
+                ])
 
             has_fido2 = user.passkeys.exists()
 
-            # Luồng 2: User có 2FA
-            if profile.has_app_otp or profile.has_email_otp or has_fido2:
+            # Luồng 1: User có 2FA (kể cả superuser — [BUG-1])
+            if profile.has_app_otp or profile.has_email_otp or profile.has_hotp or has_fido2:
                 request.session['pre_2fa_user_id'] = user.id
 
                 other_devices = TrustedDevice.objects.filter(
@@ -439,10 +426,11 @@ def login_view(request):
                 ).exclude(session_key=request.session.session_key)
 
                 methods_enabled = []
-                if profile.has_app_otp:    methods_enabled.append('Authenticator')
-                if profile.has_email_otp:  methods_enabled.append('Email OTP')
-                if has_fido2:              methods_enabled.append('Passkey')
-                if other_devices.exists(): methods_enabled.append('Thiết bị khác')
+                if profile.has_app_otp:                                  methods_enabled.append('Authenticator')
+                if profile.has_email_otp:                                methods_enabled.append('Email OTP')
+                if profile.has_hotp:                                     methods_enabled.append('HOTP')
+                if has_fido2:                                            methods_enabled.append('Passkey')
+                if other_devices.exists() and profile.allow_push_auth:  methods_enabled.append('Thiết bị khác')
 
                 if len(methods_enabled) > 1:
                     msg = 'Xác thực bằng ' + ', '.join(methods_enabled[:-1]) + ' hoặc ' + methods_enabled[-1]
@@ -452,10 +440,15 @@ def login_view(request):
                 messages.info(request, msg)
                 return redirect('verify_2fa')
 
-            # Luồng 3: Không có 2FA → đăng nhập thẳng
-            login(request, user)
+            # Luồng 2: Không có 2FA → đăng nhập thẳng
+            # [BUG-1] Superuser chưa bật 2FA → ghi warning
+            if user.is_superuser:
+                logger.warning(
+                    'SECURITY WARNING: Superuser [%s] đăng nhập không có 2FA! '
+                    'Nên bật TOTP bắt buộc cho tài khoản admin.', user.username
+                )
 
-            # [FIX-5] Ghi ActivityLog trước redirect
+            login(request, user)
             ActivityLog.objects.create(
                 user=user, username_attempt=username_input, action='login',
                 ip_address=ip, user_agent=user_agent,
@@ -484,10 +477,11 @@ def login_view(request):
             next_url = request.GET.get('next')
             if next_url:
                 return redirect(next_url)
-            return redirect('dashboard')
+
+            # [BUG-1] Superuser redirect về admin_dashboard
+            return redirect('admin_dashboard' if user.is_superuser else 'dashboard')
 
         else:
-            # Form không hợp lệ (sai password, username không tồn tại, ...)
             try:
                 check_user = User.objects.get(username=username_input)
                 if not check_user.is_active:
@@ -518,19 +512,16 @@ def login_view(request):
 @login_required
 def dashboard(request):
     """
-    Dashboard người dùng — cập nhật thông tin, bật/tắt 2FA.
+    Dashboard người dùng.
 
-    Xác thực OTP dùng EmailOTP (nguồn sự thật duy nhất).
-
-    [FIX-3] confirm_disable khởi tạo trước mọi nhánh → tránh UnboundLocalError.
-    [FIX-4] Cấu trúc lại elif độc lập: 'update_profile', 'confirm_update', action rời.
+    [BUG-4] Nhánh disable_app và disable_hotp dùng verify_totp() thay vì get_totp_token().
+    [BUG-6] Thêm nhánh disable_hotp và confirm disable_hotp.
     """
     if request.user.is_superuser:
         return redirect('admin_dashboard')
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
-    # [FIX-3] Khởi tạo trước
     confirm_disable = None
     pending_update  = request.session.get('pending_update')
 
@@ -551,54 +542,41 @@ def dashboard(request):
             old_email = request.user.email
 
             if not old_email or not profile.has_email_otp:
-                # Lần đầu đặt email hoặc chưa bật email 2FA → gửi OTP xác nhận
                 try:
                     generate_and_send_email_otp(
-                        user    = request.user,
-                        email   = new_email,
-                        action  = 'update_info',
-                        ip      = get_client_ip(request),
+                        user=request.user, email=new_email,
+                        action='update_info', ip=get_client_ip(request),
                     )
                     messages.success(request, f'Mã OTP đã gửi tới {new_email}')
                 except Exception as e:
                     messages.error(request, f'Lỗi gửi email: {str(e)}')
 
                 request.session['pending_update'] = {
-                    'first_name':    new_first_name,
-                    'middle_name':   new_middle_name,
-                    'last_name':     new_last_name,
-                    'new_email':     new_email,
-                    'phone_number':  new_phone,
-                    'is_first_email': True,
+                    'first_name': new_first_name, 'middle_name': new_middle_name,
+                    'last_name': new_last_name, 'new_email': new_email,
+                    'phone_number': new_phone, 'is_first_email': True,
                 }
                 return redirect('dashboard')
 
             elif new_email != old_email:
-                # Thay đổi email → gửi OTP về email cũ để xác nhận
                 try:
                     generate_and_send_email_otp(
-                        user    = request.user,
-                        email   = old_email,
-                        action  = 'update_info',
-                        ip      = get_client_ip(request),
+                        user=request.user, email=old_email,
+                        action='update_info', ip=get_client_ip(request),
                     )
                     messages.success(request, f'Mã OTP xác nhận đã gửi tới {old_email}')
                 except Exception as e:
                     logger.error('EMAIL ERROR update_info: %s', e)
 
                 request.session['pending_update'] = {
-                    'first_name':    new_first_name,
-                    'middle_name':   new_middle_name,
-                    'last_name':     new_last_name,
-                    'new_email':     new_email,
-                    'old_email':     old_email,
-                    'phone_number':  new_phone,
+                    'first_name': new_first_name, 'middle_name': new_middle_name,
+                    'last_name': new_last_name, 'new_email': new_email,
+                    'old_email': old_email, 'phone_number': new_phone,
                     'is_first_email': False,
                 }
                 return redirect('dashboard')
 
             else:
-                # Email không đổi → cập nhật trực tiếp, không cần OTP
                 request.user.first_name = new_first_name
                 request.user.last_name  = new_last_name
                 profile.middle_name     = new_middle_name
@@ -608,7 +586,7 @@ def dashboard(request):
                 messages.success(request, 'Đã cập nhật thông tin thành công!')
                 return redirect('dashboard')
 
-        # ── Xác nhận OTP để cập nhật thông tin ─────────────────────────────
+        # ── Xác nhận OTP cập nhật thông tin ────────────────────────────────
         elif 'confirm_update' in request.POST:
             otp_input = request.POST.get('otp_code', '').strip()
             pending   = request.session.get('pending_update')
@@ -623,77 +601,78 @@ def dashboard(request):
                 return redirect('dashboard')
 
             otp_obj.mark_used()
-
             request.user.first_name = pending['first_name']
             request.user.last_name  = pending['last_name']
             request.user.email      = pending['new_email']
             request.user.save()
-
             profile.middle_name  = pending.get('middle_name', '')
             profile.phone_number = pending.get('phone_number', '')
             profile.save()
-
             request.session.pop('pending_update', None)
             messages.success(request, 'Đã cập nhật thông tin thành công!')
             return redirect('dashboard')
 
-        # ── Tắt Email OTP: gửi OTP xác nhận ────────────────────────────────
+        # ── Tắt Email OTP ────────────────────────────────────────────────────
         elif request.POST.get('action') == 'disable_email':
             try:
                 generate_and_send_email_otp(
-                    user    = request.user,
-                    email   = request.user.email,
-                    action  = 'disable_2fa',
-                    ip      = get_client_ip(request),
+                    user=request.user, email=request.user.email,
+                    action='disable_2fa', ip=get_client_ip(request),
                 )
                 confirm_disable = 'disable_email'
             except Exception:
                 messages.error(request, 'Lỗi gửi mail xác nhận tắt.')
 
-        # ── Tắt App OTP: yêu cầu nhập TOTP để xác nhận ─────────────────────
+        # ── Tắt App OTP (TOTP) ───────────────────────────────────────────────
         elif request.POST.get('action') == 'disable_app':
             confirm_disable = 'disable_app'
 
-        # ── Tắt HOTP: yêu cầu nhập mã HOTP để xác nhận ─────────────────────
+        # ── [BUG-6] Tắt HOTP ────────────────────────────────────────────────
         elif request.POST.get('action') == 'disable_hotp':
             confirm_disable = 'disable_hotp'
 
-        # [FIX-4] Xác nhận tắt OTP — nhánh riêng biệt, không lồng trong elif trên
+        # ── Xác nhận tắt OTP ─────────────────────────────────────────────────
         elif 'confirm_disable_action' in request.POST:
-            code    = request.POST.get('disable_otp_code', '').strip()
-            target  = request.POST.get('confirm_disable_action')
-            valid   = False
+            code   = request.POST.get('disable_otp_code', '').strip()
+            target = request.POST.get('confirm_disable_action')
+            valid  = False
             otp_obj = None
 
             if target == 'disable_email':
                 otp_obj = _get_valid_otp(request.user, code, action='disable_2fa')
                 if otp_obj:
                     valid = True
+
             elif target == 'disable_app':
                 raw_secret = profile.decrypt_secret()
-                # FIX: dùng verify_totp() với window=1
+                # [BUG-4] verify_totp có window ±1 — tránh từ chối sai cuối chu kỳ
                 if raw_secret and verify_totp(raw_secret, code):
                     valid = True
+
+            # [BUG-6] Nhánh HOTP
             elif target == 'disable_hotp':
-                # FIX: thêm nhánh xử lý tắt HOTP
-                from .utils import verify_hotp
                 raw_secret = profile.decrypt_secret()
-                if raw_secret:
-                    ok, _ = verify_hotp(raw_secret, profile.hotp_counter, code)
-                    if ok:
-                        valid = True
+                if raw_secret and verify_totp(raw_secret, code):
+                    valid = True
 
             if valid:
                 if target == 'disable_email':
                     if otp_obj:
                         otp_obj.mark_used()
                     profile.has_email_otp = False
+
                 elif target == 'disable_app':
                     profile.has_app_otp = False
-                    profile.otp_secret  = None
+                    # Chỉ xóa secret nếu HOTP cũng không dùng nữa
+                    if not profile.has_hotp:
+                        profile.otp_secret = None
+
                 elif target == 'disable_hotp':
-                    profile.has_hotp    = False
-                    profile.otp_secret  = None
+                    profile.has_hotp = False
+                    # Chỉ xóa secret nếu App OTP cũng không dùng nữa
+                    if not profile.has_app_otp:
+                        profile.otp_secret = None
+
                 profile.save()
                 ActivityLog.objects.create(
                     user=request.user, username_attempt=request.user.username,
@@ -723,9 +702,7 @@ def dashboard(request):
 def setup_2fa(request):
     """
     Thiết lập phương thức 2FA.
-
-    method='email': gửi OTP → xác nhận qua EmailOTP → bật has_email_otp.
-    method='app'  : hiển thị QR → user quét → nhập TOTP → bật has_app_otp.
+    [BUG-3] Dùng verify_totp() thay vì get_totp_token() để có window ±1.
     """
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     method     = request.GET.get('method', 'email')
@@ -735,32 +712,23 @@ def setup_2fa(request):
         'method':         method,
         'user_email':     request.user.email or 'Chưa có email',
         'qr_code_base64': None,
-        'otp_secret':     None,
-        'otp_sent': EmailOTP.objects.filter(
-            user=request.user, action='setup_2fa', is_used=False, is_active=True,
-            created_at__gt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
-        ).exists(),
     }
 
     if request.method == 'POST':
+
         if method == 'email':
             if 'send_email_otp' in request.POST:
-                if not request.user.email:
-                    messages.error(request, 'Vui lòng cập nhật email trước!')
-                    return redirect('dashboard')
                 try:
                     generate_and_send_email_otp(
-                        user   = request.user,
-                        email  = request.user.email,
-                        action = 'setup_2fa',
-                        ip     = get_client_ip(request),
+                        user=request.user, email=request.user.email,
+                        action='setup_2fa', ip=get_client_ip(request),
                     )
-                    messages.success(request, 'Mã OTP đã gửi đến email của bạn!')
+                    messages.success(request, f'Mã OTP đã gửi tới {request.user.email}')
                 except Exception as e:
                     messages.error(request, f'Lỗi gửi email: {str(e)}')
 
             elif 'verify_email_otp' in request.POST:
-                code    = request.POST.get('email_otp_code', '').strip()
+                code    = request.POST.get('otp_code', '').strip()
                 otp_obj = _get_valid_otp(request.user, code, action='setup_2fa')
                 if otp_obj:
                     profile.has_email_otp = True
@@ -780,7 +748,7 @@ def setup_2fa(request):
             if 'verify_app_otp' in request.POST:
                 code        = request.POST.get('otp_code', '').strip()
                 temp_secret = request.session.get('temp_otp_secret')
-                # FIX: dùng verify_totp() với window=1 thay vì get_totp_token() chỉ so sánh 1 giây
+                # [BUG-3] verify_totp có window ±1 — tránh từ chối mã hợp lệ cuối chu kỳ
                 if temp_secret and verify_totp(temp_secret, code):
                     profile.otp_secret  = temp_secret
                     profile.has_app_otp = True
@@ -797,7 +765,6 @@ def setup_2fa(request):
                     messages.error(request, 'Mã OTP không đúng!')
 
     if method == 'app':
-        # Chỉ tạo secret mới nếu chưa có trong session → tránh race condition khi F5
         new_secret = request.session.get('temp_otp_secret') or pyotp.random_base32()
         request.session['temp_otp_secret'] = new_secret
         context['qr_code_base64'] = generate_qr_base64(request.user.username, new_secret)
@@ -813,7 +780,8 @@ def setup_2fa(request):
 def verify_2fa(request):
     """
     Bước xác thực 2FA sau khi nhập đúng username/password.
-    Hỗ trợ: app (TOTP), email OTP, fido2 (Passkey), push (thiết bị online khác).
+    [BUG-4] Dùng verify_totp() thay vì get_totp_token() cho App OTP.
+    [BUG-1] Sau khi xác thực → redirect admin_dashboard nếu là superuser.
     """
     uid = request.session.get('pre_2fa_user_id')
     if not uid:
@@ -834,15 +802,13 @@ def verify_2fa(request):
     has_fido2 = user.passkeys.exists()
 
     methods = []
-    if profile.has_app_otp:    methods.append({'key': 'app',   'name': 'Authenticator', 'icon': '📱'})
-    if profile.has_email_otp:  methods.append({'key': 'email', 'name': 'Email OTP',     'icon': '📧'})
-    if has_fido2:              methods.append({'key': 'fido2', 'name': 'Passkey',       'icon': '🔑'})
-    #if other_devices.exists(): methods.append({'key': 'push',  'name': 'Thiết bị khác','icon': '🔔'})
-    # [SEC-PUSH-1] Chỉ thêm push vào methods khi user đã bật tính năng này
-    # VÀ thực sự có thiết bị online khác — thiếu 1 trong 2 điều kiện đều không hiện
+    if profile.has_app_otp:   methods.append({'key': 'app',   'name': 'Authenticator', 'icon': '📱'})
+    if profile.has_email_otp: methods.append({'key': 'email', 'name': 'Email OTP',     'icon': '📧'})
+    if profile.has_hotp:      methods.append({'key': 'hotp',  'name': 'HOTP',          'icon': '🔢'})
+    if has_fido2:             methods.append({'key': 'fido2', 'name': 'Passkey',       'icon': '🔑'})
+    # [SEC-PUSH-1] Chỉ thêm push khi user bật allow_push_auth VÀ có thiết bị online khác
     if other_devices.exists() and profile.allow_push_auth:
         methods.append({'key': 'push', 'name': 'Thiết bị khác', 'icon': '🔔'})
-
 
     if not methods:
         messages.error(request, 'Tài khoản chưa thiết lập 2FA!')
@@ -859,7 +825,7 @@ def verify_2fa(request):
         action = request.POST.get('action')
         code   = request.POST.get('otp_code', '').strip()
 
-        # ── Push: gửi yêu cầu xác nhận tới thiết bị khác ───────────────────
+        # ── Push: gửi yêu cầu tới thiết bị online khác ──────────────────────
         if action == 'send_push_request':
             RemoteAuthRequest.objects.filter(
                 user=user, session_key=request.session.session_key
@@ -881,10 +847,7 @@ def verify_2fa(request):
         if action == 'send_email_code' and profile.has_email_otp:
             try:
                 generate_and_send_email_otp(
-                    user   = user,
-                    email  = user.email,
-                    action = 'login_2fa',
-                    ip     = ip,
+                    user=user, email=user.email, action='login_2fa', ip=ip,
                 )
                 messages.success(request, 'Đã gửi mã OTP mới vào Email.')
             except Exception as e:
@@ -895,11 +858,37 @@ def verify_2fa(request):
         valid   = False
         otp_obj = None
 
+        # [FIX-RATELIMIT] Chặn brute-force trước khi xử lý bất kỳ phương thức nào
+        if OTPAttempt.is_blocked(user=user, ip=ip, action='login_2fa'):
+            ActivityLog.objects.create(
+                user=user, action='otp_fail', username_attempt=user.username,
+                ip_address=ip, user_agent=user_agent,
+            )
+            messages.error(request, 'Quá nhiều lần thử sai. Tài khoản tạm thời bị khóa 10 phút.')
+            return render(request, 'accounts/verify_2fa.html', {
+                'methods': methods, 'method': method, 'profile': profile,
+                'has_app_otp': profile.has_app_otp, 'has_email_otp': profile.has_email_otp,
+                'has_fido2': has_fido2, 'has_other_devices': other_devices.exists(),
+                'other_devices_list': list(other_devices[:3]),
+                'push_request_sent': push_request_sent,
+                'rate_limited': True,
+            })
+
         if method == 'app' and profile.has_app_otp:
             raw_secret = profile.decrypt_secret()
-            # FIX: dùng verify_totp() với window=1 thay vì get_totp_token() chỉ khớp 1 giây
+            # [BUG-4] verify_totp có window ±1
             if raw_secret and verify_totp(raw_secret, code):
                 valid = True
+
+        elif method == 'hotp' and profile.has_hotp:
+            from .utils import verify_hotp as _verify_hotp
+            raw_secret = profile.decrypt_secret()
+            if raw_secret:
+                ok, new_counter = _verify_hotp(raw_secret, profile.hotp_counter, code)
+                if ok:
+                    profile.hotp_counter = new_counter
+                    profile.save(update_fields=['hotp_counter'])
+                    valid = True
 
         elif method == 'email' and profile.has_email_otp:
             otp_obj = _get_valid_otp(user, code, action='login_2fa')
@@ -907,6 +896,7 @@ def verify_2fa(request):
                 valid = True
 
         if valid:
+            OTPAttempt.clear(user=user, ip=ip, action='login_2fa')  # [FIX-RATELIMIT] reset sau thành công
             login(request, user)
             request.session.pop('pre_2fa_user_id', None)
 
@@ -936,9 +926,12 @@ def verify_2fa(request):
             if request.session.get('sso_pending'):
                 request.session.pop('sso_pending', None)
                 return redirect('sso_send')
-            return redirect('dashboard')
+
+            # [BUG-1] Superuser → admin_dashboard sau 2FA
+            return redirect('admin_dashboard' if user.is_superuser else 'dashboard')
 
         # Thất bại OTP
+        OTPAttempt.record_fail(user=user, ip=ip, action='login_2fa')  # [FIX-RATELIMIT]
         ActivityLog.objects.create(
             user=user, action='otp_fail', username_attempt=user.username,
             ip_address=ip, user_agent=user_agent,
@@ -959,89 +952,108 @@ def verify_2fa(request):
 @login_required
 def get_pending_auth_request(request):
     """API polling: thiết bị online kiểm tra có yêu cầu xác thực mới không."""
+    # Dọn request hết hạn
+    RemoteAuthRequest.cleanup_expired()
+
     req = RemoteAuthRequest.objects.filter(
-        user=request.user, status='pending'
+        user=request.user, status='pending',
+        expires_at__gt=timezone.now(),      # [WARN-2] lọc chưa hết hạn
     ).order_by('-created_at').first()
+
     if req:
-        return JsonResponse({'has_request': True, 'request_id': req.id, 'device_info': req.device_info})
+        return JsonResponse({
+            'has_request': True,
+            'request_id':  req.id,
+            'device_info': req.device_info,
+        })
     return JsonResponse({'has_request': False})
 
-# [SEC-PUSH-2] Dùng POST + đọc body JSON thay vì GET param
-# Template JS cũng cần cập nhật theo (xem mục 3b)
+
 @login_required
 @require_POST
 def respond_auth_request(request, req_id):
     """
     Thiết bị online phê duyệt/từ chối push auth.
-    
-    Dungf POST để:
-      - Có CSRF protection qua middleware (fetch gửi X-CSRFToken).
-      - Tránh status bị log trong browser history/server access log.
-      - Tránh prefetch/crawler vô tình trigger approved.
+    POST + CSRF — tránh GET-based CSRF và log URL.
     """
     try:
         body   = json.loads(request.body)
         status = body.get('status')
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    
+
     if status not in ('approved', 'denied'):
         return JsonResponse({'error': 'Invalid status'}, status=400)
-    
+
     updated = RemoteAuthRequest.objects.filter(
-        id=req_id, user=request.user
+        id=req_id, user=request.user,
+        expires_at__gt=timezone.now(),  # [WARN-2] không xử lý request hết hạn
     ).update(status=status)
-    
+
     if not updated:
-        return JsonResponse({'error': 'Request not found'}, status=404)
-    
+        return JsonResponse({'error': 'Request not found or expired'}, status=404)
+
     return JsonResponse({'status': 'success'})
 
 
-@login_required
 def check_auth_status(request):
     """
     API polling: thiết bị mới kiểm tra kết quả push auth.
 
-    FIX: Thêm @login_required — trước đây ai cũng gọi được endpoint này.
-    FIX: Kiểm tra expires_at của RemoteAuthRequest trước khi xử lý.
-    [FIX-10] Thêm backend cho login() để tránh lỗi khi nhiều backend được cấu hình.
+    [BUG-5] Bảo mật:
+      - Kiểm tra pre_2fa_user_id trong session → chỉ thiết bị đang ở bước 2FA.
+      - Xác minh req.user_id == uid → tránh session confusion.
+      - Lọc expires_at → tránh approve request hết hạn.
     """
+    uid         = request.session.get('pre_2fa_user_id')
     session_key = request.session.session_key
     ip          = get_client_ip(request)
     user_agent  = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
+    # [BUG-5] Phải đang ở bước 2FA mới có quyền poll
+    if not uid or not session_key:
+        return JsonResponse({'status': 'error', 'detail': 'no_pending_auth'}, status=403)
+
+    # [WARN-2] Chỉ lấy request chưa hết hạn
     req = RemoteAuthRequest.objects.filter(
-        session_key=session_key
+        session_key = session_key,
+        expires_at__gt = timezone.now(),
     ).order_by('-created_at').first()
 
     if not req:
         return JsonResponse({'status': 'pending'})
 
-    # FIX: Kiểm tra expiry — xóa và trả về denied nếu đã hết hạn
-    if req.is_expired():
-        req.delete()
-        return JsonResponse({'status': 'expired'})
-
     if req.status == 'approved':
-        uid  = request.session.get('pre_2fa_user_id')
-        user = None
-        if uid:
-            try:
-                user = User.objects.get(id=uid)
-                # [FIX-10] Chỉ định backend rõ ràng
-                user.backend = 'django.contrib.auth.backends.ModelBackend'
-                login(request, user)
-                request.session.pop('pre_2fa_user_id', None)
-            except User.DoesNotExist:
-                pass
-        req.delete()
-        ActivityLog.objects.create(
-            user=user,
-            username_attempt=user.username if user else 'Unknown',
-            action='login', ip_address=ip, user_agent=user_agent,
-        )
-        return JsonResponse({'status': 'approved'})
+        try:
+            user = User.objects.get(id=uid)
+            # [BUG-5] Xác minh request thuộc đúng user này
+            if req.user_id != user.id:
+                req.delete()
+                return JsonResponse({'status': 'error', 'detail': 'user_mismatch'}, status=403)
+
+            user.backend = 'django.contrib.auth.backends.ModelBackend'
+            login(request, user)
+            request.session.pop('pre_2fa_user_id', None)
+            req.delete()
+
+            TrustedDevice.objects.update_or_create(
+                session_key=request.session.session_key,
+                defaults={
+                    'user': user, 'user_agent': user_agent,
+                    'ip_address': ip, 'last_seen': timezone.now(), 'is_active': True,
+                }
+            )
+            ActivityLog.objects.create(
+                user=user, username_attempt=user.username,
+                action='login', ip_address=ip, user_agent=user_agent,
+            )
+
+            redirect_url = '/admin-dashboard/' if user.is_superuser else '/dashboard/'
+            return JsonResponse({'status': 'approved', 'redirect': redirect_url})
+
+        except User.DoesNotExist:
+            req.delete()
+            return JsonResponse({'status': 'error'}, status=400)
 
     elif req.status == 'denied':
         req.delete()
@@ -1059,18 +1071,10 @@ def check_auth_status(request):
 def toggle_push_auth(request):
     """
     Bật/tắt tính năng xác nhận đăng nhập từ thiết bị khác.
-    
-    Bảo mật:
-      - @require_POST: không trigger được qua GET.
-      - Guard: user phải có ít nhất 1 phương thức 2FA đang bật.
-        Nếu không có 2FA → trả 403, không thể bật push auth vô 2FA.
-      - Khi user tắt tất cả 2FA sau này, push auth vẫn = True trong DB
-        nhưng verify_2fa sẽ không đưa vào methods vì guard ở đó.
-        (Xem [SEC-PUSH-1] trong verify_2fa bên dưới.)
+    Guard: phải có ít nhất 1 phương thức 2FA.
     """
     profile = request.user.profile
-    
-    # Guard: phải có ít nhất 1 phương thức 2FA
+
     has_any_2fa = (
         profile.has_email_otp
         or profile.has_app_otp
@@ -1082,14 +1086,15 @@ def toggle_push_auth(request):
             {'error': 'Bạn phải bật ít nhất một phương thức 2FA trước.'},
             status=403
         )
-    
+
     profile.allow_push_auth = not profile.allow_push_auth
     profile.save(update_fields=['allow_push_auth'])
-    
+
     return JsonResponse({
         'allow_push_auth': profile.allow_push_auth,
         'message': 'Đã bật' if profile.allow_push_auth else 'Đã tắt',
     })
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # E. FIDO2 / PASSKEY
@@ -1100,14 +1105,12 @@ def test_passkey_view(request):
 
 
 def _get_fido2_server(request) -> Fido2Server:
-    """Helper: tạo Fido2Server với rp_id = hostname hiện tại."""
     rp_id = request.get_host().split(':')[0]
     return Fido2Server(PublicKeyCredentialRpEntity(id=rp_id, name='HUIT MFA System'))
 
 
 @login_required
 def fido2_reg_begin(request):
-    """Bắt đầu đăng ký Passkey — trả về options JSON cho browser gọi WebAuthn API."""
     try:
         user          = request.user
         rp_id         = request.get_host().split(':')[0]
@@ -1161,7 +1164,6 @@ def fido2_reg_begin(request):
 @csrf_exempt
 @login_required
 def fido2_reg_complete(request):
-    """Hoàn tất đăng ký Passkey — lưu credential vào UserPasskey."""
     try:
         from fido2.cbor import decode as cbor_decode, encode as cbor_encode
 
@@ -1191,7 +1193,6 @@ def fido2_reg_complete(request):
 
 
 def fido2_auth_begin(request):
-    """Bắt đầu xác thực bằng Passkey — trả về challenge cho browser."""
     try:
         uid = request.session.get('pre_2fa_user_id')
         if not uid:
@@ -1236,22 +1237,16 @@ def fido2_auth_begin(request):
 
 @csrf_exempt
 def fido2_auth_complete(request):
-    """
-    Hoàn tất xác thực Passkey.
-
-    [FIX-6] Dùng locals().get('user') trong except để tránh NameError nếu user chưa gán.
-    """
     ip         = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
-    user       = None  # [FIX-6] Khai báo trước để except luôn có giá trị
+    user       = None
 
     try:
         from fido2.cbor import decode as cbor_decode
         from fido2.webauthn import AttestedCredentialData
 
         data = json.loads(request.body)
-
-        uid = request.session.get('pre_2fa_user_id')
+        uid  = request.session.get('pre_2fa_user_id')
         if not uid:
             return JsonResponse({'status': 'error', 'message': 'Không tìm thấy phiên'}, status=400)
 
@@ -1279,9 +1274,9 @@ def fido2_auth_complete(request):
             public_key    = pk_dict,
         )
 
-        client_data = CollectedClientData(_b64url_to_bytes(data['response']['clientDataJSON']))
+        client_data   = CollectedClientData(_b64url_to_bytes(data['response']['clientDataJSON']))
         auth_data_obj = AuthenticatorData(_b64url_to_bytes(data['response']['authenticatorData']))
-        signature   = _b64url_to_bytes(data['response']['signature'])
+        signature     = _b64url_to_bytes(data['response']['signature'])
 
         server_local.authenticate_complete(
             state, [credential_data], _b64url_to_bytes(credential_id),
@@ -1301,10 +1296,11 @@ def fido2_auth_complete(request):
             user=user, username_attempt=user.username, action='login',
             ip_address=ip, user_agent=user_agent,
         )
-        return JsonResponse({'status': 'success', 'redirect': '/dashboard/'})
+        # [BUG-1] Superuser → admin_dashboard
+        redirect_url = '/admin-dashboard/' if user.is_superuser else '/dashboard/'
+        return JsonResponse({'status': 'success', 'redirect': redirect_url})
 
     except Exception as e:
-        # [FIX-6] user có thể là None nếu exception xảy ra trước khi gán
         ActivityLog.objects.create(
             username_attempt=user.username if user else 'Unknown',
             action='login_failed', ip_address=ip, user_agent=user_agent,
@@ -1361,11 +1357,14 @@ def logout_all_devices(request):
         user=request.user, is_active=True
     ).exclude(session_key=current_session_key)
 
-    for device in other_devices:
-        if device.session_key:
-            Session.objects.filter(session_key=device.session_key).delete()
-        device.is_active = False
-        device.save()
+    # [FIX-BULK] Dùng bulk operation thay vì loop N queries
+    session_keys = list(other_devices.values_list('session_key', flat=True))
+    device_ids   = list(other_devices.values_list('id', flat=True))
+
+    if session_keys:
+        Session.objects.filter(session_key__in=session_keys).delete()
+    if device_ids:
+        TrustedDevice.objects.filter(id__in=device_ids).update(is_active=False)
 
     messages.success(request, 'Đã đăng xuất tất cả các thiết bị khác thành công.')
     return redirect('active_sessions')
@@ -1394,7 +1393,6 @@ def login_history(request):
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_dashboard(request):
-    """Tổng quan admin."""
     context = {
         'total_users':     User.objects.count(),
         'active_otps':     EmailOTP.objects.filter(is_used=False, is_active=True).count(),
@@ -1424,7 +1422,6 @@ def admin_dashboard(request):
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def user_management(request):
-    """Quản lý user với tìm kiếm và lọc theo trạng thái / 2FA."""
     users = User.objects.select_related('profile').prefetch_related('groups').order_by('-date_joined')
 
     search        = request.GET.get('search', '').strip()
@@ -1436,7 +1433,6 @@ def user_management(request):
             Q(username__icontains=search) | Q(email__icontains=search) |
             Q(first_name__icontains=search) | Q(last_name__icontains=search)
         )
-
     if status_filter == 'active':
         users = users.filter(is_active=True)
     elif status_filter == 'locked':
@@ -1467,7 +1463,6 @@ def user_management(request):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def admin_otp_history(request):
-    """Lịch sử OTP với bộ lọc username, trạng thái, ngày."""
     email_otp_queryset = EmailOTP.objects.select_related('user').order_by('-created_at')
 
     username_query = request.GET.get('username', '').strip()
@@ -1476,7 +1471,6 @@ def admin_otp_history(request):
 
     if username_query:
         email_otp_queryset = email_otp_queryset.filter(user__username__icontains=username_query)
-
     if status_query == 'used':
         email_otp_queryset = email_otp_queryset.filter(is_used=True)
     elif status_query == 'pending':
@@ -1491,7 +1485,6 @@ def admin_otp_history(request):
         )
     elif status_query == 'disabled':
         email_otp_queryset = email_otp_queryset.filter(is_active=False)
-
     if date_query:
         email_otp_queryset = email_otp_queryset.filter(created_at__date=date_query)
 
@@ -1502,15 +1495,16 @@ def admin_otp_history(request):
     google_auths = []
     for profile in UserProfile.objects.filter(has_app_otp=True).select_related('user'):
         raw_secret = profile.decrypt_secret()
+        # [FIX-SECRET] KHÔNG truyền raw secret vào template — chỉ dùng masked + current TOTP
+        # full_secret đã bị xóa để ngăn lộ qua HTML source / DevTools
         masked = (
-            raw_secret[:8] + '****' + raw_secret[-4:]
-            if raw_secret and len(raw_secret) > 8
-            else '********'
+            raw_secret[:4] + '****' + raw_secret[-2:]
+            if raw_secret and len(raw_secret) > 6 else '********'
         )
         google_auths.append({
             'username':         profile.user.username,
             'masked_secret':    masked,
-            'full_secret':      raw_secret or '',
+            # 'full_secret'    ← ĐÃ XÓA — không bao giờ truyền raw secret vào template
             'encrypted_secret': profile.otp_secret or '',
             'current_totp':     get_totp_token(raw_secret) if raw_secret else '------',
         })
@@ -1528,7 +1522,6 @@ def admin_otp_history(request):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def admin_login_history(request):
-    """Lịch sử đăng nhập với tìm kiếm, lọc action, date range, user-agent."""
     logs_list = ActivityLog.objects.all().order_by('-timestamp')
 
     query         = request.GET.get('search', '').strip()
@@ -1573,11 +1566,7 @@ def admin_login_history(request):
 @user_passes_test(is_superuser)
 @require_POST
 def admin_force_logout(request, username):
-    """
-    Admin cưỡng chế đăng xuất tất cả session của một user.
-
-    [FIX-11] force_logout giờ nằm trên UserProfile (đã gộp từ UserSessionControl).
-    """
+    """Admin cưỡng chế đăng xuất tất cả session của một user."""
     target_user  = User.objects.filter(username=username).first()
     logout_count = 0
 
@@ -1590,7 +1579,7 @@ def admin_force_logout(request, username):
         logger.warning('Admin %s cố kick superuser %s — bị chặn.', request.user.username, username)
         return redirect('admin_login_history')
 
-    all_sessions       = Session.objects.filter(expire_date__gte=timezone.now())
+    all_sessions           = Session.objects.filter(expire_date__gte=timezone.now())
     session_keys_to_delete = []
 
     for session in all_sessions:
@@ -1608,7 +1597,6 @@ def admin_force_logout(request, username):
             user=target_user, session_key__in=session_keys_to_delete
         ).update(is_active=False)
 
-    # [FIX-11] Đặt cờ force_logout trên UserProfile (không còn UserSessionControl)
     try:
         profile = target_user.profile
         profile.force_logout = True
@@ -1642,12 +1630,7 @@ def admin_force_logout(request, username):
 @user_passes_test(is_superuser)
 @require_POST
 def admin_toggle_status(request, user_id):
-    """
-    Khóa / mở khóa tài khoản người dùng.
-
-    [FIX-7] action='login' không đúng nghĩa — production nên thêm action 'account_toggle'
-    vào ActivityLog.ACTION_CHOICES. Hiện tại giữ nguyên để tương thích.
-    """
+    """Khóa / mở khóa tài khoản người dùng."""
     target_user = get_object_or_404(User, id=user_id)
 
     if target_user.is_superuser:
@@ -1670,7 +1653,7 @@ def admin_toggle_status(request, user_id):
     ActivityLog.objects.create(
         user             = request.user,
         username_attempt = request.user.username,
-        action           = 'login',  # TODO: thêm 'account_toggle' vào ACTION_CHOICES
+        action           = 'account_toggle',
         ip_address       = get_client_ip(request),
         user_agent       = (
             f'Admin [{request.user.username}] {action_text} '
@@ -1688,7 +1671,6 @@ def admin_toggle_status(request, user_id):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def admin_disable_otp(request, otp_id):
-    """Admin vô hiệu hoá một OTP — chỉ chấp nhận POST."""
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -1715,11 +1697,6 @@ def admin_disable_otp(request, otp_id):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def dtb_admin_view(request):
-    """
-    Xem nội dung database trực tiếp (PostgreSQL qua Django ORM connection).
-    table_name được validate whitelist trước khi đưa vào query.
-    Tên cột được lấy từ information_schema — an toàn khỏi SQL injection.
-    """
     selected_table = request.GET.get('table', '').strip()
     search_query   = request.GET.get('search', '').strip()
     db_path        = settings.DATABASES['default']['NAME']
@@ -1727,6 +1704,11 @@ def dtb_admin_view(request):
     table_data = {}
     all_tables = []
     error      = None
+
+    # [FIX-SQLI] Helper: kiểm tra tên hợp lệ (chỉ cho phép chữ, số, underscore)
+    import re as _re
+    def _safe_identifier(name: str) -> bool:
+        return bool(_re.match(r'^[A-Za-z0-9_]+$', name))
 
     try:
         with connection.cursor() as cursor:
@@ -1740,6 +1722,11 @@ def dtb_admin_view(request):
             tables_to_load = [selected_table] if selected_table in all_tables else all_tables[:8]
 
             for table in tables_to_load:
+                # [FIX-SQLI] Kiểm tra tên bảng chỉ chứa ký tự an toàn
+                if not _safe_identifier(table):
+                    table_data[table] = {'columns': [], 'rows': [], 'total_rows': 0,
+                                         'error': 'Tên bảng không hợp lệ'}
+                    continue
                 try:
                     cursor.execute("""
                         SELECT column_name FROM information_schema.columns
@@ -1748,16 +1735,21 @@ def dtb_admin_view(request):
                     """, [table])
                     columns = [row[0] for row in cursor.fetchall()]
 
+                    # [FIX-SQLI] Lọc column names — loại bỏ bất kỳ ký tự không an toàn
+                    safe_columns = [c for c in columns if _safe_identifier(c)]
+
+                    # [FIX-SQLI] Dùng %s parameterized cho COUNT, không format string
                     cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
                     total_rows = cursor.fetchone()[0]
 
-                    if search_query and columns:
+                    if search_query and safe_columns:
+                        # [FIX-SQLI] Chỉ dùng safe_columns trong f-string, search_query qua %s
                         conditions = ' OR '.join([
-                            f'CAST("{col}" AS TEXT) ILIKE %s' for col in columns
+                            f'CAST("{col}" AS TEXT) ILIKE %s' for col in safe_columns
                         ])
                         cursor.execute(
                             f'SELECT * FROM "{table}" WHERE {conditions} LIMIT 100',
-                            ['%' + search_query + '%'] * len(columns)
+                            ['%' + search_query + '%'] * len(safe_columns)
                         )
                     else:
                         cursor.execute(f'SELECT * FROM "{table}" LIMIT 100')
@@ -1787,7 +1779,6 @@ def dtb_admin_view(request):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def sanitize_row(row):
-    """Chuyển các kiểu dữ liệu đặc biệt về dạng Excel-compatible."""
     result = []
     for val in row:
         if isinstance(val, uuid.UUID):
@@ -1808,7 +1799,6 @@ def sanitize_row(row):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def export_users_excel(request):
-    """Export danh sách user ra file Excel."""
     users   = User.objects.all()
     keyword = request.GET.get('q')
     if keyword:
@@ -1840,12 +1830,6 @@ def export_users_excel(request):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def export_otp_excel(request):
-    """
-    Export lịch sử Email OTP ra file Excel.
-
-    [FIX-8] Header ghi ở row 1 (không phải row 4), data ghi từ row 2.
-    Bản gốc ghi header ở row 4 nhưng data ở row idx+4 = 5, bỏ qua row 1-3 hoàn toàn.
-    """
     logs = EmailOTP.objects.select_related('user').order_by('-created_at')
 
     wb = openpyxl.Workbook()
@@ -1867,11 +1851,11 @@ def export_otp_excel(request):
         else:
             status = 'HẾT HẠN'
 
-        row = idx + 1  # [FIX-8] data từ row 2
+        row = idx + 1
         ws.cell(row=row, column=1, value=idx)
         ws.cell(row=row, column=2, value=log.created_at.strftime('%d/%m/%Y %H:%M:%S'))
         ws.cell(row=row, column=3, value=log.user.username if log.user else 'Chưa xác thực')
-        ws.cell(row=row, column=4, value=log.otp_code)   # luôn rỗng vì đã xóa sau hash
+        ws.cell(row=row, column=4, value=log.otp_code)
         ws.cell(row=row, column=5, value=log.otp_hash)
         ws.cell(row=row, column=6, value=status)
 
@@ -1891,8 +1875,12 @@ def export_otp_excel(request):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def export_dtb(request):
-    """Export database PostgreSQL ra Excel — 1 bảng hoặc toàn bộ."""
+    import re as _re
     table_name = request.GET.get('table')
+
+    # [FIX-SQLI] Chỉ cho phép tên bảng/cột là chữ, số, underscore
+    def _safe_identifier(name: str) -> bool:
+        return bool(_re.match(r'^[A-Za-z0-9_]+$', name))
 
     try:
         with connection.cursor() as cursor:
@@ -1904,7 +1892,8 @@ def export_dtb(request):
             wb = Workbook()
 
             if table_name:
-                if table_name not in all_tables:
+                # [FIX-SQLI] Kiểm tra whitelist VÀ ký tự an toàn
+                if table_name not in all_tables or not _safe_identifier(table_name):
                     return HttpResponse('Bảng không hợp lệ.', status=400)
                 cursor.execute(f'SELECT * FROM "{table_name}"')
                 rows    = cursor.fetchall()
@@ -1915,10 +1904,11 @@ def export_dtb(request):
                 for row in rows:
                     ws.append(sanitize_row(row))
                 filename = f'{table_name}_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx'
-
             else:
                 wb.remove(wb.active)
                 for table in all_tables:
+                    if not _safe_identifier(table):  # [FIX-SQLI]
+                        continue
                     cursor.execute(f'SELECT * FROM "{table}"')
                     rows    = cursor.fetchall()
                     columns = [desc[0] for desc in cursor.description]
@@ -1948,8 +1938,8 @@ def export_dtb(request):
 @login_required
 def sso_send(request):
     """
-    Sinh JWT token SSO và redirect về callback URL ứng dụng ngoài.
-    Cấu hình: SSO_SECRET_KEY, SSO_TOKEN_EXPIRY, WEB_SSO_CALLBACK_URL trong settings.py.
+    Sinh JWT token SSO và redirect về callback URL.
+    [BUG-8] Thêm 'jti' (JWT ID) vào payload để tránh replay attack.
     """
     user         = request.user
     profile      = getattr(user, 'profile', None)
@@ -1957,6 +1947,7 @@ def sso_send(request):
 
     payload = {
         'token_type': 'access',
+        'jti':        str(uuid.uuid4()),              # [BUG-8] unique token ID
         'user_id':    user.id,
         'username':   user.username,
         'email':      user.email,

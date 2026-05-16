@@ -10,6 +10,7 @@ from django.utils.html import format_html, mark_safe
 from .models import (
     ActivityLog,
     EmailOTP,
+    OTPAttempt,
     PendingRegistration,
     RemoteAuthRequest,
     TrustedDevice,
@@ -375,8 +376,31 @@ default_admin_site.register(PendingRegistration, PendingRegistrationAdmin)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ĐĂNG KÝ VÀO admin.site MẶC ĐỊNH  (/admin/)
+# 9. OTP ATTEMPT (Rate Limit Monitor)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+class OTPAttemptAdmin(admin.ModelAdmin):
+    """
+    [FIX-RATELIMIT] Theo dõi các lần nhập OTP sai để phát hiện brute-force.
+    Toàn bộ readonly — chỉ để giám sát, không chỉnh sửa.
+    """
+    list_display    = ['ip_address', 'user', 'action', 'created_at']
+    search_fields   = ['ip_address', 'user__username']
+    list_filter     = ['action']
+    ordering        = ['-created_at']
+    date_hierarchy  = 'created_at'
+    readonly_fields = ['user', 'ip_address', 'action', 'created_at']
+    list_per_page   = 50
+    actions         = ['clear_attempts']
+
+    @admin.action(description='🟢 Xóa các lần thử đã chọn (unblock user/IP)')
+    def clear_attempts(self, request, queryset):
+        n = queryset.count()
+        queryset.delete()
+        self.message_user(request, f'Đã xóa {n} bản ghi — user/IP được unblock.')
+
+
+default_admin_site.register(OTPAttempt, OTPAttemptAdmin)
 
 admin.site.site_header = "HUIT Authentication System"
 admin.site.site_title  = "HUIT Admin"
@@ -394,3 +418,4 @@ admin.site.register(TrustedDevice,       TrustedDeviceAdmin)
 admin.site.register(RemoteAuthRequest,   RemoteAuthRequestAdmin)
 admin.site.register(ActivityLog,         ActivityLogAdmin)
 admin.site.register(PendingRegistration, PendingRegistrationAdmin)
+admin.site.register(OTPAttempt,          OTPAttemptAdmin)
