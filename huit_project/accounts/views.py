@@ -39,7 +39,6 @@ import jwt
 import time
 import hashlib
 import logging
-import pyotp
 import io
 import base64
 import json
@@ -86,6 +85,7 @@ from .utils import (
     get_totp_token, verify_totp,
     compute_hotp, verify_hotp,          # HOTP — tự implement RFC 4226
     generate_qr_base64, get_client_ip, generate_and_send_email_otp,
+    generate_totp_secret,               # [BUG-A] thay pyotp.random_base32()
 )
 
 from fido2.server import Fido2Server
@@ -294,6 +294,11 @@ def verify_register_otp(request):
             return render(request, 'accounts/verify_register_otp.html', {
                 'email': email, 'username': username,
             })
+
+        # [BUG-D] Cleanup EmailOTP (user=None) tương ứng — tránh rác trong DB
+        EmailOTP.objects.filter(
+            email_sent=email, action='register', user__isnull=True, is_active=True
+        ).update(is_active=False)
 
         data = verified_pending.temp_data
 
@@ -652,7 +657,8 @@ def dashboard(request):
 
             # [BUG-6] Nhánh HOTP — dùng verify_hotp đúng với counter hiện tại
             elif target == 'disable_hotp':
-                raw_secret = profile.decrypt_secret()
+                # [BUG-B] phải dùng decrypt_hotp_secret(), không phải decrypt_secret()
+                raw_secret = profile.decrypt_hotp_secret()
                 if raw_secret:
                     ok, _ = verify_hotp(raw_secret, profile.hotp_counter, code, look_ahead=5)
                     if ok:
@@ -758,12 +764,20 @@ def setup_2fa(request):
             if 'verify_app_otp' in request.POST:
                 code        = request.POST.get('otp_code', '').strip()
                 temp_secret = request.session.get('temp_otp_secret')
+                # [BUG-C] Kiểm tra TTL 10 phút cho session secret — ngăn session hijack
+                secret_at   = request.session.get('temp_otp_secret_at', 0)
+                if time.time() - secret_at > 600:
+                    request.session.pop('temp_otp_secret', None)
+                    request.session.pop('temp_otp_secret_at', None)
+                    messages.error(request, 'Phiên thiết lập đã hết hạn. Vui lòng quét lại QR mới.')
+                    return redirect('setup_2fa')
                 # [BUG-3] verify_totp có window ±1 — tránh từ chối mã hợp lệ cuối chu kỳ
                 if temp_secret and verify_totp(temp_secret, code):
                     profile.otp_secret  = temp_secret
                     profile.has_app_otp = True
                     profile.save()
                     request.session.pop('temp_otp_secret', None)
+                    request.session.pop('temp_otp_secret_at', None)
                     ActivityLog.objects.create(
                         user=request.user, username_attempt=request.user.username,
                         action='2fa_enable', ip_address=get_client_ip(request),
@@ -775,8 +789,12 @@ def setup_2fa(request):
                     messages.error(request, 'Mã OTP không đúng!')
 
     if method == 'app':
-        new_secret = request.session.get('temp_otp_secret') or pyotp.random_base32()
-        request.session['temp_otp_secret'] = new_secret
+        new_secret = request.session.get('temp_otp_secret')
+        if not new_secret:
+            new_secret = generate_totp_secret()               # [BUG-A] thay pyotp.random_base32()
+            request.session['temp_otp_secret']    = new_secret
+            request.session['temp_otp_secret_at'] = time.time()  # [BUG-C] TTL
+            request.session.modified = True   # [SEC] đảm bảo lưu session, tránh sinh secret mới mỗi F5
         context['qr_code_base64'] = generate_qr_base64(request.user.username, new_secret)
         context['otp_secret']     = new_secret
 
@@ -891,7 +909,8 @@ def verify_2fa(request):
                 valid = True
 
         elif method == 'hotp' and profile.has_hotp:
-            raw_secret = profile.decrypt_secret()
+            # [BUG-B] phải dùng decrypt_hotp_secret(), không phải decrypt_secret()
+            raw_secret = profile.decrypt_hotp_secret()
             if raw_secret:
                 ok, new_counter = verify_hotp(raw_secret, profile.hotp_counter, code)
                 if ok:
@@ -1402,28 +1421,61 @@ def login_history(request):
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def admin_dashboard(request):
+    # Chart data từ DB thực — số user đăng ký và OTP tạo ra theo ngày (7 ngày gần nhất)
+    from django.db.models.functions import TruncDate
+    from django.db.models import Count as _Count
+
+    today = timezone.now().date()
+    date_range = [today - timedelta(days=i) for i in range(6, -1, -1)]
+
+    user_by_day = {
+        item['day']: item['count']
+        for item in User.objects.filter(
+            date_joined__date__gte=date_range[0]
+        ).annotate(day=TruncDate('date_joined')).values('day').annotate(count=_Count('id'))
+    }
+    otp_by_day = {
+        item['day']: item['count']
+        for item in EmailOTP.objects.filter(
+            created_at__date__gte=date_range[0]
+        ).annotate(day=TruncDate('created_at')).values('day').annotate(count=_Count('id'))
+    }
+
+    chart_data = [
+        {
+            'day':   d.strftime('%d/%m'),
+            'users': user_by_day.get(d, 0),
+            'otps':  otp_by_day.get(d, 0),
+        }
+        for d in date_range
+    ]
+
+    # Login chart — thành công vs thất bại theo giờ hôm nay
+    login_by_hour = {}
+    for log in ActivityLog.objects.filter(
+        timestamp__date=today,
+        action__in=['login', 'login_failed'],
+    ).values('action', 'timestamp__hour').annotate(count=_Count('id')):
+        h = f"{log['timestamp__hour']:02d}"
+        if h not in login_by_hour:
+            login_by_hour[h] = {'success': 0, 'failed': 0}
+        if log['action'] == 'login':
+            login_by_hour[h]['success'] = log['count']
+        else:
+            login_by_hour[h]['failed'] = log['count']
+
+    login_chart = [
+        {'hour': h, 'success': v['success'], 'failed': v['failed']}
+        for h, v in sorted(login_by_hour.items())
+    ] or [{'hour': '--', 'success': 0, 'failed': 0}]
+
     context = {
         'total_users':     User.objects.count(),
         'active_otps':     EmailOTP.objects.filter(is_used=False, is_active=True).count(),
         'failed_logins':   ActivityLog.objects.filter(action='login_failed').count(),
         'security_alerts': 0,
-        'chart_data': [
-            {'day': '08/04', 'users': 29, 'otps': 18},
-            {'day': '09/04', 'users': 31, 'otps': 22},
-            {'day': '10/04', 'users': 33, 'otps': 25},
-            {'day': '11/04', 'users': 35, 'otps': 30},
-            {'day': '12/04', 'users': 37, 'otps': 28},
-            {'day': '13/04', 'users': 25, 'otps': 20},
-            {'day': '14/04', 'users': 27, 'otps': 24},
-        ],
-        'login_chart': [
-            {'hour': '00', 'success': 30, 'failed': 2},
-            {'hour': '04', 'success': 28, 'failed': 1},
-            {'hour': '08', 'success': 35, 'failed': 0},
-            {'hour': '12', 'success': 33, 'failed': 3},
-            {'hour': '16', 'success': 40, 'failed': 2},
-            {'hour': '20', 'success': 32, 'failed': 1},
-        ],
+        'chart_data':      chart_data,
+        'login_chart':     login_chart,
     }
     return render(request, 'admin_dashboard/dashboard.html', context)
 
@@ -1511,11 +1563,11 @@ def admin_otp_history(request):
             if raw_secret and len(raw_secret) > 6 else '********'
         )
         google_auths.append({
-            'username':         profile.user.username,
-            'masked_secret':    masked,
+            'username':      profile.user.username,
+            'masked_secret': masked,
             # 'full_secret'    ← ĐÃ XÓA — không bao giờ truyền raw secret vào template
-            'encrypted_secret': profile.otp_secret or '',
-            'current_totp':     get_totp_token(raw_secret) if raw_secret else '------',
+            # 'encrypted_secret' ← ĐÃ XÓA — ciphertext Fernet không cần ra HTML
+            'current_totp':  get_totp_token(raw_secret) if raw_secret else '------',
         })
 
     context = {
@@ -1942,8 +1994,6 @@ def export_dtb(request):
 
 @login_required
 @require_POST
-@login_required   # FIX-1: phải đăng nhập mới gọi được
-@require_POST     # FIX-1: tránh sinh mã qua GET/link (counter tăng vô ích)
 def generate_hotp_code(request):
     """
     ════════════════════════════════════════════════════════
@@ -1997,37 +2047,47 @@ def setup_hotp(request):
             Nếu đúng → lưu secret vào profile, bật has_hotp, reset counter=1.
 
     Secret dùng chung với TOTP (cùng field otp_secret) nếu user đã bật TOTP.
-    Nếu chưa có secret nào → sinh mới bằng pyotp.random_base32().
+    Nếu chưa có secret nào → sinh mới bằng generate_totp_secret().
     """
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
     if request.method == 'POST':
-        code       = request.POST.get('otp_code', '').strip()
-        temp_secret = request.session.get('temp_hotp_secret')
+        code          = request.POST.get('otp_code', '').strip()
+        temp_secret   = request.session.get('temp_hotp_secret')
+        post_token    = request.POST.get('setup_token', '')
+        session_token = request.session.get('temp_hotp_token', '')
+
+        # [SEC-RACE-1] Xác minh setup_token 1 lần dùng — ngăn hacker submit trước user
+        if not session_token or not hmac.compare_digest(post_token, session_token):
+            messages.error(request, 'Phiên thiết lập không hợp lệ. Vui lòng bắt đầu lại.')
+            request.session.pop('temp_hotp_secret', None)
+            request.session.pop('temp_hotp_token', None)
+            request.session.modified = True
+            return redirect('setup_hotp')
 
         if not temp_secret:
             messages.error(request, 'Phiên thiết lập đã hết hạn. Vui lòng thử lại.')
             return redirect('setup_hotp')
 
-        # Xác thực mã HOTP với counter=0 (lần đầu tiên)
-        # look_ahead=3: chấp nhận counter 0, 1, 2 — tránh trường hợp user thử nhiều lần
         ok, new_counter = verify_hotp(temp_secret, 0, code, look_ahead=3)
 
         if ok:
-            # FIX-3: lưu vào hotp_secret riêng — không ghi đè otp_secret của TOTP
-            # Nếu model chưa có field hotp_secret, fallback lưu vào otp_secret nhưng chỉ khi TOTP chưa bật
+            # [SEC-RACE-2] Xóa token ngay → chỉ dùng được 1 lần
+            request.session.pop('temp_hotp_token', None)
+
             if hasattr(profile, 'hotp_secret'):
-                profile.hotp_secret  = temp_secret   # field riêng cho HOTP
+                profile.hotp_secret = temp_secret
             elif not profile.has_app_otp:
-                profile.otp_secret   = temp_secret   # fallback: chỉ ghi khi TOTP chưa dùng
+                profile.otp_secret = temp_secret
             else:
-                messages.error(request, '⚠️ Bạn đang dùng TOTP. Cần thêm field hotp_secret vào model để dùng cả hai cùng lúc.')
+                messages.error(request, '⚠️ Đang dùng TOTP. Cần thêm field hotp_secret vào model.')
                 return redirect('setup_hotp')
+
             profile.has_hotp     = True
             profile.hotp_counter = new_counter
             profile.save()
-
             request.session.pop('temp_hotp_secret', None)
+            request.session.modified = True
 
             ActivityLog.objects.create(
                 user=request.user, username_attempt=request.user.username,
@@ -2037,24 +2097,33 @@ def setup_hotp(request):
             messages.success(request, '✅ Đã kích hoạt HOTP thành công!')
             return redirect('dashboard')
         else:
-            messages.error(request, '❌ Mã HOTP không đúng. Hãy tạo mã từ counter 0 và thử lại.')
+            # [SEC-RACE-3] Mã sai → sinh secret mới ngay → vô hiệu bản copy của hacker
+            request.session.pop('temp_hotp_secret', None)
+            request.session.pop('temp_hotp_token', None)
+            request.session.modified = True
+            messages.error(request, '❌ Mã HOTP không đúng. Secret đã được làm mới — vui lòng quét lại QR.')
 
-    # GET — sinh secret mới hoặc dùng lại từ session
-    temp_secret = request.session.get('temp_hotp_secret') or pyotp.random_base32()
-    request.session['temp_hotp_secret'] = temp_secret
+    # GET — giữ nguyên secret nếu đã có (F5 không sinh mới)
+    temp_secret = request.session.get('temp_hotp_secret')
+    if not temp_secret:
+        temp_secret = generate_totp_secret()                   # [BUG-A] thay pyotp.random_base32()
+        setup_token = secrets.token_urlsafe(32)
+        request.session['temp_hotp_secret'] = temp_secret
+        request.session['temp_hotp_token']  = setup_token
+        request.session.modified = True
+    else:
+        setup_token = request.session.get('temp_hotp_token', '')
 
-    # Tính mã demo counter=0 để user thấy trước
     demo_code = compute_hotp(temp_secret, 0)
-
-    # QR code theo chuẩn otpauth://hotp/ — tương thích Aegis, andOTP
     qr_base64 = generate_qr_base64(request.user.username, temp_secret, otp_type='hotp')
 
     return render(request, 'accounts/setup_2fa.html', {
-        'method':     'hotp',
-        'profile':    profile,
-        'otp_secret': temp_secret,
-        'qr_base64':  qr_base64,
-        'demo_code':  demo_code,
+        'method':      'hotp',
+        'profile':     profile,
+        'otp_secret':  temp_secret,
+        'qr_base64':   qr_base64,
+        'demo_code':   demo_code,
+        'setup_token': setup_token,
     })
 
 

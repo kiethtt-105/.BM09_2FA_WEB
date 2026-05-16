@@ -79,17 +79,17 @@ class UserProfileAdmin(admin.ModelAdmin):
                        'badge_force_disable', 'badge_force_logout']
     search_fields   = ['user__username', 'user__email', 'phone_number']
     list_filter     = ['has_email_otp', 'has_app_otp', 'force_disable_2fa', 'is_required', 'force_logout']
-    readonly_fields = ['otp_secret']
+    readonly_fields = ['otp_secret', 'hotp_secret']
     list_per_page   = 30
     actions         = ['kick_users', 'reset_force_logout']
     fieldsets = (
         ('👤 Người dùng',          {'fields': ('user',)}),
         ('📞 Liên hệ',             {'fields': ('phone_number', 'middle_name')}),
-        ('🔐 Trạng thái 2FA',     {'fields': ('has_email_otp', 'has_app_otp')}),
+        ('🔐 Trạng thái 2FA',     {'fields': ('has_email_otp', 'has_app_otp', 'has_hotp', 'hotp_counter')}),
         ('⚙️ Kiểm soát Admin',    {'fields': ('force_disable_2fa', 'is_required', 'force_logout')}),
         ('🔒 Dữ liệu nhạy cảm (chỉ đọc)', {
             'classes': ('collapse',),
-            'fields':  ('otp_secret',),
+            'fields':  ('otp_secret', 'hotp_secret'),
         }),
     )
 

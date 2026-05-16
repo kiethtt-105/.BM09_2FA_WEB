@@ -515,7 +515,8 @@ function startPushPolling(){
         clearInterval(pushInterval);
         statusEl.className='push-status-text push-approved';
         statusEl.innerText='✅ Đã được xác nhận! Đang đăng nhập...';
-        setTimeout(()=>{ window.location.href='/dashboard/'; },1000);
+        // [BUG-F] Dùng redirect URL từ server — superuser → /admin-dashboard/
+        setTimeout(()=>{ window.location.href = data.redirect || '/dashboard/'; },1000);
       } else if(data.status==='denied'){
         clearInterval(pushInterval);
         statusEl.className='push-status-text push-denied';

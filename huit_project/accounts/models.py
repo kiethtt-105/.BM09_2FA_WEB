@@ -422,13 +422,14 @@ class OTPAttempt(models.Model):
 
     @classmethod
     def clear(cls, user=None, ip: str = None, action: str = 'login_2fa'):
-        """Xóa lịch sử sau khi xác thực thành công."""
-        qs = cls.objects.filter(action=action)
+        """Xóa lịch sử sau khi xác thực thành công.
+        Tách 2 lần delete riêng để xóa đúng theo user OR ip,
+        tránh AND condition làm sót record khi user đổi IP.
+        """
         if user is not None:
-            qs = qs.filter(user=user)
+            cls.objects.filter(user=user, action=action).delete()
         if ip:
-            qs = qs.filter(ip_address=ip)
-        qs.delete()
+            cls.objects.filter(ip_address=ip, action=action).delete()
 
     @classmethod
     def cleanup_old(cls):

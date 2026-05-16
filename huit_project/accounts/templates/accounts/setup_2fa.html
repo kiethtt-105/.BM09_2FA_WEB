@@ -171,8 +171,8 @@ body::before{
 <div class="card">
   <div class="header">
     <div class="shield-icon">🛡️</div>
-    <h1>Xác minh 2 lớp</h1>
-    <p>Xác thực để tiếp tục đăng nhập</p>
+    <h1>Thiết lập 2FA</h1>
+    <p>Quét QR → xác nhận mã để kích hoạt</p>
   </div>
 
   {% if messages %}
@@ -202,36 +202,60 @@ body::before{
     {% endfor %}
   </div>
 
+
+
   <!-- Hint -->
   <div class="method-hint">
-    {% if method == 'app' %}<i class="fas fa-mobile-screen-button"></i> Nhập mã từ ứng dụng Google Authenticator
+    {% if method == 'hotp' %}<i class="fas fa-key"></i> Quét QR bằng Aegis / andOTP → bấm sinh mã → nhập bên dưới
+    {% elif method == 'app' %}<i class="fas fa-mobile-screen-button"></i> Quét QR bằng Google Authenticator → nhập mã xác nhận
     {% elif method == 'email' %}<i class="fas fa-envelope"></i> Nhập mã OTP gửi qua email
-    {% elif method == 'hotp' %}<i class="fas fa-key"></i> Mở app → bấm sinh mã HOTP → nhập mã 6 số bên dưới
-    {% elif method == 'fido2' %}<i class="fas fa-fingerprint"></i> Xác thực bằng vân tay / khuôn mặt
-    {% elif method == 'push' %}<i class="fas fa-bell"></i> Gửi yêu cầu đến thiết bị đang đăng nhập
     {% endif %}
   </div>
 
-  <!-- ══ APP / EMAIL / HOTP OTP ══ -->
+  <!-- ══ QR CODE (hiện khi setup HOTP hoặc TOTP) ══ -->
+  {% if qr_base64 %}
+  <div style="text-align:center;margin-bottom:20px;">
+    <img src="data:image/png;base64,{{ qr_base64 }}"
+         style="width:180px;height:180px;border-radius:12px;border:2px solid rgba(245,158,11,.35);display:inline-block;">
+    {% if otp_secret %}
+    <div style="margin-top:10px;font-size:11px;color:var(--muted);font-family:var(--mono);">
+      Secret: <span style="color:var(--text);letter-spacing:1px;user-select:all;">{{ otp_secret }}</span>
+    </div>
+    {% endif %}
+    {% if demo_code %}
+    <div style="margin-top:6px;font-size:12px;color:#fcd34d;">
+      Mã demo (counter 0): <strong style="font-family:var(--mono);letter-spacing:2px;">{{ demo_code }}</strong>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ══ OTP INPUT ══ -->
   {% if method == 'app' or method == 'email' or method == 'hotp' %}
 
   {% if method == 'hotp' %}
   <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#fcd34d;display:flex;align-items:center;gap:8px;">
     <i class="fas fa-bolt" style="flex-shrink:0;font-size:14px;"></i>
-    <span>Mở <strong>Aegis / andOTP</strong>, bấm nút sinh mã HOTP → nhập mã 6 số bên dưới.</span>
+    <span>Sau khi quét QR, mở <strong>Aegis / andOTP</strong> → bấm sinh mã HOTP → nhập mã 6 số bên dưới để xác nhận kích hoạt.</span>
   </div>
   {% endif %}
 
   <form method="POST" id="otp-form">
     {% csrf_token %}
+    {% if setup_token %}
+    <input type="hidden" name="setup_token" value="{{ setup_token }}">
+    {% endif %}
     <div class="otp-row">
       {% for i in '123456' %}
       <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
       {% endfor %}
     </div>
     <input type="hidden" name="otp_code" id="hidden-otp" required>
-    <button type="submit" class="btn {% if method == 'hotp' %}btn-amber{% else %}btn-primary{% endif %}" id="confirm-btn" disabled>
-      <i class="fas fa-lock-open"></i> Xác nhận & Đăng nhập
+    <button type="submit" class="btn {% if method == 'hotp' %}btn-amber{% elif method == 'app' %}btn-primary{% else %}btn-green{% endif %}" id="confirm-btn" disabled>
+      <i class="fas fa-check-circle"></i>
+      {% if method == 'hotp' %}Xác nhận kích hoạt HOTP
+      {% elif method == 'app' %}Xác nhận kích hoạt TOTP
+      {% else %}Xác nhận{% endif %}
     </button>
   </form>
 

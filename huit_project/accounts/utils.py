@@ -24,6 +24,22 @@ from django.conf import settings
 
 from .models import EmailOTP
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 0. SECRET GENERATION — không dùng pyotp
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def generate_totp_secret(length: int = 20) -> str:
+    """
+    Sinh Base32 secret ngẫu nhiên (160-bit mặc định) để dùng với TOTP/HOTP.
+    Tương đương pyotp.random_base32() nhưng tự implement — RFC 4226 §4.
+    Bổ sung padding '=' để đảm bảo Base32 hợp lệ khi decode sau.
+    """
+    raw = secrets.token_bytes(length)
+    encoded = base64.b32encode(raw).decode()
+    # Bỏ padding khi lưu (Google Auth chấp nhận không có '=')
+    return encoded.rstrip('=')
+
 logger = logging.getLogger(__name__)
 
 
