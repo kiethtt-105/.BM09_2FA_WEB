@@ -1994,6 +1994,8 @@ def export_dtb(request):
 
 @login_required
 @require_POST
+@login_required   # FIX-1: phải đăng nhập mới gọi được
+@require_POST     # FIX-1: tránh sinh mã qua GET/link (counter tăng vô ích)
 def generate_hotp_code(request):
     """
     ════════════════════════════════════════════════════════
@@ -2072,17 +2074,7 @@ def setup_hotp(request):
         ok, new_counter = verify_hotp(temp_secret, 0, code, look_ahead=3)
 
         if ok:
-            # [SEC-RACE-2] Xóa token ngay → chỉ dùng được 1 lần
-            request.session.pop('temp_hotp_token', None)
-
-            if hasattr(profile, 'hotp_secret'):
-                profile.hotp_secret = temp_secret
-            elif not profile.has_app_otp:
-                profile.otp_secret = temp_secret
-            else:
-                messages.error(request, '⚠️ Đang dùng TOTP. Cần thêm field hotp_secret vào model.')
-                return redirect('setup_hotp')
-
+            profile.otp_secret   = temp_secret   # save() sẽ tự encrypt
             profile.has_hotp     = True
             profile.hotp_counter = new_counter
             profile.save()
