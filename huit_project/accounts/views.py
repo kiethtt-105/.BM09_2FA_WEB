@@ -732,7 +732,7 @@ def setup_2fa(request):
                 else:
                     messages.error(request, 'Mã OTP không đúng hoặc đã hết hạn!')
 
-        elif method == 'app':
+        elif method in ('app', 'totp'):  # FIX: đồng bộ với URL ?method=totp
             if 'verify_app_otp' in request.POST:
                 code        = request.POST.get('otp_code', '').strip()
                 temp_secret = request.session.get('temp_otp_secret')
@@ -820,7 +820,7 @@ def setup_2fa(request):
             else:
                 messages.error(request, 'Mã xác nhận không đúng!')
 
-    if method == 'app':
+    if method in ('app', 'totp'):  # FIX: template dùng ?method=totp nhưng view chỉ check 'app'
         new_secret = request.session.get('temp_otp_secret')
         if not new_secret:
             new_secret = generate_totp_secret()
@@ -839,7 +839,13 @@ def setup_2fa(request):
             request.session['temp_hotp_token']  = setup_token
             request.session.modified = True
         else:
-            setup_token = request.session.get('temp_hotp_token', '')
+            setup_token = request.session.get('temp_hotp_token')
+            # [BUG-14 FIX] token bị mất khỏi session (server restart / expire) → tạo mới
+            # thay vì trả '' gây loop vô hạn ở client
+            if not setup_token:
+                setup_token = secrets.token_urlsafe(32)
+                request.session['temp_hotp_token'] = setup_token
+                request.session.modified = True
         context['qr_code_base64'] = generate_qr_base64(request.user.username, temp_secret, otp_type='hotp')
         context['otp_secret']     = temp_secret
         context['setup_token']    = setup_token
@@ -919,10 +925,16 @@ def verify_2fa(request):
 
         # ── Gửi Email OTP ────────────────────────────────────────────────────
         if action == 'send_email_code' and profile.has_email_otp:
+            # [BUG-10 FIX] Rate limit gửi email — tránh spam OTP đến victim
+            email_send_key = f'email_otp_send_cooldown:{user.id}'
+            if cache.get(email_send_key):
+                messages.error(request, 'Vui lòng đợi 30 giây trước khi gửi lại mã OTP.')
+                return redirect(f'{request.path}?method=email')
             try:
                 generate_and_send_email_otp(
                     user=user, email=user.email, action='login_2fa', ip=ip,
                 )
+                cache.set(email_send_key, 1, timeout=30)
                 messages.success(request, 'Đã gửi mã OTP mới vào Email.')
             except Exception as e:
                 messages.error(request, f'Lỗi gửi email: {str(e)}')
@@ -960,8 +972,9 @@ def verify_2fa(request):
             if raw_secret:
                 ok, new_counter = verify_hotp(raw_secret, profile.hotp_counter, code)
                 if ok:
-                    profile.hotp_counter = new_counter
-                    profile.save(update_fields=['hotp_counter'])
+                    # [BUG-9 FIX] Lưu new_counter vào local var, defer save() về sau login()
+                    # tránh counter tăng khi login() chưa thành công
+                    request.session['_hotp_new_counter'] = new_counter
                     valid = True
 
         elif method == 'email' and profile.has_email_otp:
@@ -988,6 +1001,14 @@ def verify_2fa(request):
             OTPAttempt.clear(user=user, ip=ip, action='login_2fa')  # [FIX-RATELIMIT] reset sau thành công
             login(request, user)
             request.session.cycle_key()  # [M5-FIX] rotate session key sau login — chống session fixation
+
+            # [BUG-9 FIX] Flush HOTP counter sau login() thành công — tránh desync
+            if method == 'hotp':
+                _new_counter = request.session.pop('_hotp_new_counter', None)
+                if _new_counter is not None:
+                    profile.hotp_counter = _new_counter
+                    profile.save(update_fields=['hotp_counter'])
+
             request.session.pop('pre_2fa_user_id', None)
 
             if method == 'email' and otp_obj:
@@ -1312,7 +1333,12 @@ def fido2_auth_begin(request):
             return JsonResponse({'status': 'error', 'message': 'Không có passkey nào'}, status=400)
 
         auth_data, state = server_local.authenticate_begin(
-            credentials=[],
+            # [BUG-11 FIX] Truyền credential list thực — server bind đúng credential,
+            # tránh authenticator lạ có thể pass qua khi credentials=[]
+            credentials=[
+                {'type': 'public-key', 'id': websafe_decode(pk.credential_id)}
+                for pk in passkeys
+            ],
             user_verification=UserVerificationRequirement.PREFERRED,
         )
 
@@ -1387,6 +1413,19 @@ def fido2_auth_complete(request):
             state, [credential_data], _b64url_to_bytes(credential_id),
             client_data, auth_data_obj, signature,
         )
+
+        # [BUG-12 FIX] Clone detection — FIDO2 spec yêu cầu counter phải tăng dần.
+        # Nếu counter mới <= counter đã lưu (và counter > 0) → authenticator có thể bị clone.
+        if auth_data_obj.counter > 0 and auth_data_obj.counter <= passkey.sign_count:
+            logger.warning(
+                'FIDO2 CLONE DETECTED: user=%s credential=%s stored_count=%d new_count=%d',
+                user.username, passkey.credential_id, passkey.sign_count, auth_data_obj.counter
+            )
+            ActivityLog.objects.create(
+                user=user, username_attempt=user.username,
+                action='login_failed', ip_address=ip, user_agent=user_agent,
+            )
+            return JsonResponse({'status': 'error', 'message': 'Phát hiện bất thường xác thực. Liên hệ admin.'}, status=400)
 
         passkey.sign_count = auth_data_obj.counter
         passkey.save()

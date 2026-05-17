@@ -349,9 +349,9 @@ body::before {
       </div>
       {% endif %}
 
-      <form method="POST">
+      {# BUG-FIX: action phải có ?method=email để view đọc đúng GET param #}
+      <form method="POST" action="?method=email">
         {% csrf_token %}
-        <input type="hidden" name="method" value="email">
         {% if otp_sent %}
         <div class="info-row">
           <i class="fa fa-paper-plane"></i>
@@ -378,7 +378,8 @@ body::before {
 
       {% if profile.has_email_otp %}
       <div class="divider"></div>
-      <form method="POST">
+      {# BUG-FIX: disable_email chỉ xử lý trong dashboard view — POST về dashboard #}
+      <form method="POST" action="{% url 'dashboard' %}">
         {% csrf_token %}
         <input type="hidden" name="action" value="disable_email">
         <button type="submit" class="btn btn-danger">
@@ -518,7 +519,7 @@ function copySecret(el, secret) {
 
 async function registerPasskey() {
   try {
-    const optRes = await fetch('/passkeys/register-options/', { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+    const optRes = await fetch('/fido2/begin/', { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
     const opts = await optRes.json();
     opts.challenge = base64url.decode(opts.challenge);
     opts.user.id = base64url.decode(opts.user.id);
@@ -530,13 +531,13 @@ async function registerPasskey() {
         attestationObject: base64url.encode(cred.response.attestationObject),
       }, type: cred.type
     };
-    const vRes = await fetch('/passkeys/register-verify/', {
+    const vRes = await fetch('/fido2/complete/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
       body: JSON.stringify(regData)
     });
     const result = await vRes.json();
-    if (result.status === 'ok') location.reload();
+    if (result.status === 'success') { location.href = '/dashboard/'; }
     else alert('Đăng ký thất bại: ' + result.message);
   } catch (e) { console.error(e); alert('Lỗi: ' + e.message); }
 }

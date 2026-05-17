@@ -166,7 +166,7 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
 
     {# Hint box theo method #}
     {% if method == 'email' %}
-      <div class="hint-box"><i class="fa fa-envelope" style="margin-right:6px"></i>Mã đã gửi đến <strong>{{ profile.user.email|default:user.email }}</strong></div>
+      <div class="hint-box"><i class="fa fa-envelope" style="margin-right:6px"></i>Mã đã gửi đến <strong>{{ user.email }}</strong></div>
     {% elif method == 'totp' %}
       {# TOTP: hiển thị countdown 30s #}
       <div class="totp-timer" id="totp-timer">
@@ -181,8 +181,10 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
       <div class="hint-box"><i class="fa fa-hashtag" style="margin-right:6px"></i>Nhập mã HOTP từ token của bạn</div>
     {% endif %}
 
-    <form method="POST" id="otp-form">
+    {# BUG-FIX: action phải truyền method qua query string vì view đọc request.GET.get('method') #}
+    <form method="POST" action="?method={{ method }}" id="otp-form">
       {% csrf_token %}
+      <input type="hidden" name="method" value="{{ method }}">
       <input type="hidden" name="otp_code" id="hidden-otp">
       <div class="otp-row">
         <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric" pattern="\d">
