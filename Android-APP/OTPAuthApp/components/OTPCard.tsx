@@ -37,9 +37,10 @@ export default function OTPCard({ account, onDelete, onUpdate }: Props) {
       return;
     }
 
+    let interval: ReturnType<typeof setInterval> | null = null;
+
     const update = () => {
       try {
-        // Lấy thời gian thực từ Date.now() — luôn dùng UTC
         const nowSeconds = Math.floor(Date.now() / 1000);
         const totp = new OTPAuth.TOTP({
           secret: OTPAuth.Secret.fromBase32(account.secret),
@@ -48,32 +49,23 @@ export default function OTPCard({ account, onDelete, onUpdate }: Props) {
           period: 30,
         });
         setOtp(totp.generate({ timestamp: Date.now() }));
-
-        // Tính timeLeft căn theo đúng chu kỳ 30 giây UTC
-        const secondsInCycle = nowSeconds % 30;
-        setTimeLeft(30 - secondsInCycle);
+        setTimeLeft(30 - (nowSeconds % 30));
       } catch {
         setOtp('ERROR');
       }
     };
 
-    // Chạy ngay lập tức
     update();
 
-    // Căn interval về đầu giây tiếp theo để tránh drift
     const msToNextSecond = 1000 - (Date.now() % 1000);
     const alignTimeout = setTimeout(() => {
       update();
-      const interval = setInterval(update, 1000);
-      // Lưu interval để cleanup
-      (alignTimeout as any)._interval = interval;
+      interval = setInterval(update, 1000);
     }, msToNextSecond);
 
     return () => {
       clearTimeout(alignTimeout);
-      if ((alignTimeout as any)._interval) {
-        clearInterval((alignTimeout as any)._interval);
-      }
+      if (interval) clearInterval(interval);
     };
   }, [account.type, account.secret]);
 
