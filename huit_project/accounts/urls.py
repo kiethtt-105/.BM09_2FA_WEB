@@ -66,6 +66,4 @@ urlpatterns = [
     path('admin-dashboard/dtb_admin/', views.dtb_admin_view, name='dtb_admin'),      
     path('admin-dashboard/export-dtb/', views.export_dtb, name='export_dtb'),
 
-    path('api/hotp-counter/', views.get_hotp_counter, name='get_hotp_counter'),
-    path('api/hotp-counter-pre2fa/', views.get_hotp_counter_pre2fa, name='get_hotp_counter_pre2fa'),
 ]
