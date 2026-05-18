@@ -41,15 +41,20 @@ export default function OTPCard({ account, onDelete, onUpdate }: Props) {
 
     const update = () => {
       try {
-        const nowSeconds = Math.floor(Date.now() / 1000);
+        const nowMs = Date.now();
+        const nowSeconds = Math.floor(nowMs / 1000);
         const totp = new OTPAuth.TOTP({
           secret: OTPAuth.Secret.fromBase32(account.secret),
           algorithm: 'SHA1',
           digits: 6,
           period: 30,
         });
-        setOtp(totp.generate({ timestamp: Date.now() }));
-        setTimeLeft(30 - (nowSeconds % 30));
+        setOtp(totp.generate({ timestamp: nowMs }));
+
+        // Tính timeLeft dựa trên ms thực để chính xác hơn
+        const msInCycle = nowMs % 30000;
+        const msLeft = 30000 - msInCycle;
+        setTimeLeft(Math.ceil(msLeft / 1000));
       } catch {
         setOtp('ERROR');
       }
