@@ -7,166 +7,275 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        .table-container {
-            max-height: 65vh;
-            overflow: auto;
-        }
-        
-        table {
-            min-width: 100%;
-            border-collapse: collapse;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
 
-        th, td {
-            padding: 12px 8px;
-            text-align: left;
-            border-bottom: 1px solid #3f3f46;
+        .nav-link {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 16px; border-radius: 12px;
+            font-size: 0.875rem; font-weight: 500;
+            transition: all 0.15s; color: #a1a1aa;
+            text-decoration: none; border: 1px solid transparent;
         }
+        .nav-link:hover { background: #27272a; color: #e4e4e7; }
+        .nav-link.active {
+            background: rgba(124,58,237,0.12);
+            color: #a78bfa;
+            border-color: rgba(124,58,237,0.25);
+        }
+        .nav-icon { width: 18px; text-align: center; font-size: 15px; }
 
-        th {
+        aside { position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; }
+        .main-content { margin-left: 256px; min-height: 100vh; overflow-y: auto; }
+
+        .table-scroll {
+            overflow-x: auto;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .db-table { min-width: 100%; border-collapse: collapse; }
+        .db-table thead th {
             position: sticky;
             top: 0;
-            background-color: #27272a;
+            background: #27272a;
             z-index: 10;
-            font-size: 0.75rem;
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 0.7rem;
+            font-weight: 600;
             text-transform: uppercase;
-        }
-
-        td {
-            font-size: 0.85rem;
+            letter-spacing: 0.08em;
+            color: #71717a;
+            border-bottom: 1px solid #3f3f46;
             white-space: nowrap;
+        }
+        .db-table tbody td {
+            padding: 10px 14px;
+            font-size: 0.8rem;
+            color: #d4d4d8;
+            border-bottom: 1px solid #27272a;
+            max-width: 260px;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 220px;
+            white-space: nowrap;
         }
-
-        .col-wide {
-            white-space: normal;
-            max-width: 380px;
-            word-break: break-all;
-        }
-
-        .col-mono {
-            font-family: monospace;
-            font-size: 0.8rem;
-        }
-
-        .row-hover:hover {
-            background-color: #27272a !important;
-        }
-
-        .null-text {
-            color: #ef4444;
-            font-style: italic;
-        }
+        .db-table tbody tr:hover td { background: #27272a; }
+        .db-table tbody tr:last-child td { border-bottom: none; }
+        .db-table .col-mono { font-family: monospace; font-size: 0.75rem; color: #a78bfa; }
+        .db-table .col-wide { max-width: 360px; white-space: normal; word-break: break-all; }
+        .null-text { color: #ef4444; font-style: italic; font-size: 0.75rem; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 
-<div class="flex min-h-screen">
+<div class="flex">
 
-    <!-- Sidebar -->
-    <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full overflow-y-auto">
-        <div class="flex items-center gap-3 mb-10">
-            <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center text-3xl font-bold text-white">H</div>
-            <h1 class="text-3xl font-bold">HUIT</h1>
+    <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+    <aside class="w-64 bg-zinc-900 border-r border-zinc-800/70 flex flex-col" style="z-index:40;">
+        <div class="p-6 border-b border-zinc-800/70">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-violet-600/30">H</div>
+                <div>
+                    <div class="font-bold text-white text-base leading-tight">HUIT</div>
+                    <div class="text-zinc-500 text-xs">Admin Dashboard</div>
+                </div>
+            </div>
         </div>
-        <nav class="space-y-1">
-            <a href="/admin-dashboard/users/" class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">👥 Quản lý Người dùng</a>
-            <a href="/admin-dashboard/otp-history/" class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">🔑 Lịch sử OTP</a>
-            <a href="/admin-dashboard/login-history/" class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">📋 Hoạt động Đăng nhập</a>
-            <a href="/admin-dashboard/dtb_admin/" class="flex items-center gap-3 px-5 py-4 rounded-2xl bg-violet-600 text-white">🗄️ DTB Admin</a>
+        <nav class="flex-1 p-4 space-y-1">
+            <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Quản lý</p>
+            <a href="{% url 'admin_users' %}" class="nav-link">
+                <span class="nav-icon"><i class="fas fa-users"></i></span> Người dùng
+            </a>
+            <a href="{% url 'admin_otp_history' %}" class="nav-link">
+                <span class="nav-icon"><i class="fas fa-key"></i></span> Lịch sử OTP
+            </a>
+            <a href="{% url 'admin_login_history' %}" class="nav-link">
+                <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> Hoạt động Đăng nhập
+            </a>
+            <a href="{% url 'dtb_admin' %}" class="nav-link active">
+                <span class="nav-icon"><i class="fas fa-database"></i></span> DTB Admin
+            </a>
         </nav>
-    </div>
+        <div class="p-4 border-t border-zinc-800/70">
+            <div class="flex items-center gap-3 px-3 py-2 mb-3">
+                <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-400 text-xs font-bold">
+                    {{ request.user.username|slice:":2"|upper|default:"AD" }}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-zinc-200 truncate">{{ request.user.username|default:"Admin" }}</div>
+                    <div class="text-xs text-zinc-500">Superuser</div>
+                </div>
+            </div>
+            <form method="POST" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-400 hover:bg-red-600/20 hover:text-red-300 transition-all">
+                    <i class="fas fa-sign-out-alt w-4 text-center"></i> Đăng xuất
+                </button>
+            </form>
+        </div>
+    </aside>
 
-    <!-- Main Content -->
-    <div class="flex-1 ml-72 p-8">
+    <!-- ═══════════════════ MAIN ═══════════════════ -->
+    <div class="main-content flex-1 p-8">
 
-        <div class="flex justify-between items-center mb-8">
-            <h1 class="text-3xl font-bold flex items-center gap-3">
-                <i class="fas fa-database text-violet-400"></i>
-                DTB Admin - Explorer
-            </h1>
-            <p class="text-zinc-400">📂 {{ db_path }}</p>
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-8">
+            <div>
+                <h1 class="text-2xl font-bold text-white">DTB Admin — Explorer</h1>
+                <p class="text-zinc-500 text-sm mt-1 font-mono">📂 {{ db_path }}</p>
+            </div>
+            <a href="{% url 'export_dtb' %}"
+               class="flex items-center gap-2 bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/30 px-4 py-2.5 rounded-xl text-sm font-medium transition-all">
+                <i class="fas fa-file-excel"></i> Xuất toàn bộ Excel
+            </a>
         </div>
 
-        <!-- Controls -->
-        <div class="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 mb-8 flex gap-4">
-            <form method="GET" class="flex-1 flex gap-4">
-                <select name="table" onchange="this.form.submit()" class="bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3">
-                    <option value="">Hiển thị nhiều bảng</option>
-                    {% for t in all_tables %}
-                    <option value="{{ t }}" {% if selected_table == t %}selected{% endif %}>{{ t }}</option>
-                    {% endfor %}
-                </select>
+        <!-- Error -->
+        {% if error %}
+        <div class="bg-red-900/20 border border-red-700/50 text-red-300 px-5 py-3.5 rounded-xl mb-6 flex items-center gap-3 text-sm">
+            <i class="fas fa-exclamation-circle"></i> {{ error }}
+        </div>
+        {% endif %}
 
-                <input type="text" name="search" value="{{ search_query }}" 
-                       placeholder="Tìm kiếm trong bảng..." 
-                       class="flex-1 bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3">
-
-                <button type="submit" class="bg-violet-600 hover:bg-violet-700 px-6 py-3 rounded-2xl">
-                    <i class="fas fa-search"></i>
-                </button>
-
-                <a href="{% url 'export_dtb' %}" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-2xl flex items-center gap-2">
-                    <i class="fas fa-file-excel"></i> Xuất Excel
-                </a>
+        <!-- Filter / Controls -->
+        <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5 mb-6">
+            <form method="GET" class="flex flex-wrap gap-3 items-end">
+                <div class="min-w-[200px]">
+                    <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Bảng dữ liệu</label>
+                    <select name="table" onchange="this.form.submit()"
+                            class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
+                        <option value="">Hiển thị tất cả bảng</option>
+                        {% for t in all_tables %}
+                        <option value="{{ t }}" {% if selected_table == t %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[220px]">
+                    <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Tìm kiếm</label>
+                    <div class="relative">
+                        <input type="text" name="search" value="{{ search_query }}"
+                               placeholder="Tìm kiếm trong bảng..."
+                               class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
+                        <i class="fas fa-search absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 text-xs"></i>
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-[22px]">
+                    <button type="submit"
+                            class="bg-violet-600 hover:bg-violet-500 px-5 py-3 rounded-xl text-sm font-medium flex items-center gap-2 transition-all">
+                        <i class="fas fa-filter"></i> Lọc
+                    </button>
+                    <a href="{% url 'dtb_admin' %}"
+                       class="bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-xl flex items-center justify-center border border-zinc-700/60 transition-all" title="Đặt lại">
+                        <i class="fas fa-sync-alt text-xs"></i>
+                    </a>
+                </div>
             </form>
         </div>
 
-        {% if error %}
-        <div class="bg-red-900/30 border border-red-700 text-red-300 p-6 rounded-3xl mb-8">{{ error }}</div>
-        {% endif %}
-
         <!-- Tables -->
-        <div class="space-y-12">
+        <div class="space-y-8">
             {% for table_name, data in tables.items %}
             <div>
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold flex items-center gap-3">
-                        <i class="fas fa-table text-violet-400"></i> {{ table_name }}
-                        <span class="bg-zinc-800 text-xs px-3 py-1 rounded-full">{{ data.total_rows }} rows</span>
-                    </h2>
-                    <a href="{% url 'export_dtb' %}?table={{ table_name }}" 
-                       class="bg-emerald-600 hover:bg-emerald-700 px-5 py-2 rounded-2xl text-sm flex items-center gap-2">
+                <!-- Table Header -->
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fas fa-table text-violet-400 text-sm"></i>
+                            {{ table_name }}
+                        </h2>
+                        <span class="bg-zinc-800 border border-zinc-700/40 text-zinc-400 text-[11px] font-medium px-2.5 py-0.5 rounded-full">
+                            {{ data.total_rows }} rows
+                        </span>
+                    </div>
+                    <a href="{% url 'export_dtb' %}?table={{ table_name }}"
+                       class="flex items-center gap-2 bg-emerald-600/15 border border-emerald-600/25 text-emerald-400 hover:bg-emerald-600/25 px-3.5 py-2 rounded-xl text-xs font-medium transition-all">
                         <i class="fas fa-file-excel"></i> Xuất Excel
                     </a>
                 </div>
 
-                <div class="table-container bg-zinc-900 border border-zinc-700 rounded-3xl overflow-hidden">
-                    <table>
-                        <thead>
-                            <tr class="bg-zinc-800">
-                                <th class="w-12">#</th>
-                                {% for col in data.columns %}
-                                <th>{{ col|upper }}</th>
+                <!-- Table Content -->
+                <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl overflow-hidden">
+                    <div class="table-scroll">
+                        <table class="db-table">
+                            <thead>
+                                <tr>
+                                    <th class="w-10 text-center">#</th>
+                                    {% for col in data.columns %}
+                                    <th>{{ col }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if data.error %}
+                                <tr>
+                                    <td colspan="999" class="py-8 text-center text-red-400 text-sm">
+                                        <i class="fas fa-exclamation-triangle mb-1 block"></i>
+                                        {{ data.error }}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                {% for row in data.rows %}
+                                <tr>
+                                    <td class="text-center text-zinc-600 text-xs">{{ forloop.counter }}</td>
+                                    {% for cell in row %}
+                                    <td>
+                                        {% if cell == None %}
+                                            <span class="null-text">NULL</span>
+                                        {% else %}
+                                            <span title="{{ cell }}">{{ cell|truncatechars:80 }}</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="999" class="py-12 text-center text-zinc-500 text-sm">
+                                        <i class="fas fa-inbox text-2xl mb-2 block opacity-20"></i>
+                                        Không có dữ liệu.
+                                    </td>
+                                </tr>
                                 {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in data.rows %}
-                            <tr class="row-hover border-b border-zinc-800 last:border-none">
-                                <td class="text-center text-zinc-500">{{ forloop.counter }}</td>
-                                {% for cell in row %}
-                                <td class="{% if 'agent' in col|lower or 'hash' in col|lower %}col-wide{% endif %}">
-                                    {% if cell is None %}
-                                        <span class="null-text">NULL</span>
-                                    {% else %}
-                                        <span title="{{ cell }}">{{ cell|truncatechars:90 }}</span>
-                                    {% endif %}
-                                </td>
-                                {% endfor %}
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
+            </div>
+            {% empty %}
+            <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl py-20 text-center text-zinc-500">
+                <i class="fas fa-database text-3xl mb-3 block opacity-20"></i>
+                <p class="text-sm">Không có bảng nào trong database.</p>
             </div>
             {% endfor %}
         </div>
 
-    </div>
-</div>
+    </div><!-- /main -->
+</div><!-- /flex -->
+<script>
+    // Gán class col-mono / col-wide cho td theo tên cột tương ứng trong thead
+    document.addEventListener('DOMContentLoaded', function () {
+        const MONO_KEYS  = ['hash', 'secret', 'token', 'key', 'cipher'];
+        const WIDE_KEYS  = ['agent', 'description', 'data', 'json'];
 
+        document.querySelectorAll('.db-table').forEach(function (tbl) {
+            const headers = Array.from(tbl.querySelectorAll('thead th')).map(
+                th => th.textContent.trim().toLowerCase()
+            );
+            tbl.querySelectorAll('tbody tr').forEach(function (tr) {
+                const cells = tr.querySelectorAll('td');
+                // cell[0] = số thứ tự (#), cell[i+1] = data column[i-1]
+                headers.forEach(function (colName, idx) {
+                    const td = cells[idx]; // thead[0]='#' khớp cells[0], data cols từ 1
+                    if (!td) return;
+                    if (MONO_KEYS.some(k => colName.includes(k))) td.classList.add('col-mono');
+                    if (WIDE_KEYS.some(k => colName.includes(k))) td.classList.add('col-wide');
+                });
+            });
+        });
+    });
+</script>
 </body>
 </html>

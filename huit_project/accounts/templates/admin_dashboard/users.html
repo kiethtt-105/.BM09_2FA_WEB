@@ -3,90 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HUIT · User Management</title>
+    <title>HUIT · Người dùng</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        .table-row { transition: all 0.2s ease; }
-        .table-row:hover { background-color: #27272a !important; }
-        .av {
-            width: 34px; height: 34px; border-radius: 9999px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 700; font-size: 13px; flex-shrink: 0;
-        }
-        ::-webkit-scrollbar { width: 6px; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: #09090b; }
-        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+
+        .nav-link {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 16px; border-radius: 12px;
+            font-size: 0.875rem; font-weight: 500;
+            transition: all 0.15s; color: #a1a1aa;
+            text-decoration: none; border: 1px solid transparent;
+        }
+        .nav-link:hover { background: #27272a; color: #e4e4e7; }
+        .nav-link.active {
+            background: rgba(124,58,237,0.12);
+            color: #a78bfa;
+            border-color: rgba(124,58,237,0.25);
+        }
+        .nav-icon { width: 18px; text-align: center; font-size: 15px; }
+
+        /* Sidebar fixed, main scrolls */
+        aside { position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; }
+        .main-content { margin-left: 256px; min-height: 100vh; overflow-y: auto; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 
-<div class="flex min-h-screen">
+<div class="flex">
 
-    <!-- Sidebar -->
-    <div class="w-72 bg-zinc-900 border-r border-zinc-800 p-6 fixed h-full overflow-y-auto">
-        <div class="flex items-center gap-3 mb-10">
-            <div class="w-11 h-11 bg-violet-600 rounded-2xl flex items-center justify-center text-3xl font-bold text-white">H</div>
-            <h1 class="text-3xl font-bold">HUIT</h1>
+    <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+    <aside class="w-64 bg-zinc-900 border-r border-zinc-800/70 flex flex-col" style="z-index:40;">
+        <div class="p-6 border-b border-zinc-800/70">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-violet-600/30">H</div>
+                <div>
+                    <div class="font-bold text-white text-base leading-tight">HUIT</div>
+                    <div class="text-zinc-500 text-xs">Admin Dashboard</div>
+                </div>
+            </div>
         </div>
-        <nav class="space-y-1">
-            <a href="/admin-dashboard/users/"
-               class="flex items-center gap-3 px-5 py-4 rounded-2xl bg-violet-600/10 text-violet-400 font-bold border border-violet-600/20">
-                👥 Quản lý Người dùng
+        <nav class="flex-1 p-4 space-y-1">
+            <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Quản lý</p>
+            <a href="{% url 'admin_users' %}" class="nav-link active">
+                <span class="nav-icon"><i class="fas fa-users"></i></span> Người dùng
             </a>
-            <a href="/admin-dashboard/otp-history/"
-               class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">
-                🔑 Lịch sử OTP
+            <a href="{% url 'admin_otp_history' %}" class="nav-link">
+                <span class="nav-icon"><i class="fas fa-key"></i></span> Lịch sử OTP
             </a>
-            <a href="/admin-dashboard/login-history/"
-               class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">
-                📋 Hoạt động Đăng nhập
+            <a href="{% url 'admin_login_history' %}" class="nav-link">
+                <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> Hoạt động Đăng nhập
             </a>
-            <a href="/admin-dashboard/dtb_admin/"
-               class="flex items-center gap-3 px-5 py-4 rounded-2xl hover:bg-zinc-800 text-zinc-300">
-                🗄️ DTB Admin
+            <a href="{% url 'dtb_admin' %}" class="nav-link">
+                <span class="nav-icon"><i class="fas fa-database"></i></span> DTB Admin
             </a>
         </nav>
-    </div>
+        <div class="p-4 border-t border-zinc-800/70">
+            <div class="flex items-center gap-3 px-3 py-2 mb-3">
+                <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-400 text-xs font-bold">
+                    {{ request.user.username|slice:":2"|upper|default:"AD" }}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-zinc-200 truncate">{{ request.user.username|default:"Admin" }}</div>
+                    <div class="text-xs text-zinc-500">Superuser</div>
+                </div>
+            </div>
+            <form method="POST" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-400 hover:bg-red-600/20 hover:text-red-300 transition-all">
+                    <i class="fas fa-sign-out-alt w-4 text-center"></i> Đăng xuất
+                </button>
+            </form>
+        </div>
+    </aside>
 
-    <!-- Main Content -->
-    <div class="flex-1 ml-72 p-10">
+    <!-- ═══════════════════ MAIN ═══════════════════ -->
+    <div class="main-content flex-1 p-8">
 
         <!-- Header -->
-        <div class="flex justify-between items-center mb-10">
+        <div class="flex justify-between items-start mb-8">
             <div>
-                <h1 class="text-3xl font-bold">USER  MANAGEMENT</h1>
-                <p class="text-zinc-500 mt-1">Quản lý tài khoản người dùng, trạng thái và bảo mật 2FA.</p>
+                <h1 class="text-2xl font-bold text-white">Quản lý Người dùng</h1>
+                <p class="text-zinc-500 text-sm mt-1">Quản lý tài khoản, trạng thái và xác thực 2FA.</p>
             </div>
             <div class="flex items-center gap-3">
                 <a href="{% url 'export_users_excel' %}"
-                   class="bg-zinc-800 hover:bg-zinc-700 text-white px-5 py-3 rounded-2xl font-medium flex items-center gap-2 transition-all">
-                    <i class="fas fa-file-excel text-emerald-500"></i> Xuất Excel
+                   class="flex items-center gap-2 bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/30 px-4 py-2.5 rounded-xl text-sm font-medium transition-all">
+                    <i class="fas fa-file-excel"></i> Xuất Excel
                 </a>
-                <a href="/admin/auth/user/add/" target="_blank"
-                   class="bg-violet-600 hover:bg-violet-700 text-white px-5 py-3 rounded-2xl font-medium flex items-center gap-2 transition-all shadow-lg shadow-violet-600/20">
-                    <i class="fas fa-plus"></i> Thêm người dùng
+                <a href="/admin/auth/user/add/"
+                   class="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 px-4 py-2.5 rounded-xl text-sm font-medium transition-all">
+                    <i class="fas fa-user-plus"></i> Thêm người dùng
                 </a>
-            </div>
-        </div>
-
-        <!-- Stat Cards -->
-        <div class="grid grid-cols-4 gap-6 mb-10">
-            <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
-                <p class="text-zinc-500 text-sm font-medium mb-1">Tổng tài khoản</p>
-                <h3 class="text-3xl font-bold">{{ total_users }}</h3>
-            </div>
-            <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
-                <p class="text-emerald-500/50 text-sm font-medium mb-1">Đang hoạt động</p>
-                <h3 class="text-3xl font-bold text-emerald-400">{{ active_users }}</h3>
-            </div>
-            <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
-                <p class="text-red-500/50 text-sm font-medium mb-1">Đã khóa</p>
-                <h3 class="text-3xl font-bold text-red-400">{{ locked_users }}</h3>
-            </div>
-            <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
-                <p class="text-violet-500/50 text-sm font-medium mb-1">Đã bật 2FA</p>
-                <h3 class="text-3xl font-bold text-violet-400">{{ twofa_users }}</h3>
             </div>
         </div>
 
@@ -94,12 +107,9 @@
         {% if messages %}
         <div class="mb-6 space-y-2">
             {% for message in messages %}
-            <div class="px-6 py-4 rounded-2xl flex items-center gap-3
-                {% if message.tags == 'error' %}
-                    bg-red-900/40 border border-red-700 text-red-300
-                {% else %}
-                    bg-emerald-900/30 border border-emerald-500 text-emerald-300
-                {% endif %}">
+            <div class="px-5 py-3.5 rounded-xl flex items-center gap-3 text-sm
+                {% if message.tags == 'error' %}bg-red-900/30 border border-red-700/50 text-red-300
+                {% else %}bg-emerald-900/20 border border-emerald-700/50 text-emerald-300{% endif %}">
                 <i class="fas {% if message.tags == 'error' %}fa-exclamation-circle{% else %}fa-check-circle{% endif %}"></i>
                 {{ message }}
             </div>
@@ -107,148 +117,253 @@
         </div>
         {% endif %}
 
-        <!-- Filter Bar -->
-        <form method="GET" class="flex flex-wrap gap-4 mb-8 bg-zinc-900/50 p-2 rounded-3xl border border-zinc-800/50">
-            <div class="relative flex-1 min-w-[300px]">
-                <i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500"></i>
-                <input type="text" name="search" value="{{ search_val|default:'' }}"
-                       placeholder="Tìm theo tên, email hoặc username..."
-                       class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 pl-14 pr-4 focus:border-violet-500 outline-none transition-all">
+        <!-- Stats row -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+            <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5">
+                <div class="text-zinc-500 text-xs uppercase tracking-wide mb-1">Tổng người dùng</div>
+                <div class="text-3xl font-bold text-white">{{ total_users|default:users|length }}</div>
             </div>
-
-            <select name="status" class="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4 outline-none focus:border-violet-500 cursor-pointer">
-                <option value="">Tất cả trạng thái</option>
-                <option value="active" {% if status_val == 'active' %}selected{% endif %}>Hoạt động</option>
-                <option value="locked" {% if status_val == 'locked' %}selected{% endif %}>Đã khóa</option>
-            </select>
-
-            <select name="2fa" class="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4 outline-none focus:border-violet-500 cursor-pointer">
-                <option value="">Tất cả 2FA</option>
-                <option value="on"  {% if twofa_val == 'on'  %}selected{% endif %}>Đã bật</option>
-                <option value="off" {% if twofa_val == 'off' %}selected{% endif %}>Chưa bật</option>
-            </select>
-
-            <button type="submit" class="bg-zinc-800 hover:bg-violet-600 px-8 py-4 rounded-2xl font-bold transition-all">
-                Áp dụng
-            </button>
-
-            {% if search_val or status_val or twofa_val %}
-            <a href="/admin-dashboard/users/"
-               class="flex items-center justify-center px-6 py-4 text-zinc-500 hover:text-white transition-all">
-                Xóa lọc
-            </a>
-            {% endif %}
-        </form>
-
-        <!-- Table -->
-        <div class="bg-zinc-900 rounded-3xl border border-zinc-800 overflow-hidden">
-            <table class="w-full">
-                <thead>
-                    <tr class="bg-zinc-800/30 border-b border-zinc-800 text-xs uppercase text-zinc-500">
-                        <th class="w-12 py-5 px-8"></th>
-                        <th class="text-left py-5 px-8">Người dùng</th>
-                        <th class="text-left py-5 px-8">Email</th>
-                        <th class="text-left py-5 px-8">SĐT</th>
-                        <th class="text-left py-5 px-8">Vai trò</th>
-                        <th class="text-center py-5 px-8">Bảo mật 2FA</th>
-                        <th class="text-center py-5 px-8">Trạng thái</th>
-                        <th class="text-center py-5 px-8">Ngày tham gia</th>
-                        <th class="text-right py-5 px-8">Thao tác</th>
-                    </tr>
-                </thead>
-
-                <tbody class="divide-y divide-zinc-800/50">
-                    {% for u in users %}
-                    <tr class="table-row group transition-all duration-200">
-                        <td class="py-5 px-8">
-                            <div class="av bg-zinc-800 text-zinc-400 group-hover:bg-violet-600 group-hover:text-white transition-all shadow-inner">
-                                {{ u.username|slice:":2"|upper }}
-                            </div>
-                        </td>
-                        <td class="py-5 px-8">
-                            <div class="font-bold text-zinc-200">{{ u.username }}</div>
-                            <div class="text-xs text-zinc-500">{{ u.get_full_name|default:"Hệ thống" }}</div>
-                        </td>
-                        <td class="py-5 px-8 text-zinc-400 text-sm">{{ u.email|default:"—" }}</td>
-                        <td class="py-5 px-8 text-zinc-400 text-sm">{{ u.profile.phone_number|default:"—" }}</td>
-                        <td class="py-5 px-8 text-sm">
-                            {% if u.is_superuser %}
-                                <span class="text-amber-500 font-medium">Administrator</span>
-                            {% else %}
-                                <span class="text-zinc-500">Người dùng</span>
-                            {% endif %}
-                        </td>
-                        <td class="py-5 px-8 text-center text-sm">
-                            {% if u.profile.has_app_otp or u.profile.has_email_otp %}
-                                <span class="inline-flex items-center gap-1.5 text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full">
-                                    <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-                                    Đã bật
-                                </span>
-                            {% else %}
-                                <span class="text-zinc-600">Chưa bật</span>
-                            {% endif %}
-                        </td>
-                        <td class="py-5 px-8 text-center">
-                            {% if u.is_active %}
-                                <span class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-lg">Hoạt động</span>
-                            {% else %}
-                                <span class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg">Bị khóa</span>
-                            {% endif %}
-                        </td>
-                        <td class="py-5 px-8 text-center text-xs text-zinc-500">
-                            {{ u.date_joined|date:"d/m/Y" }}
-                        </td>
-
-                        <!-- CỘT THAO TÁC -->
-                        <td class="py-5 px-8 text-right">
-                            <div class="flex justify-end gap-2">
-                                <!-- Chỉnh sửa qua Django admin -->
-                                <a href="/admin/auth/user/{{ u.id }}/change/" target="_blank"
-                                   class="p-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl transition-all border border-zinc-800"
-                                   title="Chỉnh sửa chi tiết">
-                                    <i class="fas fa-edit text-sm"></i>
-                                </a>
-
-                                <!--
-                                    [SEC-3] TOGGLE STATUS: form POST + CSRF
-                                    Lỗi cũ (dashboard.html): dùng JS window.location.href GET → không có
-                                    CSRF protection, dễ bị kích hoạt bởi link độc hại.
-                                    Sửa: <form method="POST"> + {% csrf_token %} + confirm trước khi submit.
-                                -->
-                                {% if not u.is_superuser %}
-                                <form action="{% url 'admin_toggle_status' u.id %}" method="POST"
-                                      class="inline"
-                                      onsubmit="return confirm('{% if u.is_active %}Khóa{% else %}Mở khóa{% endif %} tài khoản [{{ u.username }}]?')">
-                                    {% csrf_token %}
-                                    <button type="submit"
-                                            class="p-2.5 bg-zinc-800/50 hover:bg-zinc-800 rounded-xl transition-all border border-zinc-800
-                                                   {% if u.is_active %}text-red-500 hover:text-red-400{% else %}text-emerald-500 hover:text-emerald-400{% endif %}"
-                                            title="{% if u.is_active %}Khóa tài khoản{% else %}Mở khóa tài khoản{% endif %}">
-                                        <i class="fas {% if u.is_active %}fa-user-slash{% else %}fa-user-check{% endif %} text-sm"></i>
-                                    </button>
-                                </form>
-                                {% else %}
-                                <!-- Superuser: không hiển thị nút toggle -->
-                                <span class="p-2.5 text-zinc-700 cursor-not-allowed" title="Không thể thao tác trên Admin">
-                                    <i class="fas fa-shield-alt text-sm"></i>
-                                </span>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="9" class="py-32 text-center text-zinc-500">
-                            <i class="fas fa-user-slash text-4xl mb-4 block opacity-20"></i>
-                            Không tìm thấy người dùng nào phù hợp
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5">
+                <div class="text-zinc-500 text-xs uppercase tracking-wide mb-1">Đang hoạt động</div>
+                <div class="text-3xl font-bold text-emerald-400">{{ active_count|default:"—" }}</div>
+            </div>
+            <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5">
+                <div class="text-zinc-500 text-xs uppercase tracking-wide mb-1">Đã bật 2FA</div>
+                <div class="text-3xl font-bold text-violet-400">{{ twofa_count|default:"—" }}</div>
+            </div>
+            <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5">
+                <div class="text-zinc-500 text-xs uppercase tracking-wide mb-1">Đã khóa</div>
+                <div class="text-3xl font-bold text-red-400">{{ locked_count|default:"—" }}</div>
+            </div>
         </div>
 
-    </div>
-</div>
+        <!-- Filter Bar -->
+        <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5 mb-6">
+            <form method="get" class="flex flex-wrap gap-3 items-end">
+                <div class="flex-1 min-w-[220px]">
+                    <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Tìm kiếm</label>
+                    <div class="relative">
+                        <input type="text" name="search" value="{{ request.GET.search|default:'' }}"
+                               class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500"
+                               placeholder="Username, Email hoặc Họ tên...">
+                        <i class="fas fa-search absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 text-xs"></i>
+                    </div>
+                </div>
+                <div class="min-w-[150px]">
+                    <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Trạng thái</label>
+                    <select name="status" class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
+                        <option value="">Tất cả</option>
+                        <option value="active"   {% if request.GET.status == 'active'   %}selected{% endif %}>Hoạt động</option>
+                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Đã khóa</option>
+                    </select>
+                </div>
+                <div class="min-w-[160px]">
+                    <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">2FA</label>
+                    <select name="2fa" class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
+                        <option value="">Tất cả</option>
+                        <option value="enabled"    {% if request.GET.2fa == 'enabled'    %}selected{% endif %}>✅ Đã bật</option>
+                        <option value="disabled"   {% if request.GET.2fa == 'disabled'   %}selected{% endif %}>❌ Chưa kích hoạt</option>
+                        <option value="forced_off" {% if request.GET.2fa == 'forced_off' %}selected{% endif %}>Tắt bởi Admin</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 pt-[22px]">
+                    <button type="submit" class="bg-violet-600 hover:bg-violet-500 px-5 py-3 rounded-xl text-sm font-medium flex items-center gap-2 transition-all">
+                        <i class="fas fa-filter"></i> Lọc
+                    </button>
+                    <a href="{% url 'admin_users' %}" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-xl flex items-center justify-center border border-zinc-700/60 transition-all" title="Đặt lại">
+                        <i class="fas fa-sync-alt text-xs"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Bulk Actions -->
+        <form id="bulk-form" method="POST" action="{% url 'admin_users' %}">
+            {% csrf_token %}
+            <input type="hidden" name="bulk_action" id="bulk-action-input">
+
+            <div class="flex items-center justify-between mb-3 px-1">
+                <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
+                        <input type="checkbox" id="select-all" onclick="toggleSelectAll()" class="w-4 h-4 accent-violet-600 rounded">
+                        Chọn tất cả
+                    </label>
+                    <select id="bulk-action" class="bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-2 text-sm">
+                        <option value="">Hành động hàng loạt...</option>
+                        <option value="lock">🔒 Khóa tài khoản</option>
+                        <option value="unlock">🔓 Mở khóa</option>
+                        <option value="force_logout">🚪 Buộc đăng xuất tất cả</option>
+                    </select>
+                    <button type="button" onclick="performBulkAction()"
+                            class="bg-zinc-700 hover:bg-red-600/80 border border-zinc-600/60 hover:border-red-600/30 px-4 py-2 rounded-xl text-sm font-medium transition-all">
+                        Thực hiện
+                    </button>
+                </div>
+                <div class="text-sm text-zinc-500">
+                    Tổng: <span class="text-white font-semibold">{{ users|length }}</span> người dùng
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl overflow-hidden">
+                <table class="w-full">
+                    <thead>
+                        <tr class="bg-zinc-800/40 border-b border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-500">
+                            <th class="w-10 py-4 px-4"></th>
+                            <th class="text-left py-4 px-4">Username</th>
+                            <th class="text-left py-4 px-4">Email</th>
+                            <th class="text-left py-4 px-4">Họ tên</th>
+                            <th class="text-left py-4 px-4">Vai trò</th>
+                            <th class="text-center py-4 px-4">2FA</th>
+                            <th class="text-center py-4 px-4">Trạng thái</th>
+                            <th class="text-center py-4 px-4">Last Login</th>
+                            <th class="text-center py-4 px-4">Ngày tham gia</th>
+                            <th class="text-center py-4 px-4">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-800/50">
+                        {% for u in users %}
+                        <tr class="hover:bg-zinc-800/40 transition-colors">
+                            <td class="py-4 px-4">
+                                {% if not u.is_superuser %}
+                                <input type="checkbox" name="user_ids" value="{{ u.id }}" class="user-checkbox w-4 h-4 accent-violet-600 rounded">
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 font-medium text-sm">
+                                {% if u.is_superuser %}
+                                    <span class="text-violet-300">{{ u.username }}</span>
+                                    <span class="ml-1 text-[10px] bg-violet-900/50 text-violet-400 border border-violet-700/30 px-1.5 py-0.5 rounded">SU</span>
+                                {% else %}
+                                    {{ u.username }}
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 text-sm text-zinc-400">{{ u.email|default:"—" }}</td>
+                            <td class="py-4 px-4 text-sm">{{ u.get_full_name|default:"—" }}</td>
+                            <td class="py-4 px-4">
+                                {% if u.groups.all %}
+                                    {% for group in u.groups.all %}
+                                        <span class="px-2 py-0.5 bg-blue-950/60 text-blue-400 border border-blue-800/30 text-xs rounded-full">{{ group.name }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-zinc-600 text-sm">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 text-center">
+                                {% if u.profile.is_2fa_enabled %}
+                                    <span class="px-3 py-1 bg-emerald-900/40 text-emerald-400 border border-emerald-700/30 rounded-full text-xs font-medium">✅ Bật</span>
+                                {% elif u.profile.force_disable_2fa %}
+                                    <span class="px-3 py-1 bg-zinc-800 text-zinc-500 border border-zinc-700/30 rounded-full text-xs">Admin tắt</span>
+                                {% else %}
+                                    <span class="px-3 py-1 bg-red-900/30 text-red-400 border border-red-800/30 rounded-full text-xs">❌ Chưa bật</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 text-center">
+                                {% if u.is_active %}
+                                    <span class="px-3 py-1 bg-emerald-900/40 text-emerald-400 border border-emerald-700/30 rounded-full text-xs">Hoạt động</span>
+                                {% else %}
+                                    <span class="px-3 py-1 bg-red-900/30 text-red-400 border border-red-800/30 rounded-full text-xs">Đã khóa</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 text-center">
+                                {% if u.last_login %}
+                                    <div class="text-sm font-medium">{{ u.last_login|date:"H:i:s" }}</div>
+                                    <div class="text-xs text-zinc-500">{{ u.last_login|date:"d/m/Y" }}</div>
+                                {% else %}
+                                    <span class="text-zinc-600 text-xs">Chưa đăng nhập</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 text-center">
+                                <div class="text-sm font-medium">{{ u.date_joined|date:"H:i:s" }}</div>
+                                <div class="text-xs text-zinc-500">{{ u.date_joined|date:"d/m/Y" }}</div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="flex justify-center gap-2">
+                                    <!-- Edit -->
+                                    <a href="/admin/auth/user/{{ u.id }}/change/" target="_blank"
+                                       class="p-2 rounded-lg bg-zinc-800 hover:bg-blue-900/40 text-zinc-400 hover:text-blue-400 border border-zinc-700/40 hover:border-blue-700/30 transition-all"
+                                       title="Chỉnh sửa">
+                                        <i class="fas fa-edit text-xs"></i>
+                                    </a>
+
+                                    {% if not u.is_superuser %}
+                                    <!-- Lock / Unlock -->
+                                    <form action="{% url 'admin_toggle_status' u.id %}" method="POST" style="display:inline;"
+                                          onsubmit="return confirm('{% if u.is_active %}Khóa{% else %}Mở khóa{% endif %} tài khoản [{{ u.username }}]?')">
+                                        {% csrf_token %}
+                                        <button type="submit"
+                                                class="p-2 rounded-lg bg-zinc-800 hover:bg-amber-900/40 text-zinc-400 hover:text-amber-400 border border-zinc-700/40 hover:border-amber-700/30 transition-all"
+                                                title="{% if u.is_active %}Khóa{% else %}Mở khóa{% endif %}">
+                                            <i class="fas {% if u.is_active %}fa-lock{% else %}fa-unlock{% endif %} text-xs"></i>
+                                        </button>
+                                    </form>
+
+                                    <!-- Force Logout -->
+                                    <form action="{% url 'admin_force_logout' u.username %}" method="POST" style="display:inline;"
+                                          onsubmit="return confirm('Buộc đăng xuất tất cả phiên của [{{ u.username }}]?')">
+                                        {% csrf_token %}
+                                        <button type="submit"
+                                                class="p-2 rounded-lg bg-zinc-800 hover:bg-red-900/40 text-zinc-400 hover:text-red-400 border border-zinc-700/40 hover:border-red-700/30 transition-all"
+                                                title="Buộc logout">
+                                            <i class="fas fa-sign-out-alt text-xs"></i>
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <span class="p-2 text-zinc-700 cursor-not-allowed" title="Superuser được bảo vệ">
+                                        <i class="fas fa-shield-alt text-xs"></i>
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="py-20 text-center text-zinc-500">
+                                <i class="fas fa-user-slash text-3xl mb-3 block opacity-20"></i>
+                                <p class="text-sm">Không tìm thấy người dùng nào.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+
+        <!-- Pagination -->
+        {% if users.has_other_pages %}
+        <div class="mt-6 flex justify-between items-center text-sm">
+            <span class="text-zinc-500">Trang {{ users.number }} / {{ users.paginator.num_pages }}</span>
+            <div class="flex gap-2">
+                {% if users.has_previous %}
+                    <a href="?page={{ users.previous_page_number }}&search={{ request.GET.search }}&status={{ request.GET.status }}"
+                       class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-zinc-700/60 transition-all">Trước</a>
+                {% endif %}
+                {% if users.has_next %}
+                    <a href="?page={{ users.next_page_number }}&search={{ request.GET.search }}&status={{ request.GET.status }}"
+                       class="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-xl transition-all">Tiếp theo</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+    </div><!-- /main -->
+</div><!-- /flex -->
+
+<script>
+function toggleSelectAll() {
+    const checked = document.getElementById('select-all').checked;
+    document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = checked);
+}
+
+function performBulkAction() {
+    const action = document.getElementById('bulk-action').value;
+    if (!action) { alert('Vui lòng chọn hành động!'); return; }
+    const selected = [...document.querySelectorAll('.user-checkbox:checked')].map(cb => cb.value);
+    if (selected.length === 0) { alert('Chưa chọn người dùng nào!'); return; }
+    if (confirm(`Xác nhận "${action}" cho ${selected.length} người dùng?`)) {
+        document.getElementById('bulk-action-input').value = action;
+        document.getElementById('bulk-form').submit();
+    }
+}
+</script>
 </body>
 </html>
