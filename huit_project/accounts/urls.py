@@ -15,7 +15,7 @@ urlpatterns = [
     path('export-users/', views.export_users_excel, name='export_users'),
     path('devices/', views.device_list, name='device_list'),
     path('login-history/', views.login_history, name='login_history'),
-    path('active-sessions/', views.active_sessions, name='active_sessions'),
+    path('active-sessions/', views.active_sessions, name='active_sessions'),  # URL giữ nguyên để không break bookmark
     path('logout-device/<int:device_id>/', views.logout_device, name='logout_device'),
     path('logout-all-devices/', views.logout_all_devices, name='logout_all_devices'),
     path('confirm-device/', views.confirm_device, name='confirm_device'),
@@ -39,7 +39,7 @@ urlpatterns = [
     path('passkeys/delete/<int:pk_id>/', views.delete_passkey,  name='delete_passkey'),
 
     # HOTP Setup
-    #path('setup/hotp/', views.setup_hotp, name='setup_hotp'),
+    #path('setup/hotp/', views.setup_hotp, name='setup_hotp'),  # views không có setup_hotp riêng — dùng setup_2fa?method=hotp
     path('api/generate-hotp/', views.generate_hotp_code, name='generate_hotp_code'),
 
     # Test
