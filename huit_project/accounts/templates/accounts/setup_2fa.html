@@ -328,18 +328,47 @@ body::before {
   </div>
 
   <div class="panel">
+    {% if profile.has_app_otp %}
+    {# ── ĐÃ BẬT: chỉ hiện trạng thái + form tắt ── #}
+    <div class="panel-hint" style="background:rgba(16,185,129,0.06);border-bottom-color:rgba(16,185,129,0.15);">
+      <i class="fa fa-shield-halved" style="color:var(--success)"></i>
+      <span style="color:#6ee7b7">TOTP đang bảo vệ tài khoản của bạn</span>
+    </div>
+    <div class="panel-body">
+      <div class="enabled-row">
+        <span><i class="fa fa-mobile-screen"></i> Google Authenticator / Authy đã kết nối</span>
+        <span class="badge-status on"><i class="fa fa-circle" style="font-size:6px"></i> Hoạt động</span>
+      </div>
+
+      <div class="divider"></div>
+      <p style="font-size:12px;color:var(--muted2);margin-bottom:14px;">
+        Nhập mã TOTP hiện tại từ ứng dụng để tắt phương thức này:
+      </p>
+      <form method="POST" action="?method=totp">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="disable_totp">
+        <div class="otp-row" id="disable-totp-boxes">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+        </div>
+        <input type="hidden" name="otp_code" id="disable-totp-hidden">
+        <button type="submit" class="btn btn-danger" id="disable-totp-btn" disabled>
+          <i class="fa fa-power-off"></i> Tắt TOTP
+        </button>
+      </form>
+    </div>
+
+    {% else %}
+    {# ── CHƯA BẬT: hiện QR + form kích hoạt ── #}
     <div class="panel-hint">
       <i class="fa fa-qrcode" style="color:var(--blue)"></i>
       Quét mã QR bằng ứng dụng Authenticator
     </div>
     <div class="panel-body">
-
-      {% if profile.has_app_otp %}
-      <div class="enabled-row">
-        <span><i class="fa fa-shield-halved"></i> TOTP đang bảo vệ tài khoản của bạn</span>
-      </div>
-      {% endif %}
-
       {% if qr_code_base64 %}
       <div class="qr-block">
         <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code TOTP">
@@ -352,7 +381,6 @@ body::before {
       </div>
       {% endif %}
 
-      {# Form xác nhận TOTP — action="?method=totp" để view đọc đúng GET param #}
       <form method="POST" action="?method=totp" id="totp-form">
         {% csrf_token %}
         <div class="info-row">
@@ -372,37 +400,8 @@ body::before {
           <i class="fa fa-check"></i> Xác nhận kích hoạt TOTP
         </button>
       </form>
-
-      {# Tắt TOTP — chỉ hiện khi đang bật #}
-      {% if profile.has_app_otp %}
-      <div class="divider"></div>
-      <details>
-        <summary style="cursor:pointer;font-size:12px;color:var(--muted2);margin-bottom:12px;">
-          <i class="fa fa-shield-xmark" style="color:#f87171"></i> Tắt TOTP...
-        </summary>
-        <div class="disable-confirm">
-          <p>Nhập mã TOTP hiện tại từ app để xác nhận tắt:</p>
-          <form method="POST" action="?method=totp">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="disable_totp">
-            <div class="otp-row" id="disable-totp-boxes">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-            </div>
-            <input type="hidden" name="otp_code" id="disable-totp-hidden">
-            <button type="submit" class="btn btn-danger" id="disable-totp-btn" disabled>
-              <i class="fa fa-shield-xmark"></i> Xác nhận tắt TOTP
-            </button>
-          </form>
-        </div>
-      </details>
-      {% endif %}
-
     </div>
+    {% endif %}
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
@@ -428,33 +427,46 @@ body::before {
   </div>
 
   <div class="panel">
+    {% if profile.has_email_otp %}
+    {# ── ĐÃ BẬT ── #}
+    <div class="panel-hint" style="background:rgba(16,185,129,0.06);border-bottom-color:rgba(16,185,129,0.15);">
+      <i class="fa fa-shield-halved" style="color:var(--success)"></i>
+      <span style="color:#6ee7b7">Email OTP đang bảo vệ tài khoản của bạn</span>
+    </div>
+    <div class="panel-body">
+      <div class="enabled-row">
+        <span><i class="fa fa-envelope"></i> Gửi đến {{ user.email }}</span>
+        <span class="badge-status on"><i class="fa fa-circle" style="font-size:6px"></i> Hoạt động</span>
+      </div>
+      <div class="divider"></div>
+      <p style="font-size:12px;color:var(--muted2);margin-bottom:14px;">
+        Mã xác nhận sẽ được gửi tới email của bạn để tắt phương thức này:
+      </p>
+      <form method="POST" action="{% url 'dashboard' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="disable_email">
+        <button type="submit" class="btn btn-danger">
+          <i class="fa fa-power-off"></i> Tắt Email OTP
+        </button>
+      </form>
+    </div>
+
+    {% else %}
+    {# ── CHƯA BẬT ── #}
     <div class="panel-hint">
       <i class="fa fa-envelope" style="color:var(--blue)"></i>
       Gửi mã OTP đến <strong style="color:var(--text)">{{ user.email }}</strong>
     </div>
     <div class="panel-body">
-
-      {% if profile.has_email_otp %}
-      <div class="enabled-row">
-        <span><i class="fa fa-shield-halved"></i> Email OTP đang bảo vệ tài khoản của bạn</span>
-      </div>
-      {% endif %}
-
-      {# ── otp_sent=True: view đã gửi mail, hiện khung nhập ngay ── #}
       {% if otp_sent %}
-
       <div class="info-row">
         <i class="fa fa-paper-plane"></i>
         Mã OTP đã gửi tới <strong style="color:var(--text)">{{ user.email }}</strong> · kiểm tra hộp thư
       </div>
-
-      {# Countdown timer #}
       <div class="countdown-row">
         <span>Mã còn hiệu lực:</span>
         <span class="timer" id="email-countdown">--:--</span>
       </div>
-
-      {# Form nhập OTP — không cần nút "Gửi", đã hiện thẳng #}
       <form method="POST" action="?method=email" id="email-form">
         {% csrf_token %}
         <div class="otp-row" id="email-boxes">
@@ -470,17 +482,13 @@ body::before {
           <i class="fa fa-check"></i> Xác nhận kích hoạt Email OTP
         </button>
       </form>
-
-      {# Nút gửi lại — chỉ hiện sau khi mã hết hạn (JS điều khiển) #}
       <form method="POST" action="?method=email" id="resend-form" style="margin-top:8px;display:none;">
         {% csrf_token %}
         <button type="submit" name="resend_email_otp" class="btn btn-ghost">
           <i class="fa fa-rotate-right"></i> Gửi lại mã mới
         </button>
       </form>
-
       {% else %}
-      {# otp_sent=False: view đang xử lý hoặc lỗi gửi mail — hiện spinner / nút thử lại #}
       <div class="info-row">
         <i class="fa fa-circle-notch fa-spin"></i>
         Đang gửi mã OTP tới {{ user.email }}…
@@ -492,20 +500,8 @@ body::before {
         </button>
       </form>
       {% endif %}
-
-      {# Tắt Email OTP — chỉ hiện khi đang bật #}
-      {% if profile.has_email_otp %}
-      <div class="divider"></div>
-      <form method="POST" action="{% url 'dashboard' %}">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="disable_email">
-        <button type="submit" class="btn btn-danger">
-          <i class="fa fa-shield-xmark"></i> Tắt Email OTP
-        </button>
-      </form>
-      {% endif %}
-
     </div>
+    {% endif %}
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
@@ -529,18 +525,46 @@ body::before {
   </div>
 
   <div class="panel">
+    {% if profile.has_hotp %}
+    {# ── ĐÃ BẬT ── #}
+    <div class="panel-hint" style="background:rgba(16,185,129,0.06);border-bottom-color:rgba(16,185,129,0.15);">
+      <i class="fa fa-shield-halved" style="color:var(--success)"></i>
+      <span style="color:#6ee7b7">HOTP đang bảo vệ tài khoản của bạn</span>
+    </div>
+    <div class="panel-body">
+      <div class="enabled-row">
+        <span><i class="fa fa-hashtag"></i> Counter hiện tại: <strong>{{ profile.hotp_counter }}</strong></span>
+        <span class="badge-status on"><i class="fa fa-circle" style="font-size:6px"></i> Hoạt động</span>
+      </div>
+      <div class="divider"></div>
+      <p style="font-size:12px;color:var(--muted2);margin-bottom:14px;">
+        Nhấn generate trong app → nhập mã HOTP để xác nhận tắt:
+      </p>
+      <form method="POST" action="?method=hotp">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="disable_hotp">
+        <div class="otp-row" id="disable-hotp-boxes">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+        </div>
+        <input type="hidden" name="otp_code" id="disable-hotp-hidden">
+        <button type="submit" class="btn btn-danger" id="disable-hotp-btn" disabled>
+          <i class="fa fa-power-off"></i> Tắt HOTP
+        </button>
+      </form>
+    </div>
+
+    {% else %}
+    {# ── CHƯA BẬT ── #}
     <div class="panel-hint">
       <i class="fa fa-qrcode" style="color:var(--blue)"></i>
       Quét mã QR bằng ứng dụng hỗ trợ HOTP (Aegis, andOTP...)
     </div>
     <div class="panel-body">
-
-      {% if profile.has_hotp %}
-      <div class="enabled-row">
-        <span><i class="fa fa-shield-halved"></i> HOTP đang bảo vệ tài khoản · counter: {{ profile.hotp_counter }}</span>
-      </div>
-      {% endif %}
-
       {% if qr_code_base64 %}
       <div class="qr-block">
         <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR Code HOTP">
@@ -552,12 +576,10 @@ body::before {
         </div>
       </div>
       {% endif %}
-
       <div class="info-row">
         <i class="fa fa-circle-info"></i>
         Quét QR → nhấn generate trong app → nhập mã HOTP đầu tiên (counter = 0).
       </div>
-
       {# Form HOTP: action="?method=hotp" — setup_token chống race condition #}
       <form method="POST" action="?method=hotp" id="hotp-form">
         {% csrf_token %}
@@ -575,37 +597,8 @@ body::before {
           <i class="fa fa-check"></i> Xác nhận kích hoạt HOTP
         </button>
       </form>
-
-      {# Tắt HOTP — chỉ hiện khi đang bật #}
-      {% if profile.has_hotp %}
-      <div class="divider"></div>
-      <details>
-        <summary style="cursor:pointer;font-size:12px;color:var(--muted2);margin-bottom:12px;">
-          <i class="fa fa-shield-xmark" style="color:#f87171"></i> Tắt HOTP...
-        </summary>
-        <div class="disable-confirm">
-          <p>Nhấn generate trong app → nhập mã HOTP để xác nhận tắt:</p>
-          <form method="POST" action="?method=hotp">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="disable_hotp">
-            <div class="otp-row" id="disable-hotp-boxes">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-              <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
-            </div>
-            <input type="hidden" name="otp_code" id="disable-hotp-hidden">
-            <button type="submit" class="btn btn-danger" id="disable-hotp-btn" disabled>
-              <i class="fa fa-shield-xmark"></i> Xác nhận tắt HOTP
-            </button>
-          </form>
-        </div>
-      </details>
-      {% endif %}
-
     </div>
+    {% endif %}
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
