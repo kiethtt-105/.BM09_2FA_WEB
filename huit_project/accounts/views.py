@@ -2237,6 +2237,38 @@ def generate_hotp_code(request):
         'counter_used': counter_used,
     })
 
+@login_required
+def get_hotp_counter(request):
+    """
+    API trả về hotp_counter hiện tại của user đang đăng nhập.
+    Dùng để hiển thị số counter trên trang verify 2FA.
+    """
+    profile = request.user.profile
+    if not profile.has_hotp:
+        return JsonResponse({'status': 'error', 'message': 'HOTP chưa kích hoạt'}, status=400)
+    return JsonResponse({
+        'status': 'ok',
+        'counter': profile.hotp_counter,
+    })
+def get_hotp_counter_pre2fa(request):
+    """
+    API trả counter cho user đang ở bước pre-2FA (chưa login hoàn toàn).
+    Chỉ hoạt động khi session có pre_2fa_user_id.
+    """
+    uid = request.session.get('pre_2fa_user_id')
+    if not uid:
+        return JsonResponse({'status': 'error', 'message': 'Không có phiên 2FA'}, status=403)
+    try:
+        user = User.objects.get(id=uid)
+        profile = user.profile
+        if not profile.has_hotp:
+            return JsonResponse({'status': 'error'}, status=400)
+        return JsonResponse({
+            'status': 'ok',
+            'counter': profile.hotp_counter,
+        })
+    except User.DoesNotExist:
+        return JsonResponse({'status': 'error'}, status=404)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

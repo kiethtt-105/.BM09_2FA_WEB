@@ -178,7 +178,36 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
         <span id="totp-sec">30</span>s &nbsp;·&nbsp; Nhập mã từ ứng dụng Authenticator
       </div>
     {% elif method == 'hotp' %}
-      <div class="hint-box"><i class="fa fa-hashtag" style="margin-right:6px"></i>Nhập mã HOTP từ token của bạn</div>
+      <div class="hint-box">
+        <i class="fa fa-hashtag" style="margin-right:6px"></i>Nhập mã HOTP từ token của bạn
+      </div>
+
+      {{!-- Hiển thị counter web --}}
+      <div style="background:#f3e5f5; border-radius:8px; padding:10px 14px; margin-top:10px; font-size:13px;">
+        <span style="color:#555;">
+          🔢 Counter trên <strong>web</strong>:
+          <strong id="web-counter" style="color:#7B1FA2;">đang tải...</strong>
+        </span>
+        <br>
+        <span style="color:#999; font-size:12px;">
+          Mở app → xem "Counter app" → nếu khác, bấm ✏️ Set trong app và nhập số trên.
+        </span>
+      </div>
+
+      <script>
+        fetch('/api/hotp-counter-pre2fa/', { credentials: 'same-origin' })
+          .then(r => r.json())
+          .then(data => {
+            if (data.status === 'ok') {
+              document.getElementById('web-counter').textContent = data.counter;
+            } else {
+              document.getElementById('web-counter').textContent = 'không tải được';
+            }
+          })
+          .catch(() => {
+            document.getElementById('web-counter').textContent = 'lỗi kết nối';
+          });
+      </script>
     {% endif %}
 
     {# BUG-FIX: action phải truyền method qua query string vì view đọc request.GET.get('method') #}
