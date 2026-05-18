@@ -144,7 +144,7 @@ def compute_totp(secret: str, digits: int = 6, step: int = 30,
 
 def verify_totp(secret: str, otp_input: str,
                 digits: int = 6, step: int = 30,
-                window: int = 1) -> bool:
+                window: int = 2) -> bool:
     """
     Xác thực TOTP với cửa sổ time-window ±window bước (mặc định ±1 = ±30 giây).
     hmac.compare_digest dùng để tránh timing attack.
