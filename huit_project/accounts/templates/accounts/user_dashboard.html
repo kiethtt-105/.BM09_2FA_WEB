@@ -334,7 +334,11 @@ input::placeholder { color: var(--muted2); }
 }
 .mtag.highlight { background: rgba(59,109,220,0.08); border-color: rgba(59,109,220,0.18); color: var(--blue3); }
 
-.method-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.method-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 600px) {
+  .method-card { flex-wrap: wrap; gap: 12px; }
+  .method-right { width: 100%; justify-content: flex-start; margin-left: 54px; }
+}
 
 /* Status badge */
 .badge {
@@ -651,42 +655,43 @@ input::placeholder { color: var(--muted2); }
       <div class="panel-divider"></div>
 
       <!-- ── Security Score Banner ── -->
-      {% with methods_count=0|add:profile.has_app_otp|add:profile.has_email_otp|add:profile.has_hotp %}
+      {#
+        FIX: {% with methods_count=0|add:bool %} không hoạt động trong Django vì
+        filter `add` xử lý bool thành string → kết quả luôn sai.
+        Thay bằng if/elif chain trực tiếp để so sánh các field boolean.
+      #}
       <div class="sec-banner">
         <div class="sec-score-ring">
           <svg width="64" height="64" viewBox="0 0 64 64">
             <circle class="ring-track" cx="32" cy="32" r="27"/>
-            <circle class="ring-fill" cx="32" cy="32" r="27"
-              stroke-dasharray="169.6"
-              stroke-dashoffset="
-                {% if profile.has_any_2fa %}
-                  {% if methods_count >= 3 %}0{% elif methods_count == 2 %}56{% else %}113{% endif %}
-                {% else %}169{% endif %}"
-              id="ring-fill"/>
+            {% if profile.has_app_otp and profile.has_email_otp and profile.has_hotp %}
+              <circle class="ring-fill" cx="32" cy="32" r="27" stroke-dasharray="169.6" stroke-dashoffset="0" id="ring-fill"/>
+            {% elif profile.has_app_otp and profile.has_email_otp or profile.has_app_otp and profile.has_hotp or profile.has_email_otp and profile.has_hotp %}
+              <circle class="ring-fill" cx="32" cy="32" r="27" stroke-dasharray="169.6" stroke-dashoffset="56" id="ring-fill"/>
+            {% elif profile.has_any_2fa %}
+              <circle class="ring-fill" cx="32" cy="32" r="27" stroke-dasharray="169.6" stroke-dashoffset="113" id="ring-fill"/>
+            {% else %}
+              <circle class="ring-fill" cx="32" cy="32" r="27" stroke-dasharray="169.6" stroke-dashoffset="155" id="ring-fill" style="stroke:var(--danger);"/>
+            {% endif %}
           </svg>
           <div class="sec-score-num" id="score-num">
-            {% if profile.has_any_2fa %}
-              {% if methods_count >= 3 %}A+
-              {% elif methods_count == 2 %}B
-              {% else %}C
-              {% endif %}
-            {% else %}D{% endif %}
+            {% if profile.has_app_otp and profile.has_email_otp and profile.has_hotp %}A+
+            {% elif profile.has_app_otp and profile.has_email_otp or profile.has_app_otp and profile.has_hotp or profile.has_email_otp and profile.has_hotp %}B
+            {% elif profile.has_any_2fa %}C
+            {% else %}<span style="color:var(--danger);">D</span>
+            {% endif %}
           </div>
         </div>
         <div class="sec-banner-text">
           <div class="sec-banner-title">
-            {% if profile.has_any_2fa %}
-              Tài khoản đang được bảo vệ
-            {% else %}
-              Tài khoản chưa bật 2FA
-            {% endif %}
+            {% if profile.has_any_2fa %}Tài khoản đang được bảo vệ
+            {% else %}Tài khoản chưa bật 2FA{% endif %}
           </div>
           <div class="sec-banner-sub">
-            {% if profile.has_any_2fa %}
-              {{ methods_count }} phương thức đang hoạt động. Bật thêm để tăng điểm bảo mật.
-            {% else %}
-              Kích hoạt ít nhất một phương thức 2FA để bảo vệ tài khoản.
-            {% endif %}
+            {% if profile.has_app_otp and profile.has_email_otp and profile.has_hotp %}3 phương thức đang hoạt động — bảo mật tối đa.
+            {% elif profile.has_app_otp and profile.has_email_otp or profile.has_app_otp and profile.has_hotp or profile.has_email_otp and profile.has_hotp %}2 phương thức đang hoạt động. Bật thêm để tăng điểm bảo mật.
+            {% elif profile.has_any_2fa %}1 phương thức đang hoạt động. Bật thêm để tăng điểm bảo mật.
+            {% else %}Kích hoạt ít nhất một phương thức 2FA để bảo vệ tài khoản.{% endif %}
           </div>
           <div class="sec-banner-pills">
             <span class="sec-pill {% if profile.has_app_otp %}on{% else %}off{% endif %}">
@@ -704,7 +709,6 @@ input::placeholder { color: var(--muted2); }
           </div>
         </div>
       </div>
-      {% endwith %}
 
       <!-- ── Method Cards ── -->
       <div class="methods-list">
