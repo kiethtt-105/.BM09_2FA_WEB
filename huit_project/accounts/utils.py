@@ -107,14 +107,17 @@ def compute_hotp(secret: str, counter: int, digits: int = 6) -> str:
 
 def verify_hotp(secret: str, counter: int, otp_input: str,
                 look_ahead: int = 5) -> tuple[bool, int]:
-    """
-    Xác thực HOTP với cửa sổ look-ahead.
-    Trả (True, new_counter) nếu thành công, (False, counter) nếu thất bại.
-    """
+    logger.warning(
+        'HOTP_VERIFY: secret=%s... counter=%d input=%s',
+        secret[:4], counter, otp_input
+    )
     for i in range(look_ahead):
         expected = compute_hotp(secret, counter + i)
+        logger.warning('  thử counter=%d → mã=%s', counter + i, expected)
         if hmac.compare_digest(expected, otp_input.zfill(6)):
+            logger.warning('  → KHỚP tại counter=%d', counter + i)
             return True, counter + i + 1
+    logger.warning('  → KHÔNG KHỚP')
     return False, counter
 
 
