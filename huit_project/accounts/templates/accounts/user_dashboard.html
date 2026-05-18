@@ -656,11 +656,6 @@ input::placeholder { color: var(--muted2); }
       <div class="panel-divider"></div>
 
       <!-- ── Security Score Banner ── -->
-      {#
-        FIX: {% with methods_count=0|add:bool %} không hoạt động trong Django vì
-        filter `add` xử lý bool thành string → kết quả luôn sai.
-        Thay bằng if/elif chain trực tiếp để so sánh các field boolean.
-      #}
       <div class="sec-banner">
         <div class="sec-score-ring">
           <svg width="64" height="64" viewBox="0 0 64 64">
