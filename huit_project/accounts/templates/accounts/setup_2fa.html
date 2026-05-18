@@ -480,10 +480,7 @@ body::before {
       </form>
 
       {% else %}
-      {#
-        otp_sent=False: view đang xử lý (gửi mail), hoặc có lỗi gửi mail.
-        Hiện spinner chờ redirect, hoặc nút thử lại thủ công.
-      #}
+      {# otp_sent=False: view đang xử lý hoặc lỗi gửi mail — hiện spinner / nút thử lại #}
       <div class="info-row">
         <i class="fa fa-circle-notch fa-spin"></i>
         Đang gửi mã OTP tới {{ user.email }}…
@@ -561,11 +558,7 @@ body::before {
         Quét QR → nhấn generate trong app → nhập mã HOTP đầu tiên (counter = 0).
       </div>
 
-      {#
-        Form HOTP: action="?method=hotp" để view đọc đúng GET param.
-        Bỏ hidden input name="method" — view đọc từ GET, không đọc POST body.
-        setup_token dùng để ngăn race condition.
-      #}
+      {# Form HOTP: action="?method=hotp" — setup_token chống race condition #}
       <form method="POST" action="?method=hotp" id="hotp-form">
         {% csrf_token %}
         <input type="hidden" name="setup_token" value="{{ setup_token }}">
