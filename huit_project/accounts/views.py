@@ -676,46 +676,35 @@ def dashboard(request):
 def setup_2fa(request):
     """
     Thiết lập phương thức 2FA.
-    [BUG-3] Dùng verify_totp() thay vì get_totp_token() để có window ±1.
+
+    LUỒNG EMAIL (đã sửa):
+      - GET ?method=email → tự động gửi OTP ngay (không cần user bấm nút)
+        nếu chưa có OTP còn hiệu lực trong DB.
+      - Sau khi gửi → redirect PRG về cùng URL → GET mới → otp_sent=True → hiện khung nhập.
+      - POST verify_email_otp → xác thực → kích hoạt.
+      - POST resend_email_otp → invalidate OTP cũ, gửi mã mới → redirect lại.
+      - Nếu OTP còn hiệu lực (< OTP_VALID_MINUTES) thì KHÔNG gửi lại khi GET → tránh spam.
+
+    LUỒNG TOTP (app):
+      - GET ?method=totp hoặc ?method=app → sinh secret → hiện QR → user nhập mã.
+      - POST verify_app_otp → verify_totp() window±1 → kích hoạt.
+
+    LUỒNG HOTP:
+      - GET ?method=hotp → sinh secret + setup_token → hiện QR → user nhập counter=0.
+      - POST verify_hotp_otp → verify_hotp() look_ahead=5 → kích hoạt.
     """
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
-    method     = request.GET.get('method', 'app')
+    method     = request.GET.get('method', 'totp')
+    ip         = get_client_ip(request)
+    ua         = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
-    context = {
-        'profile':        profile,
-        'method':         method,
-        'user_email':     request.user.email or 'Chưa có email',
-        'qr_code_base64': None,
-        # otp_sent: True nếu đã có EmailOTP setup_2fa còn hiệu lực → hiện form nhập OTP (email)
-        'otp_sent': EmailOTP.objects.filter(
-            user=request.user, action='setup_2fa', is_used=False, is_active=True,
-            created_at__gt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES)
-        ).exists() if method == 'email' else False,
-        # FIX-4: hotp_ready = True khi user đang ở bước setup HOTP (đã có QR) → hiện form nhập mã
-        'hotp_ready': bool(request.session.get('temp_hotp_secret')) if method == 'hotp' else False,
-        # [BUG-SETUP-TABS] Ẩn tab phương thức đã kích hoạt
-        'already_enabled': {
-            'email': profile.has_email_otp,
-            'app':   profile.has_app_otp,
-            'hotp':  profile.has_hotp,
-            'fido2': profile.has_fido2,
-        },
-    }
-
+    # ── POST handler ─────────────────────────────────────────────────────────
     if request.method == 'POST':
 
+        # ── Email: xác nhận OTP ─────────────────────────────────────────────
         if method == 'email':
-            if 'send_email_otp' in request.POST:
-                try:
-                    generate_and_send_email_otp(
-                        user=request.user, email=request.user.email,
-                        action='setup_2fa', ip=get_client_ip(request),
-                    )
-                    messages.success(request, f'Mã OTP đã gửi tới {request.user.email}')
-                except Exception as e:
-                    messages.error(request, f'Lỗi gửi email: {str(e)}')
 
-            elif 'verify_email_otp' in request.POST:
+            if 'verify_email_otp' in request.POST:
                 code    = request.POST.get('otp_code', '').strip()
                 otp_obj = _get_valid_otp(request.user, code, action='setup_2fa')
                 if otp_obj:
@@ -724,27 +713,45 @@ def setup_2fa(request):
                     otp_obj.mark_used()
                     ActivityLog.objects.create(
                         user=request.user, username_attempt=request.user.username,
-                        action='2fa_enable', ip_address=get_client_ip(request),
-                        user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+                        action='2fa_enable', ip_address=ip, user_agent=ua,
                     )
                     messages.success(request, 'Đã kích hoạt Email OTP thành công!')
                     return redirect('dashboard')
                 else:
                     messages.error(request, 'Mã OTP không đúng hoặc đã hết hạn!')
+                # Sau lỗi → redirect PRG để GET lại, otp_sent sẽ tự đúng
+                return redirect(f'/setup-2fa/?method=email')
 
-        elif method in ('app', 'totp'):  # FIX: đồng bộ với URL ?method=totp
+            elif 'resend_email_otp' in request.POST:
+                # Invalidate OTP cũ + gửi mới
+                EmailOTP.objects.filter(
+                    user=request.user, action='setup_2fa',
+                    is_used=False, is_active=True,
+                ).update(is_active=False)
+                try:
+                    generate_and_send_email_otp(
+                        user=request.user, email=request.user.email,
+                        action='setup_2fa', ip=ip,
+                    )
+                    messages.success(request, f'Đã gửi lại mã OTP mới tới {request.user.email}')
+                except Exception as e:
+                    messages.error(request, f'Lỗi gửi email: {str(e)}')
+                return redirect(f'/setup-2fa/?method=email')
+
+        # ── TOTP (app) ───────────────────────────────────────────────────────
+        elif method in ('totp', 'app'):
             if 'verify_app_otp' in request.POST:
                 code        = request.POST.get('otp_code', '').strip()
                 temp_secret = request.session.get('temp_otp_secret')
-                # [BUG-C] Kiểm tra TTL 10 phút cho session secret — ngăn session hijack
                 secret_at   = request.session.get('temp_otp_secret_at', 0)
-                if time.time() - secret_at > 600:
+
+                if not temp_secret or time.time() - secret_at > 600:
                     request.session.pop('temp_otp_secret', None)
                     request.session.pop('temp_otp_secret_at', None)
                     messages.error(request, 'Phiên thiết lập đã hết hạn. Vui lòng quét lại QR mới.')
-                    return redirect('setup_2fa')
-                # [BUG-3] verify_totp có window ±1 — tránh từ chối mã hợp lệ cuối chu kỳ
-                if temp_secret and verify_totp(temp_secret, code):
+                    return redirect('/setup-2fa/?method=totp')
+
+                if verify_totp(temp_secret, code):
                     profile.otp_secret  = temp_secret
                     profile.has_app_otp = True
                     profile.save()
@@ -752,14 +759,32 @@ def setup_2fa(request):
                     request.session.pop('temp_otp_secret_at', None)
                     ActivityLog.objects.create(
                         user=request.user, username_attempt=request.user.username,
-                        action='2fa_enable', ip_address=get_client_ip(request),
-                        user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+                        action='2fa_enable', ip_address=ip, user_agent=ua,
                     )
-                    messages.success(request, 'Thiết lập Google Authenticator thành công!')
+                    messages.success(request, 'Thiết lập Google Authenticator (TOTP) thành công!')
                     return redirect('dashboard')
                 else:
-                    messages.error(request, 'Mã OTP không đúng!')
+                    messages.error(request, 'Mã TOTP không đúng. Hãy kiểm tra đồng hồ thiết bị và thử lại.')
+                return redirect('/setup-2fa/?method=totp')
 
+            elif request.POST.get('action') == 'disable_totp':
+                code       = request.POST.get('otp_code', '').strip()
+                raw_secret = profile.decrypt_secret()
+                if raw_secret and verify_totp(raw_secret, code):
+                    profile.has_app_otp = False
+                    if not profile.has_hotp:
+                        profile.otp_secret = None
+                    profile.save()
+                    ActivityLog.objects.create(
+                        user=request.user, username_attempt=request.user.username,
+                        action='2fa_disable', ip_address=ip, user_agent=ua,
+                    )
+                    messages.success(request, 'Đã tắt TOTP thành công.')
+                else:
+                    messages.error(request, 'Mã xác nhận không đúng!')
+                return redirect('/setup-2fa/?method=totp')
+
+        # ── HOTP ─────────────────────────────────────────────────────────────
         elif method == 'hotp':
             if 'verify_hotp_otp' in request.POST:
                 code          = request.POST.get('otp_code', '').strip()
@@ -767,7 +792,6 @@ def setup_2fa(request):
                 post_token    = request.POST.get('setup_token', '')
                 session_token = request.session.get('temp_hotp_token', '')
 
-                # Xác minh setup_token — ngăn race condition
                 if not session_token or not hmac.compare_digest(post_token, session_token):
                     request.session.pop('temp_hotp_secret', None)
                     request.session.pop('temp_hotp_token', None)
@@ -790,8 +814,7 @@ def setup_2fa(request):
                     request.session.modified = True
                     ActivityLog.objects.create(
                         user=request.user, username_attempt=request.user.username,
-                        action='2fa_enable', ip_address=get_client_ip(request),
-                        user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+                        action='2fa_enable', ip_address=ip, user_agent=ua,
                     )
                     messages.success(request, '✅ Đã kích hoạt HOTP thành công!')
                     return redirect('dashboard')
@@ -802,50 +825,114 @@ def setup_2fa(request):
                     messages.error(request, '❌ Mã HOTP không đúng. Vui lòng quét lại QR mới.')
                     return redirect('/setup-2fa/?method=hotp')
 
-        # ── Tắt App OTP (TOTP) từ setup page ─────────────────────────────────
-        elif request.POST.get('action') == 'disable_app':
-            raw_secret = profile.decrypt_secret()
-            if raw_secret and verify_totp(raw_secret, request.POST.get('otp_code', '').strip()):
-                profile.has_app_otp = False
-                if not profile.has_hotp:
-                    profile.otp_secret = None
-                profile.save()
-                ActivityLog.objects.create(
-                    user=request.user, username_attempt=request.user.username,
-                    action='2fa_disable', ip_address=get_client_ip(request),
-                    user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-                )
-                messages.success(request, 'Đã tắt TOTP thành công.')
-                return redirect('setup_2fa')
-            else:
-                messages.error(request, 'Mã xác nhận không đúng!')
+            elif request.POST.get('action') == 'disable_hotp':
+                code       = request.POST.get('otp_code', '').strip()
+                raw_secret = getattr(profile, 'hotp_secret', None)
+                # Với HOTP: dùng counter hiện tại để verify
+                if raw_secret:
+                    ok, _ = verify_hotp(raw_secret, profile.hotp_counter, code, look_ahead=5)
+                    if ok:
+                        profile.has_hotp     = False
+                        profile.hotp_secret  = None
+                        profile.hotp_counter = 0
+                        profile.save()
+                        ActivityLog.objects.create(
+                            user=request.user, username_attempt=request.user.username,
+                            action='2fa_disable', ip_address=ip, user_agent=ua,
+                        )
+                        messages.success(request, 'Đã tắt HOTP thành công.')
+                    else:
+                        messages.error(request, 'Mã xác nhận không đúng!')
+                else:
+                    messages.error(request, 'Không tìm thấy thông tin HOTP.')
+                return redirect('/setup-2fa/?method=hotp')
 
-    if method in ('app', 'totp'):  # FIX: template dùng ?method=totp nhưng view chỉ check 'app'
+        # Fallback: unknown POST → redirect về GET
+        return redirect(f'/setup-2fa/?method={method}')
+
+    # ── GET handler ──────────────────────────────────────────────────────────
+
+    # Khởi tạo context mặc định
+    context = {
+        'profile':        profile,
+        'method':         method,
+        'user_email':     request.user.email or 'Chưa có email',
+        'qr_code_base64': None,
+        'otp_secret':     None,
+        'setup_token':    None,
+        'otp_sent':       False,
+        'otp_expires_in': 0,   # giây còn lại của OTP hiện tại (để hiện countdown)
+        'already_enabled': {
+            'email': profile.has_email_otp,
+            'totp':  profile.has_app_otp,
+            'hotp':  profile.has_hotp,
+            'fido2': getattr(profile, 'has_fido2', False),
+        },
+    }
+
+    # ── GET: Email ────────────────────────────────────────────────────────────
+    if method == 'email':
+        if not request.user.email:
+            messages.error(request, 'Bạn chưa có email. Vui lòng cập nhật email trong Dashboard trước!')
+            return redirect('dashboard')
+
+        valid_minutes = getattr(EmailOTP, 'OTP_VALID_MINUTES', 3)
+        existing_otp  = EmailOTP.objects.filter(
+            user      = request.user,
+            action    = 'setup_2fa',
+            is_used   = False,
+            is_active = True,
+            created_at__gt = timezone.now() - timedelta(minutes=valid_minutes),
+        ).order_by('-created_at').first()
+
+        if existing_otp:
+            # OTP còn hiệu lực → KHÔNG gửi lại, chỉ hiển thị khung nhập
+            elapsed  = (timezone.now() - existing_otp.created_at).total_seconds()
+            expires  = max(0, int(valid_minutes * 60 - elapsed))
+            context['otp_sent']       = True
+            context['otp_expires_in'] = expires
+        else:
+            # Chưa có OTP hợp lệ → tự động gửi ngay (PRG: sau gửi redirect về GET này)
+            try:
+                generate_and_send_email_otp(
+                    user   = request.user,
+                    email  = request.user.email,
+                    action = 'setup_2fa',
+                    ip     = ip,
+                )
+                messages.info(request, f'Đã tự động gửi mã OTP tới {request.user.email}. Kiểm tra hộp thư!')
+            except Exception as e:
+                messages.error(request, f'Lỗi gửi email: {str(e)}')
+            # PRG: redirect về GET để tránh duplicate POST nếu user F5
+            return redirect('/setup-2fa/?method=email')
+
+    # ── GET: TOTP ─────────────────────────────────────────────────────────────
+    elif method in ('totp', 'app'):
         new_secret = request.session.get('temp_otp_secret')
-        if not new_secret:
+        secret_at  = request.session.get('temp_otp_secret_at', 0)
+        # Tái tạo nếu chưa có hoặc đã hết hạn 10 phút
+        if not new_secret or time.time() - secret_at > 600:
             new_secret = generate_totp_secret()
             request.session['temp_otp_secret']    = new_secret
             request.session['temp_otp_secret_at'] = time.time()
             request.session.modified = True
-        context['qr_code_base64'] = generate_qr_base64(request.user.username, new_secret)
+        context['qr_code_base64'] = generate_qr_base64(request.user.username, new_secret, otp_type='totp')
         context['otp_secret']     = new_secret
 
+    # ── GET: HOTP ─────────────────────────────────────────────────────────────
     elif method == 'hotp':
         temp_secret = request.session.get('temp_hotp_secret')
+        setup_token = request.session.get('temp_hotp_token')
         if not temp_secret:
             temp_secret = generate_totp_secret()
             setup_token = secrets.token_urlsafe(32)
             request.session['temp_hotp_secret'] = temp_secret
             request.session['temp_hotp_token']  = setup_token
             request.session.modified = True
-        else:
-            setup_token = request.session.get('temp_hotp_token')
-            # [BUG-14 FIX] token bị mất khỏi session (server restart / expire) → tạo mới
-            # thay vì trả '' gây loop vô hạn ở client
-            if not setup_token:
-                setup_token = secrets.token_urlsafe(32)
-                request.session['temp_hotp_token'] = setup_token
-                request.session.modified = True
+        elif not setup_token:
+            setup_token = secrets.token_urlsafe(32)
+            request.session['temp_hotp_token'] = setup_token
+            request.session.modified = True
         context['qr_code_base64'] = generate_qr_base64(request.user.username, temp_secret, otp_type='hotp')
         context['otp_secret']     = temp_secret
         context['setup_token']    = setup_token
