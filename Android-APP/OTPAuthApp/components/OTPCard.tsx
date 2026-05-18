@@ -56,19 +56,21 @@ export default function OTPCard({ account, onDelete, onUpdate }: Props) {
     return () => clearInterval(interval);
   }, [account.type, account.counter]);
 
-  const generateHOTP = (counter: number) => {
-    try {
-      const hotp = new OTPAuth.HOTP({
-        secret: OTPAuth.Secret.fromBase32(account.secret),
-        algorithm: 'SHA1',
-        digits: 6,
-        counter,
-      });
-      setOtp(hotp.generate());
-    } catch {
-      setOtp('ERROR');
-    }
-  };
+const generateHOTP = (counter: number) => {
+  try {
+    const hotp = new OTPAuth.HOTP({
+      secret: OTPAuth.Secret.fromBase32(account.secret),
+      algorithm: 'SHA1',
+      digits: 6,
+      counter,
+    });
+    const code = hotp.generate();
+    console.log(`HOTP counter=${counter} → mã=${code}`);  // ← thêm dòng này
+    setOtp(code);
+  } catch {
+    setOtp('ERROR');
+  }
+};
 
   // Lưu counter mới vào SecureStore và cập nhật state
   const saveCounter = async (newCounter: number) => {
