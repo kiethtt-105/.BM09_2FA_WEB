@@ -311,9 +311,23 @@ td{padding:14px 18px;vertical-align:middle;}
     <a href="{% url 'dashboard' %}" class="nav-item">
       <i class="fa fa-shield-halved"></i> Bảo mật 2FA
     </a>
+
+    <hr class="nav-sep">
+    <div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:0 11px;margin-bottom:6px;">Tài khoản</div>
+
     <a href="{% url 'active_sessions' %}" class="nav-item active">
       <i class="fa fa-laptop"></i> Phiên đăng nhập
     </a>
+    <a href="{% url 'login_history' %}" class="nav-item">
+      <i class="fa fa-clock-rotate-left"></i> Lịch sử đăng nhập
+    </a>
+    <a href="{% url 'manage_passkeys' %}" class="nav-item">
+      <i class="fa fa-fingerprint"></i> Quản lý Passkey
+    </a>
+    <a href="{% url 'auth_approval' %}" class="nav-item">
+      <i class="fa fa-bell"></i> Xác thực thiết bị
+    </a>
+
     <hr class="nav-sep">
     <form method="post" action="{% url 'logout' %}" style="margin:0;">
       {% csrf_token %}

@@ -8,288 +8,35 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
 :root{
-  --bg:#04080f;--bg1:#080f1c;--bg2:#0d1626;
+  --bg:#04080f;--bg1:#080f1c;--bg2:#0d1626;--bg3:#111e33;
   --border:rgba(37,99,235,0.14);--border2:rgba(37,99,235,0.30);
-  --blue:#2563eb;--blue2:#3b82f6;
+  --blue:#2563eb;--blue2:#3b82f6;--blue3:#60a5fa;
   --text:#e2e8f0;--muted:#475569;--muted2:#64748b;
+  --danger:#ef4444;--success:#10b981;
   --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{
-  font-family:var(--font);background:var(--bg);color:var(--text);
-  min-height:100vh;padding:24px;-webkit-font-smoothing:antialiased;
-}
-body::before{
-  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse 600px 400px at 20% 10%,rgba(37,99,235,0.05) 0%,transparent 70%);
-}
-.page{position:relative;z-index:1;background:var(--bg1);border:1px solid var(--border);border-radius:16px;padding:32px 28px;min-height:520px;box-shadow:0 1px 0 rgba(37,99,235,.1) inset,0 20px 40px rgba(2,6,14,.5);}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:24px;-webkit-font-smoothing:antialiased;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 700px 400px at 20% -10%,rgba(37,99,235,0.09) 0%,transparent 65%),
+             radial-gradient(ellipse 400px 300px at 80% 100%,rgba(59,130,246,0.05) 0%,transparent 65%);}
 
-.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:12px;flex-wrap:wrap;}
-.top-left{display:flex;align-items:center;gap:14px;}
-.back-btn{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:8px 14px;border-radius:8px;
-  background:var(--bg1);border:1px solid var(--border);
-  color:var(--muted2);font-size:13px;font-weight:500;text-decoration:none;
-  transition:border-color .15s,color .15s;
-}
-.back-btn:hover{border-color:var(--border2);color:var(--text);}
-.page-title{font-size:20px;font-weight:600;letter-spacing:-.01em;}
-.page-sub{font-size:13px;color:var(--muted);margin-top:2px;}
+/* Layout */
+.layout{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;max-width:1040px;margin:0 auto;position:relative;z-index:1;}
+@media(max-width:720px){.layout{grid-template-columns:1fr;}}
 
-/* Stats row */
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;}
-.stat-card{
-  background:var(--bg1);border:1px solid var(--border);border-radius:12px;
-  padding:16px;text-align:center;
-}
-.stat-val{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--blue2);}
-.stat-label{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:4px;}
-
-/* Passkey list */
-.list-card{
-  background:var(--bg1);border:1px solid var(--border);border-radius:14px;overflow:hidden;
-}
-.list-header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:16px 20px;border-bottom:1px solid var(--border);
-}
-.list-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;}
-.list-title i{color:var(--blue2);}
-
-.btn{
-  display:inline-flex;align-items:center;gap:7px;
-  padding:8px 14px;border:none;border-radius:8px;
-  font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;
-  text-decoration:none;transition:opacity .15s,transform .15s;
-}
-.btn:hover{opacity:.85;transform:translateY(-1px);}
-.btn:active{transform:translateY(0);}
-.btn-primary{background:var(--blue);color:#fff;}
-.btn-ghost{background:var(--bg2);border:1px solid var(--border);color:var(--muted2);}
-.btn-danger{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);color:#fca5a5;}
-.btn-sm{padding:6px 12px;font-size:12px;}
-
-.pk-item{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:16px 20px;border-bottom:1px solid var(--border);
-  transition:background .15s;
-}
-.pk-item:last-child{border-bottom:none;}
-.pk-item:hover{background:rgba(37,99,235,.04);}
-
-.pk-info{display:flex;align-items:center;gap:12px;}
-.pk-icon{
-  width:38px;height:38px;border-radius:8px;
-  background:rgba(37,99,235,.10);border:1px solid var(--border2);
-  display:flex;align-items:center;justify-content:center;
-  font-size:16px;color:var(--blue2);flex-shrink:0;
-}
-.pk-name{font-size:13px;font-weight:500;}
-.pk-id{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px;}
-.pk-meta{display:flex;align-items:center;gap:12px;margin-top:3px;}
-.pk-meta span{font-size:11px;color:var(--muted);font-family:var(--mono);}
-
-/* Empty state */
-.empty{text-align:center;padding:50px 20px;}
-.empty i{font-size:32px;color:var(--bg2);margin-bottom:12px;display:block;}
-.empty p{font-size:14px;color:var(--muted);}
-
-/* Modal backdrop */
-.modal-backdrop{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;
-  align-items:center;justify-content:center;
-}
-.modal-backdrop.open{display:flex;}
-.modal{
-  background:var(--bg1);border:1px solid var(--border2);border-radius:14px;
-  padding:28px;max-width:360px;width:100%;text-align:center;
-}
-.modal h3{font-size:16px;font-weight:600;margin-bottom:8px;}
-.modal p{font-size:13px;color:var(--muted);margin-bottom:20px;}
-.modal code{background:var(--bg2);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:12px;color:var(--blue2);}
-.modal-btns{display:flex;gap:8px;justify-content:center;}
-
-  /* ── BLUE PRO OVERRIDES ── */
-  body::before {
-    background:
-      radial-gradient(ellipse 700px 400px at 20% -10%, rgba(37,99,235,0.09) 0%, transparent 65%),
-      radial-gradient(ellipse 400px 300px at 80% 100%, rgba(59,130,246,0.05) 0%, transparent 65%);
-  }
-  /* Sharper card border with subtle top glow */
-  .card, .wrap, .panel, .list-card, .table-card, .sidebar, .main {
-    border-color: rgba(37,99,235,0.16) !important;
-    box-shadow: 0 1px 0 0 rgba(37,99,235,0.12) inset, 0 24px 48px -12px rgba(2,6,14,0.6);
-  }
-  /* Primary button — blue gradient */
-  .btn-primary {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-    box-shadow: 0 2px 12px rgba(37,99,235,0.30);
-    letter-spacing: 0.01em;
-  }
-  .btn-primary:hover:not(:disabled) {
-    box-shadow: 0 4px 20px rgba(37,99,235,0.45);
-    opacity: 1 !important;
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-  }
-  /* Ghost button */
-  .btn-ghost, .back-link, .back-btn {
-    background: rgba(13,22,38,0.7) !important;
-    border-color: rgba(37,99,235,0.16) !important;
-    backdrop-filter: blur(4px);
-  }
-  .btn-ghost:hover, .back-link:hover, .back-btn:hover {
-    border-color: rgba(37,99,235,0.35) !important;
-    background: rgba(37,99,235,0.08) !important;
-    color: var(--blue3) !important;
-  }
-  /* Input focus */
-  input[type=text]:focus, input[type=email]:focus,
-  input[type=tel]:focus, input[type=password]:focus,
-  .otp-box:focus {
-    border-color: var(--blue) !important;
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.18) !important;
-  }
-  /* Active nav item */
-  .nav-item.active {
-    background: rgba(37,99,235,0.12) !important;
-    color: var(--blue3) !important;
-    border-color: rgba(37,99,235,0.22) !important;
-  }
-  .nav-item:hover { 
-    background: rgba(37,99,235,0.07) !important; 
-    color: var(--text) !important;
-  }
-  /* Brand dot */
-  .brand-dot, .logo-dot { background: var(--blue2) !important; }
-  /* OTP box filled state */
-  .otp-box.filled { border-color: rgba(37,99,235,0.45) !important; }
-  /* Method tabs in verify_2fa */
-  .method.active {
-    border-color: var(--blue) !important;
-    color: var(--blue3) !important;
-    background: rgba(37,99,235,0.10) !important;
-  }
-  /* Badge online pulse */
-  .dot-pulse, .dot-live { background: var(--success) !important; }
-  /* Toggle checked */
-  .toggle input:checked + .toggle-track { background: var(--blue) !important; }
-  /* Table hover */
-  tbody tr:hover { background: rgba(37,99,235,0.05) !important; }
-  /* TOTP progress fill */
-  .totp-ring-fg { stroke: var(--blue2) !important; }
-  /* Stat cards */
-  .stat-val { color: var(--blue3) !important; }
-  /* pk-icon */
-  .pk-icon, .dev-icon, .method-icon {
-    background: rgba(37,99,235,0.10) !important;
-    border-color: rgba(37,99,235,0.22) !important;
-    color: var(--blue3) !important;
-  }
-  /* Badge status on */
-  .badge-status.on, .badge-on, .badge-online {
-    background: rgba(16,185,129,0.09) !important;
-    border-color: rgba(16,185,129,0.20) !important;
-    color: #6ee7b7 !important;
-  }
-  .badge-status.off {
-    background: rgba(37,99,235,0.10) !important;
-    border-color: rgba(37,99,235,0.22) !important;
-    color: var(--blue3) !important;
-  }
-  /* email badge */
-  .email-badge {
-    background: rgba(37,99,235,0.10) !important;
-    border-color: rgba(37,99,235,0.22) !important;
-    color: var(--blue3) !important;
-  }
-  /* method badge in setup_2fa */
-  .method-badge {
-    border-color: rgba(37,99,235,0.28) !important;
-  }
-  .badge-icon {
-    background: rgba(37,99,235,0.12) !important;
-    border-color: rgba(37,99,235,0.28) !important;
-    color: var(--blue2) !important;
-  }
-  /* Confirm box */
-  .confirm-box, .disable-confirm {
-    border-color: rgba(37,99,235,0.22) !important;
-  }
-  /* ip badge */
-  .ip-badge {
-    background: rgba(37,99,235,0.08) !important;
-    border-color: rgba(37,99,235,0.16) !important;
-    color: var(--blue3) !important;
-  }
-  /* expiry badge */
-  .expiry { border-color: rgba(245,158,11,0.18) !important; }
-  /* alert info */
-  .alert-info, .msg-info, .msg-warning {
-    background: rgba(37,99,235,0.08) !important;
-    border-color: rgba(37,99,235,0.20) !important;
-    color: var(--blue3) !important;
-  }
-  /* secret chip */
-  .secret-chip {
-    color: var(--blue3) !important;
-    border-color: rgba(37,99,235,0.20) !important;
-  }
-  .secret-chip:hover { border-color: rgba(37,99,235,0.40) !important; }
-  /* btn-purple → blue style */
-  .btn-purple {
-    background: rgba(37,99,235,0.12) !important;
-    border-color: rgba(37,99,235,0.28) !important;
-    color: var(--blue3) !important;
-  }
-  .btn-purple:hover:not(:disabled) {
-    background: rgba(37,99,235,0.20) !important;
-  }
-  /* TOTP bar fill */
-  #totp-fill, .totp-bar { background: var(--blue2) !important; }
-  /* Panel hint bar */
-  .panel-hint { color: var(--blue3) !important; }
-  .panel-hint i { color: var(--blue2) !important; }
-  /* list-title icon */
-  .list-title i { color: var(--blue3) !important; }
-  /* page-title area */
-  .icon-wrap {
-    background: rgba(37,99,235,0.10) !important;
-    border-color: rgba(37,99,235,0.24) !important;
-  }
-  /* thead */
-  thead tr { background: rgba(8,15,28,0.8) !important; }
-  /* smooth all transitions */
-  *, *::before, *::after { transition-timing-function: cubic-bezier(0.4,0,0.2,1); }
-
-
-/* ── Sidebar (copy from dashboard) ── */
-.layout{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;max-width:1000px;margin:0 auto;}
-@media(max-width:700px){.layout{grid-template-columns:1fr;}}
-.sidebar{
-  background:var(--bg1);border:1px solid var(--border);border-radius:16px;padding:24px 16px;
-  box-shadow:0 1px 0 rgba(37,99,235,.1) inset,0 20px 40px rgba(2,6,14,.5);
-  position:sticky;top:24px;
-}
+/* Sidebar */
+.sidebar{background:var(--bg1);border:1px solid rgba(37,99,235,0.16);border-radius:16px;padding:24px 16px;
+  box-shadow:0 1px 0 rgba(37,99,235,.1) inset,0 20px 40px rgba(2,6,14,.5);position:sticky;top:24px;max-height:calc(100vh - 48px);overflow-y:auto;}
 .avatar-block{text-align:center;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border);}
-.avatar{
-  width:56px;height:56px;border-radius:13px;
-  background:linear-gradient(135deg,var(--blue),var(--blue2));
-  display:flex;align-items:center;justify-content:center;
-  font-family:var(--mono);font-size:20px;font-weight:700;color:#fff;
-  margin:0 auto 10px;box-shadow:0 4px 16px rgba(37,99,235,.3);
-}
+.avatar{width:56px;height:56px;border-radius:13px;background:linear-gradient(135deg,var(--blue),var(--blue2));
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:20px;font-weight:700;
+  color:#fff;margin:0 auto 10px;box-shadow:0 4px 16px rgba(37,99,235,.3);}
 .uname{font-size:14px;font-weight:600;}
 .uemail{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.nav-item{
-  display:flex;align-items:center;gap:9px;width:100%;
-  padding:9px 11px;border-radius:9px;
-  font-size:13px;font-weight:500;color:var(--muted2);
-  background:none;border:1px solid transparent;cursor:pointer;
-  text-decoration:none;transition:all .15s;
-  font-family:var(--font);margin-bottom:3px;
-}
+.nav-item{display:flex;align-items:center;gap:9px;width:100%;padding:9px 11px;border-radius:9px;
+  font-size:13px;font-weight:500;color:var(--muted2);background:none;border:1px solid transparent;
+  cursor:pointer;text-decoration:none;transition:all .15s;font-family:var(--font);margin-bottom:3px;}
 .nav-item:hover{background:var(--bg2);color:var(--text);}
 .nav-item.active{background:rgba(37,99,235,.1);color:var(--blue3);border-color:rgba(37,99,235,.2);}
 .nav-item i{width:15px;text-align:center;font-size:13px;flex-shrink:0;}
@@ -297,11 +44,103 @@ body::before{
 .nav-danger{color:#fca5a5!important;}
 .nav-danger:hover{background:rgba(239,68,68,.08)!important;color:#fca5a5!important;}
 
+/* Main */
+.main{display:flex;flex-direction:column;gap:16px;}
+.card{background:var(--bg1);border:1px solid rgba(37,99,235,0.16);border-radius:16px;overflow:hidden;
+  box-shadow:0 1px 0 rgba(37,99,235,.1) inset,0 20px 40px rgba(2,6,14,.5);}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;}
+.card-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.card-title i{color:var(--blue2);}
+.card-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.card-body{padding:20px 24px;}
+
+/* Stats */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:0;}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;}
+.stat-val{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--blue3);}
+.stat-label{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:5px;}
+
+/* Passkey list */
+.pk-item{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);transition:background .15s;gap:12px;}
+.pk-item:last-child{border-bottom:none;}
+.pk-item:hover{background:rgba(37,99,235,.04);}
+.pk-left{display:flex;align-items:center;gap:14px;flex:1;min-width:0;}
+.pk-icon{width:40px;height:40px;border-radius:10px;background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,0.22);
+  display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--blue3);flex-shrink:0;}
+.pk-name{font-size:14px;font-weight:600;}
+.pk-id{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px;
+  max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pk-meta{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:5px;}
+.pk-meta-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted2);font-family:var(--mono);}
+.pk-meta-item i{font-size:10px;color:var(--blue2);}
+.pk-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;
+  font-size:10px;font-weight:700;font-family:var(--mono);letter-spacing:.5px;}
+.pk-badge.new{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);color:#6ee7b7;}
+.pk-badge.used{background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.2);color:var(--blue3);}
+
+/* Empty */
+.empty{text-align:center;padding:48px 24px;}
+.empty-icon{font-size:36px;color:var(--muted);margin-bottom:14px;opacity:.4;}
+.empty p{font-size:14px;color:var(--muted);margin-bottom:16px;}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 16px;
+  border:none;border-radius:9px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;
+  text-decoration:none;transition:opacity .15s,transform .1s,box-shadow .15s;}
+.btn:hover:not(:disabled){opacity:.88;transform:translateY(-1px);}
+.btn:active:not(:disabled){transform:scale(.99);}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.3);}
+.btn-primary:hover:not(:disabled){box-shadow:0 4px 20px rgba(37,99,235,.45);}
+.btn-ghost{background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,0.16);color:var(--muted2);backdrop-filter:blur(4px);}
+.btn-ghost:hover:not(:disabled){border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.08);color:var(--blue3);}
+.btn-danger{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);color:#fca5a5;}
+.btn-danger:hover:not(:disabled){background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn-full{width:100%;}
+
+/* Info banner */
+.info-banner{display:flex;align-items:flex-start;gap:10px;padding:13px 16px;border-radius:10px;
+  background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.18);font-size:13px;color:var(--blue3);margin-bottom:16px;}
+.info-banner i{margin-top:1px;flex-shrink:0;color:var(--blue2);}
+
+/* Security tips */
+.tip-list{display:flex;flex-direction:column;gap:8px;}
+.tip-item{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--muted2);
+  padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;}
+.tip-item i{color:var(--blue2);margin-top:1px;flex-shrink:0;width:14px;text-align:center;}
+
+/* Alert messages */
+.alert{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:9px;font-size:13px;margin-bottom:14px;}
+.alert-success{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);color:#6ee7b7;}
+.alert-error{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.15);color:#fca5a5;}
+.alert i{margin-top:1px;flex-shrink:0;}
+
+/* Modal */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-backdrop.open{display:flex;}
+.modal{background:var(--bg1);border:1px solid rgba(37,99,235,.28);border-radius:16px;padding:28px 24px;max-width:380px;width:calc(100% - 40px);
+  box-shadow:0 24px 60px rgba(2,6,14,.8);animation:modalIn .2s cubic-bezier(.16,1,.3,1);}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(8px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.modal-icon{width:48px;height:48px;border-radius:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);
+  display:flex;align-items:center;justify-content:center;font-size:20px;color:#fca5a5;margin:0 auto 16px;}
+.modal h3{font-size:16px;font-weight:600;text-align:center;margin-bottom:8px;}
+.modal p{font-size:13px;color:var(--muted2);text-align:center;margin-bottom:20px;line-height:1.6;}
+.modal code{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:2px 7px;
+  font-family:var(--mono);font-size:12px;color:var(--blue3);}
+.modal-btns{display:flex;gap:8px;}
+.modal-btns .btn{flex:1;}
+
+/* Sign count indicator */
+.sign-bar{height:3px;background:var(--border);border-radius:2px;margin-top:6px;max-width:160px;}
+.sign-bar-fill{height:100%;border-radius:2px;background:var(--blue2);transition:width .4s;}
 </style>
 </head>
 <body>
 <div class="layout">
-<div class="sidebar">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
     <div class="avatar-block">
       <div class="avatar">{{ user.username|first|upper }}</div>
       <div class="uname">{{ user.username }}</div>
@@ -313,87 +152,169 @@ body::before{
     <a href="{% url 'dashboard' %}" class="nav-item">
       <i class="fa fa-shield-halved"></i> Bảo mật 2FA
     </a>
-    <a href="{% url 'active_sessions' %}" class="nav-item ">
+
+    <hr class="nav-sep">
+    <div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:0 11px;margin-bottom:6px;">Tài khoản</div>
+
+    <a href="{% url 'active_sessions' %}" class="nav-item">
       <i class="fa fa-laptop"></i> Phiên đăng nhập
     </a>
+    <a href="{% url 'login_history' %}" class="nav-item">
+      <i class="fa fa-clock-rotate-left"></i> Lịch sử đăng nhập
+    </a>
+    <a href="{% url 'manage_passkeys' %}" class="nav-item active">
+      <i class="fa fa-fingerprint"></i> Quản lý Passkey
+    </a>
+    <a href="{% url 'auth_approval' %}" class="nav-item">
+      <i class="fa fa-bell"></i> Xác thực thiết bị
+    </a>
+
     <hr class="nav-sep">
     <form method="post" action="{% url 'logout' %}" style="margin:0;">
       {% csrf_token %}
-      <button type="submit" class="nav-item nav-danger" style="width:100%;">
+      <button type="submit" class="nav-item nav-danger" style="width:100%;text-align:left;">
         <i class="fa fa-right-from-bracket"></i> Đăng xuất
       </button>
     </form>
   </div>
 
-  <div class="page">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px;">
-    <div>
-      <div class="page-title">Passkeys</div>
-      <div class="page-sub">Quản lý khóa FIDO2 đã đăng ký</div>
-    </div>
-    <a href="{% url 'setup_2fa' %}?method=fido2" class="btn btn-primary btn-sm">
-      <i class="fa fa-plus"></i> Thêm passkey
-    </a>
-  </div>
+  <!-- Main -->
+  <div class="main">
 
-  <div class="stats">
-    <div class="stat-card">
-      <div class="stat-val">{{ passkeys.count }}</div>
-      <div class="stat-label">Tổng khóa</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" style="font-size:14px;padding-top:4px;">{{ user.username }}</div>
-      <div class="stat-label">Tài khoản</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val"><i class="fa fa-shield-halved" style="font-size:20px;"></i></div>
-      <div class="stat-label">Bảo mật cao</div>
-    </div>
-  </div>
-
-  <div class="list-card">
-    <div class="list-header">
-      <div class="list-title">
-        <i class="fa fa-fingerprint"></i> Thiết bị đã đăng ký
+    <!-- Messages -->
+    {% if messages %}
+      {% for message in messages %}
+      <div class="alert {% if 'success' in message.tags %}alert-success{% else %}alert-error{% endif %}">
+        <i class="fa {% if 'success' in message.tags %}fa-circle-check{% else %}fa-circle-xmark{% endif %}"></i>
+        <span>{{ message }}</span>
       </div>
-    </div>
+      {% endfor %}
+    {% endif %}
 
-    {% if passkeys %}
-    {% for pk in passkeys %}
-    <div class="pk-item">
-      <div class="pk-info">
-        <div class="pk-icon"><i class="fa fa-key"></i></div>
+    <!-- Header card -->
+    <div class="card">
+      <div class="card-header">
         <div>
-          <div class="pk-name">Passkey #{{ forloop.counter }}</div>
-          <div class="pk-id">{{ pk.credential_id|truncatechars:28 }}</div>
-          <div class="pk-meta">
-            <span><i class="fa fa-clock" style="margin-right:3px"></i>{{ pk.created_at|date:"d/m/Y H:i" }}</span>
-            <span><i class="fa fa-rotate" style="margin-right:3px"></i>{{ pk.sign_count }} lần dùng</span>
+          <div class="card-title"><i class="fa fa-fingerprint"></i> Passkeys (FIDO2)</div>
+          <div class="card-sub">Quản lý khóa sinh trắc học đã đăng ký · vân tay, Face ID, security key</div>
+        </div>
+        <a href="{% url 'setup_2fa' %}?method=fido2" class="btn btn-primary btn-sm">
+          <i class="fa fa-plus"></i> Thêm passkey
+        </a>
+      </div>
+      <div class="card-body">
+        <div class="stats-row">
+          <div class="stat">
+            <div class="stat-val">{{ passkeys.count }}</div>
+            <div class="stat-label">Passkeys</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val">{{ total_sign_count|default:0 }}</div>
+            <div class="stat-label">Tổng lần dùng</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val" style="font-size:18px;padding-top:3px;">
+              {% if passkeys %}<i class="fa fa-shield-halved" style="color:var(--success)"></i>{% else %}<i class="fa fa-shield-xmark" style="color:var(--muted)"></i>{% endif %}
+            </div>
+            <div class="stat-label">{% if passkeys %}Đang bảo vệ{% else %}Chưa bật{% endif %}</div>
           </div>
         </div>
       </div>
-      <button onclick="confirmDelete({{ pk.id }},'{{ pk.credential_id|truncatechars:18 }}')" class="btn btn-danger btn-sm">
-        <i class="fa fa-trash" style="font-size:11px"></i>
-      </button>
     </div>
-    {% endfor %}
-    {% else %}
-    <div class="empty">
-      <i class="fa fa-fingerprint"></i>
-      <p>Chưa có passkey nào được đăng ký</p>
-      <a href="{% url 'setup_2fa' %}?method=fido2" class="btn btn-primary" style="margin-top:14px;">
-        <i class="fa fa-plus"></i> Thêm passkey đầu tiên
-      </a>
-    </div>
-    {% endif %}
-  </div>
-</div>
 
-<!-- Delete modal -->
+    <!-- Passkey list -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fa fa-key"></i> Thiết bị đã đăng ký</div>
+      </div>
+
+      {% if passkeys %}
+        {% for pk in passkeys %}
+        <div class="pk-item">
+          <div class="pk-left">
+            <div class="pk-icon">
+              <i class="fa fa-{% if 'Mobile' in pk.user_agent|default:'' %}mobile-screen{% else %}fingerprint{% endif %}"></i>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div class="pk-name">Passkey #{{ forloop.counter }}</div>
+                {% if pk.sign_count == 0 %}
+                <span class="pk-badge new"><i class="fa fa-sparkle" style="font-size:8px"></i> Mới</span>
+                {% else %}
+                <span class="pk-badge used"><i class="fa fa-check" style="font-size:8px"></i> Đã dùng {{ pk.sign_count }} lần</span>
+                {% endif %}
+              </div>
+              <div class="pk-id" title="{{ pk.credential_id }}">{{ pk.credential_id|truncatechars:40 }}</div>
+              <div class="pk-meta">
+                <div class="pk-meta-item">
+                  <i class="fa fa-calendar"></i>
+                  {{ pk.created_at|date:"d/m/Y H:i" }}
+                </div>
+                <div class="pk-meta-item">
+                  <i class="fa fa-rotate"></i>
+                  {{ pk.sign_count }} lần xác thực
+                </div>
+              </div>
+              <!-- Sign count bar: tối đa 50 lần = 100% -->
+              {% if pk.sign_count > 0 %}
+              <div class="sign-bar">
+                <div class="sign-bar-fill" style="width:{% widthratio pk.sign_count 50 100 %}%"></div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          <button onclick="confirmDelete({{ pk.id }},'{{ pk.credential_id|truncatechars:20 }}')" class="btn btn-danger btn-sm" style="flex-shrink:0;">
+            <i class="fa fa-trash" style="font-size:11px"></i>
+          </button>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="empty">
+        <div class="empty-icon"><i class="fa fa-fingerprint"></i></div>
+        <p>Chưa có passkey nào được đăng ký</p>
+        <a href="{% url 'setup_2fa' %}?method=fido2" class="btn btn-primary">
+          <i class="fa fa-plus"></i> Đăng ký passkey đầu tiên
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Security tips -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fa fa-lightbulb"></i> Lưu ý bảo mật</div>
+      </div>
+      <div class="card-body">
+        <div class="tip-list">
+          <div class="tip-item">
+            <i class="fa fa-shield-halved"></i>
+            Passkey sử dụng mã hóa khóa công khai — server không bao giờ lưu thông tin sinh trắc học.
+          </div>
+          <div class="tip-item">
+            <i class="fa fa-mobile-screen"></i>
+            Nếu mất thiết bị, hãy xóa passkey của thiết bị đó ngay để bảo vệ tài khoản.
+          </div>
+          <div class="tip-item">
+            <i class="fa fa-plus-circle"></i>
+            Nên đăng ký ít nhất 2 passkey trên 2 thiết bị khác nhau để dự phòng.
+          </div>
+          <div class="tip-item">
+            <i class="fa fa-rotate"></i>
+            Sign count tăng mỗi lần xác thực thành công — dùng để phát hiện bất thường.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<!-- Delete confirm modal -->
 <div class="modal-backdrop" id="modal">
   <div class="modal">
-    <h3>Xóa passkey?</h3>
-    <p>Thiết bị <code id="modal-pk-label"></code> sẽ không thể đăng nhập bằng passkey nữa.</p>
+    <div class="modal-icon"><i class="fa fa-trash"></i></div>
+    <h3>Xóa Passkey?</h3>
+    <p>Thiết bị <code id="modal-pk-label"></code> sẽ không thể đăng nhập bằng passkey nữa.<br>Hành động này không thể hoàn tác.</p>
     <div class="modal-btns">
       <form id="delete-form" method="POST" style="display:contents;">
         {% csrf_token %}
@@ -405,15 +326,18 @@ body::before{
 </div>
 
 <script>
-function confirmDelete(id,label){
-  document.getElementById('modal-pk-label').textContent=label+'...';
-  document.getElementById('delete-form').action='/passkeys/delete/'+id+'/';
+function confirmDelete(id, label) {
+  document.getElementById('modal-pk-label').textContent = label + '…';
+  document.getElementById('delete-form').action = '/passkeys/delete/' + id + '/';
   document.getElementById('modal').classList.add('open');
 }
-function closeModal(){document.getElementById('modal').classList.remove('open');}
-document.getElementById('modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 </script>
-  </div><!-- /page -->
-</div><!-- /layout -->
 </body>
 </html>

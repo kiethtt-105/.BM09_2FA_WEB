@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xác nhận đăng nhập · HUIT</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg:#04080f;--bg1:#080f1c;--bg2:#0d1626;--bg3:#111e33;
+  --border:rgba(37,99,235,0.14);--border2:rgba(37,99,235,0.30);
+  --blue:#2563eb;--blue2:#3b82f6;--blue3:#60a5fa;
+  --text:#e2e8f0;--muted:#475569;--muted2:#64748b;
+  --danger:#ef4444;--success:#10b981;--warn:#f59e0b;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:24px;-webkit-font-smoothing:antialiased;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 700px 400px at 20% -10%,rgba(37,99,235,0.09) 0%,transparent 65%),
+             radial-gradient(ellipse 400px 300px at 80% 100%,rgba(59,130,246,0.05) 0%,transparent 65%);}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;max-width:1040px;margin:0 auto;position:relative;z-index:1;}
+@media(max-width:720px){.layout{grid-template-columns:1fr;}}
+
+/* Sidebar */
+.sidebar{background:var(--bg1);border:1px solid rgba(37,99,235,0.16);border-radius:16px;padding:24px 16px;
+  box-shadow:0 1px 0 rgba(37,99,235,.1) inset,0 20px 40px rgba(2,6,14,.5);position:sticky;top:24px;max-height:calc(100vh - 48px);overflow-y:auto;}
+.avatar-block{text-align:center;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border);}
+.avatar{width:56px;height:56px;border-radius:13px;background:linear-gradient(135deg,var(--blue),var(--blue2));
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:20px;font-weight:700;
+  color:#fff;margin:0 auto 10px;box-shadow:0 4px 16px rgba(37,99,235,.3);}
+.uname{font-size:14px;font-weight:600;}
+.uemail{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nav-item{display:flex;align-items:center;gap:9px;width:100%;padding:9px 11px;border-radius:9px;
+  font-size:13px;font-weight:500;color:var(--muted2);background:none;border:1px solid transparent;
+  cursor:pointer;text-decoration:none;transition:all .15s;font-family:var(--font);margin-bottom:3px;}
+.nav-item:hover{background:var(--bg2);color:var(--text);}
+.nav-item.active{background:rgba(37,99,235,.1);color:var(--blue3);border-color:rgba(37,99,235,.2);}
+.nav-item i{width:15px;text-align:center;font-size:13px;flex-shrink:0;}
+.nav-sep{margin:10px 0;border:none;height:1px;background:var(--border);}
+.nav-danger{color:#fca5a5!important;}
+.nav-danger:hover{background:rgba(239,68,68,.08)!important;color:#fca5a5!important;}
+
+/* Notification badge on nav */
+.nav-badge{display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:rgba(239,68,68,.85);color:#fff;font-size:10px;font-weight:700;
+  font-family:var(--mono);margin-left:auto;}
+
+/* Main */
+.main{display:flex;flex-direction:column;gap:16px;}
+.card{background:var(--bg1);border:1px solid rgba(37,99,235,0.16);border-radius:16px;overflow:hidden;
+  box-shadow:0 1px 0 rgba(37,99,235,.1) inset,0 20px 40px rgba(2,6,14,.5);}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;}
+.card-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.card-title i{color:var(--blue2);}
+.card-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.card-body{padding:20px 24px;}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 18px;
+  border:none;border-radius:9px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;
+  text-decoration:none;transition:opacity .15s,transform .1s,box-shadow .15s;}
+.btn:hover:not(:disabled){opacity:.88;transform:translateY(-1px);}
+.btn:active:not(:disabled){transform:scale(.99);}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.3);}
+.btn-primary:hover:not(:disabled){box-shadow:0 4px 20px rgba(37,99,235,.45);}
+.btn-ghost{background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,0.16);color:var(--muted2);backdrop-filter:blur(4px);}
+.btn-ghost:hover:not(:disabled){border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.08);color:var(--blue3);}
+.btn-danger{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);color:#fca5a5;}
+.btn-danger:hover:not(:disabled){background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);}
+.btn-success{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:#6ee7b7;}
+.btn-success:hover:not(:disabled){background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4);}
+.btn-sm{padding:7px 13px;font-size:12px;}
+.btn-lg{padding:13px 24px;font-size:14px;}
+.btn-full{width:100%;}
+
+/* Alert messages */
+.alert{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:9px;font-size:13px;margin-bottom:14px;}
+.alert-success{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);color:#6ee7b7;}
+.alert-error{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.15);color:#fca5a5;}
+.alert-info{background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.18);color:var(--blue3);}
+.alert i{margin-top:1px;flex-shrink:0;}
+
+/* ── PENDING REQUEST CARD ── */
+.request-card{
+  background:var(--bg2);border:1px solid var(--border2);border-radius:14px;
+  padding:24px;position:relative;overflow:hidden;
+}
+.request-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--blue),var(--blue3));
+}
+.request-card.expired{border-color:rgba(239,68,68,.2);}
+.request-card.expired::before{background:var(--danger);}
+
+.req-header{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+.req-icon{
+  width:48px;height:48px;border-radius:12px;
+  background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);
+  display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--warn);flex-shrink:0;
+}
+.req-title{font-size:16px;font-weight:600;}
+.req-sub{font-size:12px;color:var(--muted2);margin-top:3px;}
+
+.req-details{display:flex;flex-direction:column;gap:8px;margin-bottom:20px;}
+.req-detail-row{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:10px 14px;background:var(--bg1);border:1px solid var(--border);border-radius:9px;font-size:13px;
+}
+.req-detail-row i{color:var(--blue2);margin-top:1px;flex-shrink:0;width:14px;text-align:center;}
+.req-detail-key{color:var(--muted2);font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.5px;white-space:nowrap;margin-right:4px;}
+.req-detail-val{color:var(--text);word-break:break-all;}
+
+/* Countdown */
+.req-countdown{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.15);border-radius:9px;margin-bottom:18px;
+}
+.countdown-label{font-size:12px;color:var(--muted2);}
+.countdown-timer{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--warn);}
+.countdown-timer.critical{color:var(--danger);animation:blink .7s step-end infinite;}
+@keyframes blink{50%{opacity:.4;}}
+.countdown-bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden;}
+.countdown-bar-fill{height:100%;border-radius:2px;background:var(--warn);transition:width 1s linear;}
+.countdown-bar-fill.critical{background:var(--danger);}
+
+.req-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* ── NO REQUEST ── */
+.no-request{text-align:center;padding:40px 24px;}
+.no-request-icon{font-size:40px;color:var(--muted);opacity:.3;margin-bottom:14px;}
+.no-request-title{font-size:15px;font-weight:600;margin-bottom:6px;}
+.no-request-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6;}
+
+/* Polling indicator */
+.poll-dot{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-family:var(--mono);color:var(--muted2);
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex-shrink:0;
+  animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(16,185,129,.4);}50%{opacity:.7;box-shadow:0 0 0 5px rgba(16,185,129,0);}}
+
+/* ── HISTORY TABLE ── */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--bg2);border-bottom:1px solid var(--border);}
+th{padding:10px 16px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;
+   text-transform:uppercase;color:var(--muted);text-align:left;white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(37,99,235,.04);}
+td{padding:13px 16px;font-size:13px;vertical-align:middle;}
+
+.status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;
+  font-size:11px;font-weight:700;font-family:var(--mono);letter-spacing:.3px;}
+.status-approved{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);color:#6ee7b7;}
+.status-denied{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;}
+.status-pending{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:#fcd34d;}
+.status-expired{background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.2);color:var(--muted2);}
+
+.ua-cell{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted2);font-family:var(--mono);font-size:11px;}
+.time-cell{font-family:var(--mono);font-size:11px;color:var(--muted2);white-space:nowrap;}
+
+/* Empty history */
+.empty-table{text-align:center;padding:36px;color:var(--muted);}
+.empty-table i{font-size:28px;opacity:.3;margin-bottom:10px;display:block;}
+
+/* Refresh button */
+.refresh-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 12px;border-radius:7px;font-size:12px;font-weight:500;
+  background:var(--bg2);border:1px solid var(--border);color:var(--muted2);
+  cursor:pointer;transition:all .15s;text-decoration:none;
+}
+.refresh-btn:hover{border-color:var(--border2);color:var(--text);}
+.refresh-btn.spinning i{animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="avatar-block">
+      <div class="avatar">{{ user.username|first|upper }}</div>
+      <div class="uname">{{ user.username }}</div>
+      <div class="uemail">{{ user.email|default:"—" }}</div>
+    </div>
+    <a href="{% url 'dashboard' %}" class="nav-item">
+      <i class="fa fa-user"></i> Hồ sơ
+    </a>
+    <a href="{% url 'dashboard' %}" class="nav-item">
+      <i class="fa fa-shield-halved"></i> Bảo mật 2FA
+    </a>
+
+    <hr class="nav-sep">
+    <div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:0 11px;margin-bottom:6px;">Tài khoản</div>
+
+    <a href="{% url 'active_sessions' %}" class="nav-item">
+      <i class="fa fa-laptop"></i> Phiên đăng nhập
+    </a>
+    <a href="{% url 'login_history' %}" class="nav-item">
+      <i class="fa fa-clock-rotate-left"></i> Lịch sử đăng nhập
+    </a>
+    <a href="{% url 'manage_passkeys' %}" class="nav-item">
+      <i class="fa fa-fingerprint"></i> Quản lý Passkey
+    </a>
+    <a href="{% url 'auth_approval' %}" class="nav-item active">
+      <i class="fa fa-bell"></i> Xác thực thiết bị
+      {% if pending_count %}
+      <span class="nav-badge">{{ pending_count }}</span>
+      {% endif %}
+    </a>
+
+    <hr class="nav-sep">
+    <form method="post" action="{% url 'logout' %}" style="margin:0;">
+      {% csrf_token %}
+      <button type="submit" class="nav-item nav-danger" style="width:100%;text-align:left;">
+        <i class="fa fa-right-from-bracket"></i> Đăng xuất
+      </button>
+    </form>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Messages -->
+    {% if messages %}
+      {% for message in messages %}
+      <div class="alert {% if 'success' in message.tags %}alert-success{% elif 'error' in message.tags %}alert-error{% else %}alert-info{% endif %}">
+        <i class="fa {% if 'success' in message.tags %}fa-circle-check{% elif 'error' in message.tags %}fa-circle-xmark{% else %}fa-circle-info{% endif %}"></i>
+        <span>{{ message }}</span>
+      </div>
+      {% endfor %}
+    {% endif %}
+
+    <!-- ── PENDING REQUEST SECTION ── -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">
+            <i class="fa fa-bell"></i> Yêu cầu xác nhận đang chờ
+          </div>
+          <div class="card-sub">Ai đó đang cố đăng nhập và cần bạn xác nhận · trang tự động làm mới</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="poll-dot"><span class="dot"></span> Đang theo dõi</span>
+          <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()">
+            <i class="fa fa-rotate-right"></i> Làm mới
+          </button>
+        </div>
+      </div>
+
+      <div class="card-body" id="request-area">
+        {% if pending_request %}
+
+        {# ── Có yêu cầu đang chờ ── #}
+        <div class="request-card" id="req-{{ pending_request.id }}">
+          <div class="req-header">
+            <div class="req-icon"><i class="fa fa-circle-question"></i></div>
+            <div>
+              <div class="req-title">Yêu cầu đăng nhập mới</div>
+              <div class="req-sub">Thiết bị lạ đang chờ bạn xác nhận · hết hạn sau <span id="expire-label">...</span></div>
+            </div>
+          </div>
+
+          <div class="req-details">
+            <div class="req-detail-row">
+              <i class="fa fa-desktop"></i>
+              <span class="req-detail-key">THIẾT BỊ</span>
+              <span class="req-detail-val">{{ pending_request.device_info|truncatechars:120 }}</span>
+            </div>
+            <div class="req-detail-row">
+              <i class="fa fa-calendar-clock"></i>
+              <span class="req-detail-key">GỬI LÚC</span>
+              <span class="req-detail-val">{{ pending_request.created_at|date:"d/m/Y H:i:s" }}</span>
+            </div>
+            <div class="req-detail-row">
+              <i class="fa fa-hourglass-half"></i>
+              <span class="req-detail-key">HẾT HẠN</span>
+              <span class="req-detail-val">{{ pending_request.expires_at|date:"d/m/Y H:i:s" }}</span>
+            </div>
+          </div>
+
+          <div class="req-countdown">
+            <div>
+              <div class="countdown-label">Thời gian còn lại để xác nhận:</div>
+              <div class="countdown-bar" style="width:200px;margin-top:6px;">
+                <div class="countdown-bar-fill" id="countdown-bar-fill" style="width:100%"></div>
+              </div>
+            </div>
+            <div class="countdown-timer" id="countdown-timer">--:--</div>
+          </div>
+
+          <div class="req-btns">
+            <form method="POST" action="{% url 'auth_approval_respond' pending_request.id 'approved' %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-success btn-full btn-lg">
+                <i class="fa fa-check-circle"></i> Cho phép đăng nhập
+              </button>
+            </form>
+            <form method="POST" action="{% url 'auth_approval_respond' pending_request.id 'denied' %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-full btn-lg">
+                <i class="fa fa-ban"></i> Từ chối
+              </button>
+            </form>
+          </div>
+
+          <div class="alert alert-info" style="margin-top:14px;margin-bottom:0;">
+            <i class="fa fa-circle-info"></i>
+            <span>Nếu <strong>không phải bạn</strong> đang cố đăng nhập, hãy bấm <strong>Từ chối</strong> và đổi mật khẩu ngay.</span>
+          </div>
+        </div>
+
+        {% else %}
+
+        {# ── Không có yêu cầu ── #}
+        <div class="no-request" id="no-request-state">
+          <div class="no-request-icon"><i class="fa fa-bell-slash"></i></div>
+          <div class="no-request-title">Không có yêu cầu nào đang chờ</div>
+          <div class="no-request-sub">
+            Khi ai đó đăng nhập bằng tài khoản của bạn và chọn phương thức<br>
+            <strong>"Xác nhận từ thiết bị này"</strong>, yêu cầu sẽ xuất hiện ở đây.
+          </div>
+          <div class="alert alert-info" style="text-align:left;max-width:420px;margin:0 auto;">
+            <i class="fa fa-circle-info"></i>
+            <span>Trang sẽ tự động làm mới mỗi <strong>8 giây</strong>. Bạn không cần F5 thủ công.</span>
+          </div>
+        </div>
+
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── HISTORY TABLE ── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fa fa-clock-rotate-left"></i> Lịch sử xác nhận</div>
+        <div class="card-sub">{{ history_logs.count }} bản ghi gần đây</div>
+      </div>
+      <div class="table-wrap">
+        {% if history_logs %}
+        <table>
+          <thead>
+            <tr>
+              <th>Thời gian</th>
+              <th>Thiết bị yêu cầu</th>
+              <th>Kết quả</th>
+              <th>Hết hạn</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in history_logs %}
+            <tr>
+              <td class="time-cell">{{ log.created_at|date:"d/m/Y H:i:s" }}</td>
+              <td>
+                <div class="ua-cell" title="{{ log.device_info }}">{{ log.device_info }}</div>
+              </td>
+              <td>
+                {% if log.status == 'approved' %}
+                <span class="status-badge status-approved"><i class="fa fa-check" style="font-size:9px"></i> Đã duyệt</span>
+                {% elif log.status == 'denied' %}
+                <span class="status-badge status-denied"><i class="fa fa-ban" style="font-size:9px"></i> Từ chối</span>
+                {% elif log.status == 'pending' %}
+                <span class="status-badge status-pending"><i class="fa fa-hourglass" style="font-size:9px"></i> Chờ</span>
+                {% else %}
+                <span class="status-badge status-expired"><i class="fa fa-clock" style="font-size:9px"></i> Hết hạn</span>
+                {% endif %}
+              </td>
+              <td class="time-cell">{{ log.expires_at|date:"H:i:s" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-table">
+          <i class="fa fa-clock-rotate-left"></i>
+          <p>Chưa có lịch sử xác nhận nào</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// Countdown timer cho pending request
+// ════════════════════════════════════════════════════════════════
+(function () {
+  const timerEl    = document.getElementById('countdown-timer');
+  const barFill    = document.getElementById('countdown-bar-fill');
+  const expLabel   = document.getElementById('expire-label');
+  if (!timerEl) return;  // không có request đang chờ
+
+  // expires_at từ Django context, dạng ISO string
+  const expiresAt  = new Date('{{ pending_request.expires_at|date:"c"|default:"" }}');
+  const createdAt  = new Date('{{ pending_request.created_at|date:"c"|default:"" }}');
+  const totalMs    = expiresAt - createdAt;
+
+  function tick() {
+    const now       = new Date();
+    const remaining = Math.max(0, expiresAt - now);
+    const secs      = Math.floor(remaining / 1000);
+    const mins      = Math.floor(secs / 60);
+    const secPart   = secs % 60;
+    const display   = String(mins).padStart(2,'0') + ':' + String(secPart).padStart(2,'0');
+
+    if (timerEl) {
+      timerEl.textContent = display;
+      timerEl.className   = 'countdown-timer' + (secs < 30 ? ' critical' : '');
+    }
+    if (expLabel) expLabel.textContent = display;
+
+    if (barFill && totalMs > 0) {
+      const pct = (remaining / totalMs) * 100;
+      barFill.style.width = pct + '%';
+      barFill.className   = 'countdown-bar-fill' + (secs < 30 ? ' critical' : '');
+    }
+
+    if (remaining <= 0) {
+      // Hết hạn → reload để phản ánh trạng thái mới
+      window.location.reload();
+    }
+  }
+
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// ════════════════════════════════════════════════════════════════
+// Auto-poll: làm mới khu vực request mỗi 8 giây (Ajax-lite)
+// Nếu không có request → reload cả trang khi server phát hiện mới
+// ════════════════════════════════════════════════════════════════
+let pollTimer;
+const HAS_REQUEST = {{ pending_request|yesno:"true,false" }};
+
+function startPolling() {
+  if (HAS_REQUEST) return;  // đã có request, không cần poll
+
+  pollTimer = setInterval(async () => {
+    try {
+      const res  = await fetch('/api/get-auth-request/', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      const data = await res.json();
+      if (data.has_request) {
+        // Có request mới → reload trang để hiển thị đầy đủ
+        window.location.reload();
+      }
+    } catch (e) {
+      // Lỗi mạng — bỏ qua, tick sau thử lại
+    }
+  }, 8000);
+}
+
+startPolling();
+
+// ════════════════════════════════════════════════════════════════
+// Manual refresh button
+// ════════════════════════════════════════════════════════════════
+function manualRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  clearInterval(pollTimer);
+  setTimeout(() => { window.location.reload(); }, 400);
+}
+
+// ════════════════════════════════════════════════════════════════
+// Xác nhận nút Approve / Deny với confirm dialog
+// ════════════════════════════════════════════════════════════════
+document.querySelectorAll('.req-btns form').forEach(form => {
+  form.addEventListener('submit', function (e) {
+    const isApprove = this.action.includes('approved');
+    const msg = isApprove
+      ? 'Xác nhận cho phép thiết bị này đăng nhập?'
+      : 'Xác nhận từ chối yêu cầu đăng nhập?';
+    if (!confirm(msg)) {
+      e.preventDefault();
+    }
+  });
+});
+</script>
+</body>
+</html>

@@ -1542,8 +1542,13 @@ def fido2_auth_complete(request):
 
 @login_required
 def manage_passkeys(request):
-    passkeys = request.user.passkeys.all().order_by('-created_at')
-    return render(request, 'accounts/manage_passkeys.html', {'passkeys': passkeys})
+    """Danh sách passkey đã đăng ký + thống kê sign_count."""
+    passkeys         = request.user.passkeys.all().order_by('-created_at')
+    total_sign_count = sum(pk.sign_count for pk in passkeys)
+    return render(request, 'accounts/manage_passkeys.html', {
+        'passkeys':         passkeys,
+        'total_sign_count': total_sign_count,
+    })
 
 
 @login_required
@@ -1553,6 +1558,79 @@ def delete_passkey(request, pk_id):
     passkey.delete()
     messages.success(request, 'Đã xóa passkey thành công!')
     return redirect('manage_passkeys')
+
+
+# ── Auth Approval (Push Auth) ──────────────────────────────────────────────────
+
+@login_required
+def auth_approval(request):
+    """
+    Trang riêng để thiết bị đang online xem + xác nhận / từ chối yêu cầu push auth.
+    Không popup, không notification — user CHỦ ĐỘNG vào trang này để kiểm tra.
+
+    Context:
+        pending_request  : RemoteAuthRequest đang chờ (chưa hết hạn), hoặc None.
+        pending_count    : số yêu cầu đang chờ (để hiện badge trên nav).
+        history_logs     : 20 bản ghi gần nhất của user này (tất cả status).
+    """
+    # Dọn request hết hạn trước khi truy vấn
+    RemoteAuthRequest.cleanup_expired()
+
+    # Lấy request đang chờ mới nhất của user này
+    pending_request = (
+        RemoteAuthRequest.get_active()
+        .filter(user=request.user, status='pending')
+        .order_by('-created_at')
+        .first()
+    )
+    pending_count = (
+        RemoteAuthRequest.get_active()
+        .filter(user=request.user, status='pending')
+        .count()
+    )
+
+    # Lịch sử 30 bản ghi gần nhất (mọi status)
+    history_logs = (
+        RemoteAuthRequest.objects
+        .filter(user=request.user)
+        .order_by('-created_at')[:30]
+    )
+
+    return render(request, 'accounts/auth_approval.html', {
+        'pending_request': pending_request,
+        'pending_count':   pending_count,
+        'history_logs':    history_logs,
+    })
+
+
+@login_required
+@require_POST
+def auth_approval_respond(request, req_id, action):
+    """
+    Thiết bị đang online phê duyệt (approved) hoặc từ chối (denied) push auth request.
+    Nhận qua form POST — không dùng JSON API để đơn giản + CSRF an toàn.
+
+    Sau khi xử lý → redirect về auth_approval để hiện kết quả + lịch sử cập nhật.
+    """
+    if action not in ('approved', 'denied'):
+        messages.error(request, 'Hành động không hợp lệ.')
+        return redirect('auth_approval')
+
+    updated = (
+        RemoteAuthRequest.get_active()
+        .filter(id=req_id, user=request.user, status='pending')
+        .update(status=action)
+    )
+
+    if updated:
+        if action == 'approved':
+            messages.success(request, '✅ Đã cho phép đăng nhập. Thiết bị kia sẽ vào được trong vài giây.')
+        else:
+            messages.error(request, '🚫 Đã từ chối yêu cầu đăng nhập.')
+    else:
+        messages.warning(request, 'Yêu cầu không còn tồn tại hoặc đã hết hạn.')
+
+    return redirect('auth_approval')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

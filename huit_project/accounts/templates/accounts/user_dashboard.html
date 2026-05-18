@@ -19,6 +19,7 @@
 body{
   font-family:var(--font); background:var(--bg); color:var(--text);
   min-height:100vh; padding:24px; -webkit-font-smoothing:antialiased;
+  /* Cho phép sticky sidebar hoạt động — body cần height > viewport */
 }
 body::before{
   content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
@@ -29,16 +30,20 @@ body::before{
 
 /* ── Layout ── */
 .layout{
-  position:relative; z-index:1; max-width:1000px; margin:0 auto;
+  position:relative; z-index:1; max-width:1060px; margin:0 auto;
   display:grid; grid-template-columns:220px 1fr; gap:16px; align-items:start;
 }
-@media(max-width:700px){.layout{grid-template-columns:1fr;}}
+@media(max-width:700px){
+  .layout{grid-template-columns:1fr;}
+  .sidebar{position:static!important;}
+}
 
-/* ── Sidebar ── */
+/* ── Sidebar — sticky ── */
 .sidebar{
   background:var(--bg1); border:1px solid var(--border);
   border-radius:16px; padding:24px 16px;
   box-shadow:0 1px 0 rgba(37,99,235,.1) inset, 0 20px 40px rgba(2,6,14,.5);
+  position:sticky; top:24px; max-height:calc(100vh - 48px); overflow-y:auto;
 }
 .avatar-block{text-align:center; margin-bottom:20px; padding-bottom:18px; border-bottom:1px solid var(--border);}
 .avatar{
@@ -265,9 +270,23 @@ input::placeholder{color:var(--muted);}
     <button onclick="switchTab('security')" id="btn-security" class="nav-item">
       <i class="fa fa-shield-halved"></i> Bảo mật 2FA
     </button>
+
+    <hr class="nav-sep">
+    <div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:0 11px;margin-bottom:6px;">Tài khoản</div>
+
     <a href="{% url 'active_sessions' %}" class="nav-item">
       <i class="fa fa-laptop"></i> Phiên đăng nhập
     </a>
+    <a href="{% url 'login_history' %}" class="nav-item">
+      <i class="fa fa-clock-rotate-left"></i> Lịch sử đăng nhập
+    </a>
+    <a href="{% url 'manage_passkeys' %}" class="nav-item">
+      <i class="fa fa-fingerprint"></i> Quản lý Passkey
+    </a>
+    <a href="{% url 'auth_approval' %}" class="nav-item">
+      <i class="fa fa-bell"></i> Xác thực thiết bị
+    </a>
+
     <hr class="nav-sep">
     <form method="post" action="{% url 'logout' %}" style="margin:0;">
       {% csrf_token %}
@@ -590,6 +609,16 @@ function switchTab(name) {
   document.getElementById('tab-' + name).classList.add('active');
   document.getElementById('btn-' + name).classList.add('active');
 }
+
+// ── Highlight sidebar link theo URL hiện tại ────────
+(function() {
+  const path = window.location.pathname;
+  document.querySelectorAll('.sidebar a.nav-item').forEach(a => {
+    if (a.getAttribute('href') && path.startsWith(a.getAttribute('href').split('?')[0])) {
+      a.classList.add('active');
+    }
+  });
+})();
 
 // ── Profile edit ────────────────────────────────────
 function toggleEdit() {
