@@ -1,12 +1,3 @@
-"""
-utils.py — Tiện ích hệ thống HUIT 2FA  [PATCHED]
-==================================================
-THAY ĐỔI SO VỚI BẢN GỐC:
-
-  [WARN-1] generate_and_send_email_otp: Tự động vô hiệu OTP cũ cùng user+action
-           trước khi tạo OTP mới → tránh nhiều OTP active song song.
-           User dùng mã cũ từ email cũ sẽ bị từ chối đúng chuẩn.
-"""
 
 import io
 import base64
