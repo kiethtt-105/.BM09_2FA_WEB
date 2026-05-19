@@ -45,7 +45,7 @@ from .models import (
     RemoteAuthRequest, TrustedDevice,
     EmailOTP, UserProfile, PendingRegistration,
     ActivityLog, UserPasskey,
-    OTPAttempt,   
+    OTPAttempt, HOTPAttempt,
     BackupCode,
 )
 from .utils import (
@@ -1576,7 +1576,12 @@ def verify_2fa(request):
             return redirect('admin_dashboard' if user.is_superuser else 'dashboard')
 
         # Thất bại OTP
-        OTPAttempt.record_fail(user=user, ip=ip, action='login_2fa')  # [FIX-RATELIMIT]
+        OTPAttempt.record_fail(user=user, ip=ip, action='login_2fa')  # rate-limit chung
+
+        # ── [HOTP-RATELIMIT] Ghi thêm vào bảng HOTP riêng ──────────────────────
+        if method == 'hotp':
+            HOTPAttempt.record_fail(user=user, ip=ip, action='login_2fa_hotp')
+
         ActivityLog.objects.create(
             user=user, action='otp_fail', username_attempt=user.username,
             ip_address=ip, user_agent=user_agent,

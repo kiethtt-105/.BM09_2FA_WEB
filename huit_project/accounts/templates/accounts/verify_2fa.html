@@ -342,12 +342,21 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
         <span id="totp-sec">30</span>s &nbsp;·&nbsp; Nhập mã từ ứng dụng Authenticator
       </div>
     {% elif method == 'hotp' %}
+      {% if hotp_locked %}
+      <div class="msg msg-error" style="text-align:center; padding: 20px;">
+        <i class="fas fa-lock" style="font-size:2rem; display:block; margin-bottom:10px;"></i>
+        <strong>Nhập sai quá 5 lần</strong><br>
+        Bạn phải đợi <strong>30 phút</strong> kể từ lần thử cuối cùng mới có thể nhập mã HOTP trở lại.
+      </div>
+      {% else %}
       <div class="hint-box">
         <i class="fa fa-hashtag" style="margin-right:6px"></i>Nhập mã HOTP từ token của bạn
       </div>
+      {% endif %}
     {% endif %}
 
     {# BUG-FIX: action phải truyền method qua query string vì view đọc request.GET.get('method') #}
+    {% if not hotp_locked %}
     <form method="POST" action="?method={{ method }}" id="otp-form">
       {% csrf_token %}
       <input type="hidden" name="method" value="{{ method }}">
@@ -364,6 +373,7 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
         <i class="fa fa-arrow-right"></i> Xác minh
       </button>
     </form>
+    {% endif %}
 
     {# Resend — chỉ với email #}
     {% if method == 'email' %}

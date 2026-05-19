@@ -1,5 +1,3 @@
-
-
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
@@ -459,6 +457,18 @@ class OTPAttempt(models.Model):
     def __str__(self):
         return f'OTPAttempt({self.ip_address} | {self.action} | {self.created_at})'
 
+class HOTPAttempt(OTPAttempt):
+    """
+    Rate-limit riêng cho HOTP: 5 lần sai → khóa 30 phút.
+    Dùng proxy model để tránh tạo bảng mới.
+    """
+    MAX_FAILS      = 5
+    WINDOW_MINUTES = 30   # ← 30 phút thay vì 10
+
+    class Meta:
+        proxy = True
+        verbose_name        = 'HOTP Attempt (Rate Limit)'
+        verbose_name_plural = 'HOTP Attempts (Rate Limit)'
 
 # ════════════════════════════════════════════════════════════════════════════
 # 5. TrustedDevice
