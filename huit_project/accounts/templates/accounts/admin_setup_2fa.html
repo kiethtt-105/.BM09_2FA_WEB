@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thiết lập 2FA Admin · HUIT</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg:#04080f; --bg1:#080f1c; --bg2:#0d1626; --bg3:#111e33;
+  --border:rgba(37,99,235,.14); --border2:rgba(37,99,235,.30);
+  --blue:#2563eb; --blue2:#3b82f6; --blue3:#60a5fa;
+  --text:#e2e8f0; --muted:#475569; --muted2:#64748b;
+  --success:#10b981; --danger:#ef4444; --warn:#f59e0b;
+  --font:'DM Sans',sans-serif; --mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+  -webkit-font-smoothing:antialiased;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 700px 400px at 20% -10%,rgba(37,99,235,.09) 0%,transparent 65%),
+             radial-gradient(ellipse 400px 300px at 80% 100%,rgba(59,130,246,.05) 0%,transparent 65%);}
+
+.wrap{position:relative;z-index:1;width:100%;max-width:560px;animation:up .35s cubic-bezier(.16,1,.3,1) both;}
+@keyframes up{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+
+/* Top bar */
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+.logo{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);}
+.logo span{color:var(--blue2);}
+.badge-admin{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;
+  font-size:11px;font-family:var(--mono);font-weight:700;letter-spacing:.5px;
+  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;}
+
+/* Card */
+.card{background:var(--bg1);border:1px solid rgba(37,99,235,.16);border-radius:16px;overflow:hidden;
+  box-shadow:0 1px 0 rgba(37,99,235,.1) inset,0 24px 48px rgba(2,6,14,.5);}
+
+/* Warning banner */
+.warning-banner{display:flex;align-items:flex-start;gap:12px;padding:16px 24px;
+  background:rgba(245,158,11,.07);border-bottom:1px solid rgba(245,158,11,.15);}
+.warning-banner i{color:var(--warn);margin-top:2px;flex-shrink:0;font-size:16px;}
+.warning-banner strong{color:#fcd34d;font-size:13px;display:block;margin-bottom:3px;}
+.warning-banner p{font-size:12px;color:var(--muted2);line-height:1.6;}
+
+/* Header */
+.card-header{padding:24px 28px 20px;border-bottom:1px solid var(--border);}
+.card-title{font-size:17px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.card-title i{color:var(--blue2);}
+.card-sub{font-size:12px;color:var(--muted2);margin-top:5px;}
+
+/* Progress */
+.progress-bar{height:3px;background:var(--border);margin:0 28px;border-radius:2px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--blue3));border-radius:2px;transition:width .4s ease;}
+
+/* Steps */
+.step-tracker{display:flex;gap:0;padding:20px 28px;border-bottom:1px solid var(--border);}
+.step-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;position:relative;}
+.step-item:not(:last-child)::after{content:'';position:absolute;top:14px;left:calc(50% + 14px);right:calc(-50% + 14px);height:1px;background:var(--border);}
+.step-item.done:not(:last-child)::after{background:rgba(16,185,129,.4);}
+.step-circle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;font-family:var(--mono);border:1px solid var(--border);
+  background:var(--bg2);color:var(--muted);z-index:1;}
+.step-item.done .step-circle{border-color:var(--success);background:rgba(16,185,129,.15);color:#6ee7b7;}
+.step-item.active .step-circle{border-color:var(--blue);background:rgba(37,99,235,.15);color:var(--blue3);}
+.step-label{font-size:10px;font-family:var(--mono);color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.5px;}
+.step-item.done .step-label{color:#6ee7b7;}
+.step-item.active .step-label{color:var(--blue3);}
+
+/* Body */
+.card-body{padding:24px 28px;}
+
+/* Method selection */
+.method-grid{display:flex;flex-direction:column;gap:10px;margin-bottom:20px;}
+.method-check{position:relative;}
+.method-check input[type=checkbox]{position:absolute;opacity:0;width:0;height:0;}
+.method-check label{
+  display:flex;align-items:center;gap:14px;padding:14px 16px;
+  border:1px solid var(--border);border-radius:12px;cursor:pointer;
+  background:var(--bg2);transition:all .15s;
+}
+.method-check input:checked + label{border-color:rgba(37,99,235,.4);background:rgba(37,99,235,.07);}
+.method-check input:disabled + label{opacity:.5;cursor:not-allowed;}
+.method-check label:hover:not([style*="not-allowed"]){border-color:var(--border2);}
+.m-icon{width:38px;height:38px;border-radius:9px;background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.2);
+  display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--blue3);flex-shrink:0;}
+.m-label{font-size:14px;font-weight:600;}
+.m-desc{font-size:11px;color:var(--muted2);margin-top:2px;}
+.m-check{margin-left:auto;width:20px;height:20px;border-radius:5px;
+  background:var(--bg3);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;}
+.method-check input:checked + label .m-check{background:var(--blue);border-color:var(--blue);}
+.m-enabled-badge{margin-left:auto;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;
+  font-size:11px;font-weight:700;font-family:var(--mono);
+  background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);color:#6ee7b7;}
+
+/* QR block */
+.qr-block{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;margin-bottom:20px;}
+.qr-block img{width:160px;height:160px;border-radius:8px;}
+.qr-label{font-size:11px;color:var(--muted);margin:10px 0 6px;font-family:var(--mono);}
+.secret-chip{display:inline-flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:7px;padding:7px 14px;font-family:var(--mono);font-size:13px;color:var(--blue3);cursor:pointer;transition:border-color .15s;}
+.secret-chip:hover{border-color:var(--border2);}
+
+/* OTP boxes */
+.otp-row{display:flex;justify-content:center;gap:8px;margin-bottom:18px;}
+.otp-box{width:48px;height:56px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;
+  font-size:22px;font-weight:700;font-family:var(--mono);text-align:center;color:var(--text);outline:none;
+  transition:border-color .15s,box-shadow .15s;}
+.otp-box:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15);}
+.otp-box.filled{border-color:rgba(37,99,235,.4);}
+
+/* Info rows */
+.info-row{display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:9px;font-size:13px;margin-bottom:14px;
+  background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.14);color:var(--blue3);}
+.info-row i{flex-shrink:0;font-size:14px;}
+
+.tip-box{display:flex;align-items:flex-start;gap:9px;padding:11px 14px;border-radius:9px;font-size:12px;
+  background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.14);color:#fcd34d;margin-bottom:16px;}
+.tip-box i{flex-shrink:0;margin-top:1px;}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:11px 20px;
+  border:none;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;
+  text-decoration:none;transition:opacity .15s,transform .1s,box-shadow .15s;}
+.btn:hover:not(:disabled){opacity:.88;transform:translateY(-1px);}
+.btn:active:not(:disabled){transform:scale(.99);}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.3);}
+.btn-primary:hover:not(:disabled){box-shadow:0 4px 20px rgba(37,99,235,.45);}
+.btn-ghost{background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,.16);color:var(--muted2);backdrop-filter:blur(4px);}
+.btn-ghost:hover:not(:disabled){border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.08);color:var(--blue3);}
+.btn-full{width:100%;}
+.btn-row{display:flex;gap:10px;margin-top:4px;}
+
+/* Alerts */
+.alert{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:9px;font-size:13px;margin-bottom:14px;}
+.alert-success{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);color:#6ee7b7;}
+.alert-error{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.15);color:#fca5a5;}
+.alert-info{background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.18);color:var(--blue3);}
+.alert i{margin-top:1px;flex-shrink:0;}
+
+/* Done screen */
+.done-icon{width:72px;height:72px;border-radius:18px;background:rgba(16,185,129,.1);border:2px solid rgba(16,185,129,.3);
+  display:flex;align-items:center;justify-content:center;font-size:30px;color:#6ee7b7;margin:0 auto 20px;}
+.method-list{display:flex;flex-direction:column;gap:8px;margin:16px 0;}
+.method-done-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:9px;
+  background:var(--bg2);border:1px solid rgba(16,185,129,.15);font-size:13px;}
+.method-done-item i.check{color:#6ee7b7;font-size:13px;flex-shrink:0;}
+
+/* Countdown */
+.countdown-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted2);margin-bottom:14px;}
+.countdown-timer{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--blue3);}
+.countdown-timer.warn{color:var(--warn);}
+.countdown-timer.expired{color:var(--danger);}
+
+/* TOTP progress bar */
+.totp-bar{height:3px;background:var(--border);border-radius:2px;margin-bottom:16px;overflow:hidden;}
+.totp-fill{height:100%;border-radius:2px;background:var(--blue2);transition:width 1s linear;}
+
+/* Method order indicator */
+.method-order{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;}
+.order-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;
+  font-size:11px;font-family:var(--mono);font-weight:600;letter-spacing:.3px;
+  background:var(--bg2);border:1px solid var(--border);color:var(--muted2);}
+.order-chip.done{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.2);color:#6ee7b7;}
+.order-chip.active{background:rgba(37,99,235,.12);border-color:rgba(37,99,235,.3);color:var(--blue3);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      HUIT<span>.auth</span>
+    </div>
+    <span class="badge-admin"><i class="fa fa-shield-halved"></i> Admin Setup</span>
+  </div>
+
+  <!-- Messages -->
+  {% if messages %}
+    {% for message in messages %}
+    <div class="alert {% if 'success' in message.tags %}alert-success{% elif 'info' in message.tags %}alert-info{% else %}alert-error{% endif %}" style="margin-bottom:12px;">
+      <i class="fa {% if 'success' in message.tags %}fa-circle-check{% elif 'info' in message.tags %}fa-circle-info{% else %}fa-circle-xmark{% endif %}"></i>
+      <span>{{ message }}</span>
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card">
+
+    {% if force_setup %}
+    <div class="warning-banner">
+      <i class="fa fa-triangle-exclamation"></i>
+      <div>
+        <strong>Bắt buộc thiết lập 2FA</strong>
+        <p>Tài khoản admin phải bật ít nhất 2 phương thức xác thực 2FA trước khi truy cập Dashboard. Không thể bỏ qua bước này.</p>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ═══════════════════ STEP: SELECT ═══════════════════ #}
+    {% if step == 'select' %}
+
+    <div class="card-header">
+      <div class="card-title"><i class="fa fa-list-check"></i> Chọn phương thức 2FA cho Admin</div>
+      <div class="card-sub">Phải chọn ≥ 2 phương thức · Push Auth không được phép cho tài khoản admin</div>
+    </div>
+
+    <div class="card-body">
+      <div class="tip-box">
+        <i class="fa fa-lightbulb"></i>
+        <span>Khuyến nghị: <strong>FIDO2 + TOTP</strong> hoặc <strong>FIDO2 + HOTP</strong> để bảo mật tối đa. Phương thức đã bật sẽ được tự động giữ lại.</span>
+      </div>
+
+      <form method="POST" action="?step=select">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_selection">
+        <div class="method-grid">
+
+          {# FIDO2 #}
+          <div class="method-check">
+            <input type="checkbox" id="m-fido2" name="methods" value="fido2"
+              {% if 'fido2' in preselected %}checked{% endif %}
+              {% if already_enabled.fido2 %}disabled{% endif %}>
+            <label for="m-fido2">
+              <div class="m-icon"><i class="fa fa-fingerprint"></i></div>
+              <div>
+                <div class="m-label">Passkey · FIDO2</div>
+                <div class="m-desc">Vân tay, Face ID, security key · Bảo mật cao nhất</div>
+              </div>
+              {% if already_enabled.fido2 %}
+              <span class="m-enabled-badge"><i class="fa fa-check" style="font-size:9px"></i> Đang bật</span>
+              {% else %}
+              <div class="m-check">{% if 'fido2' in preselected %}<i class="fa fa-check" style="font-size:11px;color:#fff"></i>{% endif %}</div>
+              {% endif %}
+            </label>
+          </div>
+
+          {# TOTP #}
+          <div class="method-check">
+            <input type="checkbox" id="m-totp" name="methods" value="totp"
+              {% if 'totp' in preselected %}checked{% endif %}
+              {% if already_enabled.totp %}disabled{% endif %}>
+            <label for="m-totp">
+              <div class="m-icon"><i class="fa fa-mobile-screen"></i></div>
+              <div>
+                <div class="m-label">TOTP · Google Authenticator</div>
+                <div class="m-desc">Mã xoay 30 giây · RFC 6238 · có window ±1</div>
+              </div>
+              {% if already_enabled.totp %}
+              <span class="m-enabled-badge"><i class="fa fa-check" style="font-size:9px"></i> Đang bật</span>
+              {% else %}
+              <div class="m-check">{% if 'totp' in preselected %}<i class="fa fa-check" style="font-size:11px;color:#fff"></i>{% endif %}</div>
+              {% endif %}
+            </label>
+          </div>
+
+          {# HOTP #}
+          <div class="method-check">
+            <input type="checkbox" id="m-hotp" name="methods" value="hotp"
+              {% if 'hotp' in preselected %}checked{% endif %}
+              {% if already_enabled.hotp %}disabled{% endif %}>
+            <label for="m-hotp">
+              <div class="m-icon"><i class="fa fa-key"></i></div>
+              <div>
+                <div class="m-label">HOTP · Counter-based</div>
+                <div class="m-desc">Mã đổi theo số lần dùng · RFC 4226 · look-ahead 5</div>
+              </div>
+              {% if already_enabled.hotp %}
+              <span class="m-enabled-badge"><i class="fa fa-check" style="font-size:9px"></i> Đang bật</span>
+              {% else %}
+              <div class="m-check">{% if 'hotp' in preselected %}<i class="fa fa-check" style="font-size:11px;color:#fff"></i>{% endif %}</div>
+              {% endif %}
+            </label>
+          </div>
+
+          {# Email OTP #}
+          <div class="method-check">
+            <input type="checkbox" id="m-email" name="methods" value="email"
+              {% if 'email' in preselected %}checked{% endif %}
+              {% if already_enabled.email %}disabled{% endif %}>
+            <label for="m-email">
+              <div class="m-icon"><i class="fa fa-envelope"></i></div>
+              <div>
+                <div class="m-label">Email OTP</div>
+                <div class="m-desc">Mã 6 số gửi qua email · dự phòng</div>
+              </div>
+              {% if already_enabled.email %}
+              <span class="m-enabled-badge"><i class="fa fa-check" style="font-size:9px"></i> Đang bật</span>
+              {% else %}
+              <div class="m-check">{% if 'email' in preselected %}<i class="fa fa-check" style="font-size:11px;color:#fff"></i>{% endif %}</div>
+              {% endif %}
+            </label>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="select-btn">
+          <i class="fa fa-arrow-right"></i> Tiếp tục thiết lập
+        </button>
+      </form>
+    </div>
+
+    {# ═══════════════════ STEP: SETUP METHOD ═══════════════════ #}
+    {% elif step == 'setup_method' %}
+
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fa fa-{% if current_method == 'fido2' %}fingerprint{% elif current_method == 'totp' %}mobile-screen{% elif current_method == 'hotp' %}key{% else %}envelope{% endif %}"></i>
+        Thiết lập
+        {% if current_method == 'fido2' %}Passkey FIDO2
+        {% elif current_method == 'totp' %}TOTP (Authenticator)
+        {% elif current_method == 'hotp' %}HOTP (Counter-based)
+        {% else %}Email OTP{% endif %}
+      </div>
+      <div class="card-sub">Bước {{ setup_done_count|add:1 }} / {{ setup_total_count }}</div>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" style="width:{% if setup_total_count > 0 %}{% widthratio setup_done_count setup_total_count 100 %}{% else %}0{% endif %}%"></div>
+    </div>
+
+    <div class="card-body">
+
+      <!-- Method order tracker -->
+      <div class="method-order">
+        {% for m in setup_methods %}
+        <div class="order-chip {% if m in setup_done %}done{% elif m == current_method %}active{% endif %}">
+          {% if m in setup_done %}<i class="fa fa-check"></i>{% elif m == current_method %}<i class="fa fa-circle-dot"></i>{% else %}<i class="fa fa-circle" style="font-size:7px;opacity:.4"></i>{% endif %}
+          {{ m|upper }}
+        </div>
+        {% endfor %}
+      </div>
+
+      {# ── FIDO2 ── #}
+      {% if current_method == 'fido2' %}
+        {% if already_enabled.fido2 %}
+        <div class="alert alert-success"><i class="fa fa-circle-check"></i><span>Passkey FIDO2 đã được đăng ký. Không cần setup lại.</span></div>
+        <form method="POST" action="?step=setup_method">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="skip_method">
+          <input type="hidden" name="method" value="fido2">
+          <button type="submit" class="btn btn-primary btn-full"><i class="fa fa-arrow-right"></i> Tiếp tục</button>
+        </form>
+        {% else %}
+        <div class="info-row"><i class="fa fa-circle-info"></i> Sử dụng vân tay, Face ID hoặc security key để đăng ký passkey mới.</div>
+        <button onclick="registerPasskeyAdmin()" class="btn btn-primary btn-full" style="margin-bottom:10px;">
+          <i class="fa fa-fingerprint"></i> Đăng ký Passkey ngay
+        </button>
+        <form method="POST" action="?step=setup_method" id="fido2-done-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="fido2_registered">
+        </form>
+        {% endif %}
+
+      {# ── TOTP ── #}
+      {% elif current_method == 'totp' %}
+        {% if already_enabled.totp %}
+        <div class="alert alert-success"><i class="fa fa-circle-check"></i><span>TOTP đã được kích hoạt trước đó.</span></div>
+        <form method="POST" action="?step=setup_method">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="skip_method">
+          <input type="hidden" name="method" value="totp">
+          <button type="submit" class="btn btn-primary btn-full"><i class="fa fa-arrow-right"></i> Tiếp tục</button>
+        </form>
+        {% else %}
+        <div class="totp-bar"><div class="totp-fill" id="totp-fill"></div></div>
+        {% if qr_code_base64 %}
+        <div class="qr-block">
+          <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR TOTP">
+          <div class="qr-label">Hoặc nhập thủ công secret key</div>
+          <div class="secret-chip" onclick="copySecret('{{ otp_secret }}')">
+            <i class="fa fa-key"></i><span>{{ otp_secret }}</span><i class="fa fa-copy"></i>
+          </div>
+        </div>
+        {% endif %}
+        <div class="info-row"><i class="fa fa-circle-info"></i> Quét QR → mở Google Authenticator → nhập mã 6 số hiển thị.</div>
+        <form method="POST" action="?step=setup_method" id="totp-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="verify_totp">
+          <div class="otp-row" id="totp-boxes">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          </div>
+          <input type="hidden" name="otp_code" id="totp-hidden">
+          <button type="submit" class="btn btn-primary btn-full" id="totp-btn" disabled>
+            <i class="fa fa-check"></i> Xác nhận kích hoạt TOTP
+          </button>
+        </form>
+        {% endif %}
+
+      {# ── HOTP ── #}
+      {% elif current_method == 'hotp' %}
+        {% if already_enabled.hotp %}
+        <div class="alert alert-success"><i class="fa fa-circle-check"></i><span>HOTP đã được kích hoạt trước đó. Counter: {{ profile.hotp_counter }}</span></div>
+        <form method="POST" action="?step=setup_method">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="skip_method">
+          <input type="hidden" name="method" value="hotp">
+          <button type="submit" class="btn btn-primary btn-full"><i class="fa fa-arrow-right"></i> Tiếp tục</button>
+        </form>
+        {% else %}
+        {% if qr_code_base64 %}
+        <div class="qr-block">
+          <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="QR HOTP">
+          <div class="qr-label">Hoặc nhập thủ công secret key</div>
+          <div class="secret-chip" onclick="copySecret('{{ otp_secret }}')">
+            <i class="fa fa-key"></i><span>{{ otp_secret }}</span><i class="fa fa-copy"></i>
+          </div>
+        </div>
+        {% endif %}
+        <div class="info-row"><i class="fa fa-circle-info"></i> Quét QR → nhấn Generate trong app → nhập mã HOTP đầu tiên (counter = 0).</div>
+        <form method="POST" action="?step=setup_method" id="hotp-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="verify_hotp">
+          <input type="hidden" name="setup_token" value="{{ setup_token }}">
+          <div class="otp-row" id="hotp-boxes">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          </div>
+          <input type="hidden" name="otp_code" id="hotp-hidden">
+          <button type="submit" class="btn btn-primary btn-full" id="hotp-btn" disabled>
+            <i class="fa fa-check"></i> Xác nhận kích hoạt HOTP
+          </button>
+        </form>
+        {% endif %}
+
+      {# ── Email OTP ── #}
+      {% elif current_method == 'email' %}
+        {% if already_enabled.email %}
+        <div class="alert alert-success"><i class="fa fa-circle-check"></i><span>Email OTP đã được kích hoạt trước đó.</span></div>
+        <form method="POST" action="?step=setup_method">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="skip_method">
+          <input type="hidden" name="method" value="email">
+          <button type="submit" class="btn btn-primary btn-full"><i class="fa fa-arrow-right"></i> Tiếp tục</button>
+        </form>
+        {% else %}
+
+        {% if otp_sent %}
+        <div class="info-row"><i class="fa fa-paper-plane"></i> Đã gửi mã OTP tới <strong>{{ request.user.email }}</strong></div>
+        <div class="countdown-row">
+          <span>Mã còn hiệu lực:</span>
+          <span class="countdown-timer" id="email-countdown">--:--</span>
+        </div>
+        <form method="POST" action="?step=setup_method" id="email-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="verify_email">
+          <div class="otp-row" id="email-boxes">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+            <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          </div>
+          <input type="hidden" name="otp_code" id="email-hidden">
+          <button type="submit" class="btn btn-primary btn-full" id="email-btn" disabled>
+            <i class="fa fa-check"></i> Xác nhận kích hoạt Email OTP
+          </button>
+        </form>
+        <form method="POST" action="?step=setup_method" id="email-resend" style="margin-top:8px;display:none;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="resend_email_otp">
+          <button type="submit" class="btn btn-ghost btn-full"><i class="fa fa-rotate-right"></i> Gửi lại mã</button>
+        </form>
+        {% else %}
+        <div class="info-row"><i class="fa fa-circle-notch fa-spin"></i> Đang gửi mã OTP tới {{ request.user.email }}...</div>
+        {% endif %}
+
+        {% endif %}
+      {% endif %}
+
+    </div>
+
+    {# ═══════════════════ STEP: DONE ═══════════════════ #}
+    {% elif step == 'done' %}
+
+    <div class="card-body" style="text-align:center;padding:40px 28px;">
+      <div class="done-icon"><i class="fa fa-shield-halved"></i></div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:8px;">Thiết lập 2FA hoàn tất!</div>
+      <div style="font-size:13px;color:var(--muted2);margin-bottom:24px;line-height:1.6;">
+        Tài khoản admin đã được bảo vệ bởi {{ setup_done_count }} phương thức xác thực.
+        Mỗi lần đăng nhập bạn sẽ phải xác thực tất cả các phương thức này.
+      </div>
+      <div class="method-list" style="text-align:left;">
+        {% for m in setup_methods %}
+        <div class="method-done-item">
+          <i class="fa fa-check check"></i>
+          {% if m == 'fido2' %}<i class="fa fa-fingerprint" style="color:var(--blue3)"></i> Passkey FIDO2
+          {% elif m == 'totp' %}<i class="fa fa-mobile-screen" style="color:var(--blue3)"></i> TOTP (Authenticator)
+          {% elif m == 'hotp' %}<i class="fa fa-key" style="color:var(--blue3)"></i> HOTP (Counter-based)
+          {% else %}<i class="fa fa-envelope" style="color:var(--blue3)"></i> Email OTP
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <a href="{% url 'admin_dashboard' %}" class="btn btn-primary" style="margin-top:8px;display:inline-flex;">
+        <i class="fa fa-gauge-high"></i> Vào Admin Dashboard
+      </a>
+    </div>
+
+    {% endif %}
+
+  </div><!-- /card -->
+</div><!-- /wrap -->
+
+<script>
+// ── OTP box handler ───────────────────────────────────────────
+function initOtpBoxes(containerSel, hiddenId, btnId) {
+  const container = document.querySelector(containerSel);
+  if (!container) return;
+  const boxes  = [...container.querySelectorAll('.otp-box')];
+  const hidden = document.getElementById(hiddenId);
+  const btn    = document.getElementById(btnId);
+  if (!boxes.length || !hidden || !btn) return;
+  function sync() {
+    let v = ''; boxes.forEach(b => v += b.value);
+    hidden.value = v; btn.disabled = v.length < 6;
+  }
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', () => {
+      box.value = box.value.replace(/\D/g,'').slice(-1);
+      box.classList.toggle('filled', !!box.value);
+      sync(); if (box.value && i < 5) boxes[i+1].focus();
+    });
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !box.value && i > 0) {
+        boxes[i-1].value = ''; boxes[i-1].classList.remove('filled');
+        boxes[i-1].focus(); sync();
+      }
+    });
+    box.addEventListener('paste', e => {
+      e.preventDefault();
+      const p = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'');
+      [...p.slice(0,6)].forEach((c,j) => { if(boxes[j]){boxes[j].value=c;boxes[j].classList.add('filled');}});
+      sync(); boxes[Math.min(p.length,5)].focus();
+    });
+  });
+  if (boxes[0]) boxes[0].focus();
+}
+initOtpBoxes('#totp-boxes', 'totp-hidden', 'totp-btn');
+initOtpBoxes('#hotp-boxes', 'hotp-hidden', 'hotp-btn');
+initOtpBoxes('#email-boxes','email-hidden','email-btn');
+
+// ── TOTP progress bar ──────────────────────────────────────────
+(function(){
+  const fill = document.getElementById('totp-fill');
+  if (!fill) return;
+  function update() {
+    const step = Math.floor(Date.now()/1000) % 30;
+    const pct  = ((30 - step) / 30) * 100;
+    fill.style.width = pct + '%';
+    fill.style.background = pct < 20 ? '#f59e0b' : 'var(--blue2)';
+  }
+  update(); setInterval(update, 1000);
+})();
+
+// ── Email countdown ────────────────────────────────────────────
+(function(){
+  const timerEl = document.getElementById('email-countdown');
+  const resendEl = document.getElementById('email-resend');
+  const emailBtn = document.getElementById('email-btn');
+  const emailBoxes = document.querySelector('#email-boxes');
+  if (!timerEl) return;
+  let remaining = parseInt('{{ otp_expires_in|default:180 }}', 10);
+  if (remaining <= 0) remaining = 180;
+  function fmt(s){const m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+  function tick(){
+    if (remaining > 0){
+      timerEl.textContent = fmt(remaining);
+      timerEl.className   = 'countdown-timer' + (remaining <= 30 ? ' warn' : '');
+      remaining--; setTimeout(tick, 1000);
+    } else {
+      timerEl.textContent = 'Hết hạn'; timerEl.className = 'countdown-timer expired';
+      if (emailBoxes) emailBoxes.style.opacity = '0.3';
+      if (emailBtn)   emailBtn.disabled = true;
+      if (resendEl)   resendEl.style.display = 'block';
+    }
+  }
+  tick();
+})();
+
+// ── Method checkbox UX (chỉ chọn được ≥2) ─────────────────────
+(function(){
+  const checkboxes = [...document.querySelectorAll('input[name=methods]:not(:disabled)')];
+  const btn = document.getElementById('select-btn');
+  if (!checkboxes.length || !btn) return;
+  function update(){
+    const checked = document.querySelectorAll('input[name=methods]:checked').length;
+    // Count also disabled+checked (already enabled)
+    const alreadyOn = document.querySelectorAll('input[name=methods]:disabled').length;
+    btn.disabled = (checked + alreadyOn) < 2;
+    btn.textContent = (checked + alreadyOn) >= 2
+      ? ` Tiếp tục (${checked + alreadyOn} phương thức)`
+      : ' Phải chọn ít nhất 2 phương thức';
+  }
+  checkboxes.forEach(cb => cb.addEventListener('change', update));
+  update();
+})();
+
+// ── Copy secret ────────────────────────────────────────────────
+function copySecret(secret){
+  navigator.clipboard.writeText(secret).then(() => {
+    const chips = document.querySelectorAll('.secret-chip i.fa-copy');
+    chips.forEach(i => {i.className='fa fa-check';i.style.color='#22c55e';
+      setTimeout(() => {i.className='fa fa-copy';i.style.color='';}, 1500);});
+  });
+}
+
+// ── FIDO2 registration for admin ──────────────────────────────
+async function registerPasskeyAdmin(){
+  try{
+    const opts = await (await fetch('/fido2/begin/',{
+      method:'POST', headers:{'X-CSRFToken':getCsrf()}
+    })).json();
+    if(opts.status==='error'){alert('Lỗi: '+opts.message);return;}
+    opts.challenge = b64d(opts.challenge);
+    opts.user.id   = b64d(opts.user.id);
+    if(opts.excludeCredentials)
+      opts.excludeCredentials = opts.excludeCredentials.map(c=>({...c,id:b64d(c.id)}));
+    const cred = await navigator.credentials.create({publicKey:opts});
+    const res  = await fetch('/fido2/complete/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCsrf()},
+      body: JSON.stringify({
+        id: cred.id, rawId: b64e(cred.rawId), type: cred.type,
+        response:{
+          clientDataJSON:    b64e(cred.response.clientDataJSON),
+          attestationObject: b64e(cred.response.attestationObject),
+        }
+      })
+    });
+    const r = await res.json();
+    if(r.status==='success'){
+      document.getElementById('fido2-done-form').submit();
+    } else {
+      alert('Đăng ký thất bại: '+(r.message||'Lỗi không xác định'));
+    }
+  }catch(e){alert('Lỗi: '+e.message);}
+}
+function getCsrf(){return document.cookie.split(';').find(c=>c.trim().startsWith('csrftoken='))?.split('=')[1]||'';}
+const b64e=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+const b64d=s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;};
+</script>
+</body>
+</html>

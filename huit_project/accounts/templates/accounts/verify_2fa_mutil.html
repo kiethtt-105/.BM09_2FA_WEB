@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xác thực Admin · HUIT</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg:#04080f; --bg1:#080f1c; --bg2:#0d1626; --bg3:#111e33;
+  --border:rgba(37,99,235,.14); --border2:rgba(37,99,235,.30);
+  --blue:#2563eb; --blue2:#3b82f6; --blue3:#60a5fa;
+  --text:#e2e8f0; --muted:#475569; --muted2:#64748b;
+  --success:#10b981; --danger:#ef4444; --warn:#f59e0b;
+  --font:'DM Sans',sans-serif; --mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+  -webkit-font-smoothing:antialiased;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 700px 400px at 20% -10%,rgba(37,99,235,.09) 0%,transparent 65%),
+             radial-gradient(ellipse 400px 300px at 80% 100%,rgba(59,130,246,.05) 0%,transparent 65%);}
+
+.wrap{position:relative;z-index:1;width:100%;max-width:500px;animation:up .35s cubic-bezier(.16,1,.3,1) both;}
+@keyframes up{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+
+/* Top bar */
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.logo{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);}
+.logo span{color:var(--blue2);}
+.badge-admin{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;
+  font-size:11px;font-family:var(--mono);font-weight:700;letter-spacing:.5px;
+  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;}
+
+/* Progress steps */
+.steps-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.step-pill{flex:1;min-width:80px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);
+  display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--muted2);transition:all .2s;}
+.step-pill.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.07);color:#6ee7b7;}
+.step-pill.active{border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.1);color:var(--blue3);}
+.step-pill.pending{opacity:.45;}
+.step-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;font-family:var(--mono);background:var(--bg3);color:var(--muted);flex-shrink:0;}
+.step-pill.done .step-num{background:rgba(16,185,129,.2);color:#6ee7b7;}
+.step-pill.active .step-num{background:rgba(37,99,235,.2);color:var(--blue3);}
+
+/* Main card */
+.card{background:var(--bg1);border:1px solid rgba(37,99,235,.16);border-radius:16px;overflow:hidden;
+  box-shadow:0 1px 0 rgba(37,99,235,.1) inset,0 24px 48px rgba(2,6,14,.5);}
+
+/* Security banner */
+.sec-banner{display:flex;align-items:center;gap:12px;padding:14px 22px;
+  background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.12);}
+.sec-banner i{color:#fca5a5;font-size:16px;flex-shrink:0;}
+.sec-banner p{font-size:12px;color:var(--muted2);line-height:1.5;}
+.sec-banner strong{color:#fca5a5;}
+
+/* Header */
+.card-header{padding:22px 26px 18px;border-bottom:1px solid var(--border);}
+.card-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.card-title i{color:var(--blue2);}
+.card-sub{font-size:12px;color:var(--muted2);}
+
+/* Method selector */
+.method-tabs{display:flex;gap:6px;padding:16px 22px 0;flex-wrap:wrap;}
+.method-tab{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:8px;
+  font-size:12px;font-weight:600;font-family:var(--mono);cursor:pointer;text-decoration:none;
+  border:1px solid var(--border);background:var(--bg2);color:var(--muted2);transition:all .15s;}
+.method-tab:hover{border-color:var(--border2);color:var(--text);}
+.method-tab.active{border-color:rgba(37,99,235,.4);background:rgba(37,99,235,.1);color:var(--blue3);}
+.method-tab.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.07);color:#6ee7b7;cursor:default;pointer-events:none;}
+
+/* Body */
+.card-body{padding:22px 26px;}
+
+/* OTP boxes */
+.otp-label{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:12px;display:block;}
+.otp-row{display:flex;justify-content:center;gap:8px;margin-bottom:18px;}
+.otp-box{width:50px;height:58px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;
+  font-size:24px;font-weight:700;font-family:var(--mono);text-align:center;color:var(--text);outline:none;
+  transition:border-color .15s,box-shadow .15s;}
+.otp-box:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15);}
+.otp-box.filled{border-color:rgba(37,99,235,.4);}
+
+/* Info/tip rows */
+.info-row{display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:9px;font-size:13px;margin-bottom:14px;
+  background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.14);color:var(--blue3);}
+.info-row i{flex-shrink:0;}
+.warn-row{display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:9px;font-size:12px;margin-bottom:14px;
+  background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.12);color:#fcd34d;}
+
+/* TOTP countdown */
+.totp-bar{height:3px;background:var(--border);border-radius:2px;margin-bottom:16px;overflow:hidden;}
+.totp-fill{height:100%;border-radius:2px;background:var(--blue2);transition:width 1s linear;}
+.totp-timer{text-align:right;font-family:var(--mono);font-size:11px;color:var(--muted2);margin-bottom:8px;}
+.totp-timer.warn{color:var(--warn);}
+
+/* HOTP */
+.hotp-gen{display:flex;align-items:center;justify-content:space-between;
+  padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;margin-bottom:16px;}
+.hotp-gen span{font-size:12px;color:var(--muted2);font-family:var(--mono);}
+.hotp-code{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--blue3);letter-spacing:3px;}
+
+/* FIDO2 */
+.fido2-block{text-align:center;padding:20px 0;}
+.fido2-icon{font-size:48px;color:var(--blue3);margin-bottom:16px;opacity:.8;}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:11px 20px;
+  border:none;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;
+  text-decoration:none;transition:opacity .15s,transform .1s,box-shadow .15s;}
+.btn:hover:not(:disabled){opacity:.88;transform:translateY(-1px);}
+.btn:active:not(:disabled){transform:scale(.99);}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.3);}
+.btn-primary:hover:not(:disabled){box-shadow:0 4px 20px rgba(37,99,235,.45);}
+.btn-ghost{background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,.16);color:var(--muted2);}
+.btn-ghost:hover:not(:disabled){border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.08);color:var(--blue3);}
+.btn-full{width:100%;}
+
+/* Alerts */
+.alert{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:9px;font-size:13px;margin-bottom:14px;}
+.alert-success{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);color:#6ee7b7;}
+.alert-error{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.15);color:#fca5a5;}
+.alert-info{background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.15);color:var(--blue3);}
+.alert i{margin-top:1px;flex-shrink:0;}
+
+/* Email actions */
+.email-actions{display:flex;gap:8px;margin-bottom:14px;align-items:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      HUIT<span>.auth</span>
+    </div>
+    <span class="badge-admin"><i class="fa fa-shield-halved"></i> Admin 2FA</span>
+  </div>
+
+  <!-- Messages -->
+  {% if messages %}
+    {% for message in messages %}
+    <div class="alert {% if 'success' in message.tags %}alert-success{% elif 'info' in message.tags %}alert-info{% else %}alert-error{% endif %}" style="margin-bottom:12px;">
+      <i class="fa {% if 'success' in message.tags %}fa-circle-check{% elif 'info' in message.tags %}fa-circle-info{% else %}fa-circle-xmark{% endif %}"></i>
+      <span>{{ message }}</span>
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Progress steps -->
+  <div class="steps-row">
+    {% for m in methods %}
+    {% if m in verified %}
+    <div class="step-pill done">
+      <div class="step-num">{{ forloop.counter }}</div>
+      <i class="fa fa-check"></i>
+      <span>{{ m|upper }}</span>
+    </div>
+    {% elif m == current_method %}
+    <div class="step-pill active">
+      <div class="step-num">{{ forloop.counter }}</div>
+      <i class="fa fa-{% if m == 'fido2' %}fingerprint{% elif m == 'totp' %}mobile-screen{% elif m == 'hotp' %}key{% else %}envelope{% endif %}"></i>
+      <span>{{ m|upper }}</span>
+    </div>
+    {% else %}
+    <div class="step-pill pending">
+      <div class="step-num">{{ forloop.counter }}</div>
+      <i class="fa fa-{% if m == 'fido2' %}fingerprint{% elif m == 'totp' %}mobile-screen{% elif m == 'hotp' %}key{% else %}envelope{% endif %}"></i>
+      <span>{{ m|upper }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- Main card -->
+  <div class="card">
+
+    <div class="sec-banner">
+      <i class="fa fa-lock"></i>
+      <p><strong>Xác thực đa lớp bắt buộc</strong> · Phải xác thực tất cả {{ required }} phương thức. Push Auth bị vô hiệu cho tài khoản Admin.</p>
+    </div>
+
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fa fa-shield-halved"></i>
+        Xác thực Admin — {{ verified|length }}/{{ required }} hoàn thành
+      </div>
+      <div class="card-sub">
+        {% if remaining %}
+        Còn {{ remaining|length }} phương thức: {{ remaining|join:", "|upper }}
+        {% else %}
+        Tất cả phương thức đã xác thực — đang chuyển hướng...
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Method tabs -->
+    <div class="method-tabs">
+      {% for m in methods %}
+      {% if m in verified %}
+      <span class="method-tab done">
+        <i class="fa fa-check"></i> {{ m|upper }}
+      </span>
+      {% else %}
+      {# [FIX-B2] Dùng current_method (truyền từ view) thay vì 'method' không tồn tại #}
+      <a href="?method={{ m }}" class="method-tab {% if m == current_method %}active{% endif %}">
+        <i class="fa fa-{% if m == 'fido2' %}fingerprint{% elif m == 'totp' %}mobile-screen{% elif m == 'hotp' %}key{% else %}envelope{% endif %}"></i>
+        {{ m|upper }}
+      </a>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="card-body">
+
+      {# ── TOTP ─────────────────────────────────────────────────────────── #}
+      {% if current_method == 'totp' %}
+      <div class="totp-timer" id="totp-timer">-- giây</div>
+      <div class="totp-bar"><div class="totp-fill" id="totp-fill" style="width:100%"></div></div>
+      <div class="info-row"><i class="fa fa-mobile-screen"></i> Mở Google Authenticator → nhập mã 6 số đang hiển thị.</div>
+      <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="method" value="totp">
+        <label class="otp-label">Mã TOTP (6 số)</label>
+        <div class="otp-row" id="totp-boxes">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric" autofocus>
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+        </div>
+        <input type="hidden" name="code" id="totp-hidden">
+        <button type="submit" class="btn btn-primary btn-full" id="totp-btn" disabled>
+          <i class="fa fa-check"></i> Xác nhận TOTP
+        </button>
+      </form>
+
+      {# ── HOTP ─────────────────────────────────────────────────────────── #}
+      {% elif current_method == 'hotp' %}
+      <div class="hotp-gen">
+        <div>
+          <div style="font-size:11px;color:var(--muted2);margin-bottom:4px;font-family:var(--mono);">MÃ HOTP HIỆN TẠI</div>
+          <div class="hotp-code" id="hotp-display">------</div>
+        </div>
+        <button onclick="generateHotp()" class="btn btn-ghost" id="hotp-gen-btn" type="button">
+          <i class="fa fa-rotate-right"></i> Tạo mã
+        </button>
+      </div>
+      <div class="info-row"><i class="fa fa-key"></i> Nhấn "Tạo mã" → mã HOTP hiển thị. Nhập vào ô bên dưới để xác thực.</div>
+      <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="method" value="hotp">
+        <label class="otp-label">Mã HOTP (6 số)</label>
+        <div class="otp-row" id="hotp-boxes">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+        </div>
+        <input type="hidden" name="code" id="hotp-hidden">
+        <button type="submit" class="btn btn-primary btn-full" id="hotp-btn" disabled>
+          <i class="fa fa-check"></i> Xác nhận HOTP
+        </button>
+      </form>
+
+      {# ── Email OTP ─────────────────────────────────────────────────────── #}
+      {% elif current_method == 'email' %}
+      <div class="info-row"><i class="fa fa-envelope"></i> Bấm "Gửi mã" để nhận OTP qua email rồi nhập vào ô bên dưới.</div>
+      {# [FIX-B1] sendEmailOtp() gọi đúng endpoint /api/admin/send-email-otp/ #}
+      <div class="email-actions">
+        <button onclick="sendEmailOtp()" class="btn btn-ghost" id="email-send-btn" type="button">
+          <i class="fa fa-paper-plane"></i> Gửi mã OTP
+        </button>
+        <span id="email-cooldown" style="font-size:12px;color:var(--muted2);display:none;">
+          Chờ <span id="cooldown-secs">30</span>s...
+        </span>
+      </div>
+      <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="method" value="email">
+        <label class="otp-label">Mã Email OTP (6 số)</label>
+        <div class="otp-row" id="email-boxes">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+          <input class="otp-box" type="text" maxlength="1" autocomplete="off" inputmode="numeric">
+        </div>
+        <input type="hidden" name="code" id="email-hidden">
+        <button type="submit" class="btn btn-primary btn-full" id="email-btn" disabled>
+          <i class="fa fa-check"></i> Xác nhận Email OTP
+        </button>
+      </form>
+
+      {# ── FIDO2 ────────────────────────────────────────────────────────── #}
+      {% elif current_method == 'fido2' %}
+      <div class="fido2-block">
+        <div class="fido2-icon"><i class="fa fa-fingerprint"></i></div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:8px;">Xác thực bằng Passkey</div>
+        <div style="font-size:12px;color:var(--muted2);margin-bottom:20px;line-height:1.6;">
+          Dùng vân tay, Face ID hoặc security key để xác thực
+        </div>
+        <button onclick="authenticatePasskey()" class="btn btn-primary" id="fido2-btn" type="button">
+          <i class="fa fa-fingerprint"></i> Xác thực Passkey
+        </button>
+      </div>
+      {#
+        [FIX-A3] Form này được submit sau khi fido2_admin_auth_complete
+        trả về status=success và đã set session['fido2_auth_ok']=True server-side.
+        verify_2fa_multi view sẽ đọc session đó và xác nhận.
+      #}
+      <form method="POST" id="fido2-method-form" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="method" value="fido2">
+        <input type="hidden" name="code" value="fido2_ok">
+      </form>
+
+      {% else %}
+      <div class="info-row"><i class="fa fa-circle-check"></i> Tất cả phương thức đã xác thực! Đang chuyển hướng...</div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- Đăng xuất dự phòng -->
+  <div style="text-align:center;margin-top:16px;">
+    <form method="post" action="{% url 'logout' %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost" style="font-size:12px;padding:8px 16px;">
+        <i class="fa fa-right-from-bracket"></i> Đăng xuất
+      </button>
+    </form>
+  </div>
+
+</div>
+
+<script>
+// ── OTP box handler ─────────────────────────────────────────────────────────
+function initOtpBoxes(containerSel, hiddenId, btnId) {
+  const container = document.querySelector(containerSel);
+  if (!container) return;
+  const boxes  = [...container.querySelectorAll('.otp-box')];
+  const hidden = document.getElementById(hiddenId);
+  const btn    = document.getElementById(btnId);
+  if (!boxes.length || !hidden || !btn) return;
+
+  function sync() {
+    let v = ''; boxes.forEach(b => v += b.value);
+    hidden.value = v;
+    btn.disabled = v.length < 6;
+  }
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', () => {
+      box.value = box.value.replace(/\D/g,'').slice(-1);
+      box.classList.toggle('filled', !!box.value);
+      sync();
+      if (box.value && i < 5) boxes[i+1].focus();
+    });
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !box.value && i > 0) {
+        boxes[i-1].value = '';
+        boxes[i-1].classList.remove('filled');
+        boxes[i-1].focus();
+        sync();
+      }
+    });
+    box.addEventListener('paste', e => {
+      e.preventDefault();
+      const p = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'');
+      [...p.slice(0,6)].forEach((ch,j) => {
+        if (boxes[j]) { boxes[j].value = ch; boxes[j].classList.add('filled'); }
+      });
+      sync();
+      boxes[Math.min(p.length, 5)].focus();
+    });
+  });
+  // auto-focus first box
+  if (boxes[0]) boxes[0].focus();
+}
+initOtpBoxes('#totp-boxes',  'totp-hidden',  'totp-btn');
+initOtpBoxes('#hotp-boxes',  'hotp-hidden',  'hotp-btn');
+initOtpBoxes('#email-boxes', 'email-hidden', 'email-btn');
+
+// ── TOTP 30s countdown ──────────────────────────────────────────────────────
+(function(){
+  const fill  = document.getElementById('totp-fill');
+  const timer = document.getElementById('totp-timer');
+  if (!fill) return;
+  function update(){
+    const step = Math.floor(Date.now()/1000) % 30;
+    const rem  = 30 - step;
+    const pct  = (rem / 30) * 100;
+    fill.style.width = pct + '%';
+    const isWarn = rem <= 10;
+    fill.style.background = isWarn ? '#f59e0b' : 'var(--blue2)';
+    if (timer) {
+      timer.textContent = rem + ' giây';
+      timer.className   = 'totp-timer' + (isWarn ? ' warn' : '');
+    }
+  }
+  update(); setInterval(update, 1000);
+})();
+
+// ── HOTP generate ───────────────────────────────────────────────────────────
+async function generateHotp(){
+  const btn     = document.getElementById('hotp-gen-btn');
+  const display = document.getElementById('hotp-display');
+  btn.disabled  = true;
+  btn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i>';
+  try {
+    const res  = await fetch('/api/generate-hotp/', {
+      method:  'POST',
+      headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      display.textContent = data.code;
+      display.style.color = 'var(--blue3)';
+    } else {
+      display.textContent = 'Lỗi';
+      display.style.color = '#fca5a5';
+    }
+  } catch(e) {
+    display.textContent = 'Lỗi';
+    display.style.color = '#fca5a5';
+  }
+  setTimeout(() => {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="fa fa-rotate-right"></i> Tạo mã';
+  }, 3000);
+}
+
+// ── Send Email OTP ──────────────────────────────────────────────────────────
+// [FIX-B1] Gọi đúng endpoint /api/admin/send-email-otp/ (POST JSON + CSRF)
+async function sendEmailOtp(){
+  const btn  = document.getElementById('email-send-btn');
+  const cool = document.getElementById('email-cooldown');
+  const secs = document.getElementById('cooldown-secs');
+
+  btn.disabled     = true;
+  btn.style.display = 'none';
+  cool.style.display = 'flex';
+
+  let s = 30;
+  const t = setInterval(() => {
+    s--;
+    if (secs) secs.textContent = s;
+    if (s <= 0) {
+      clearInterval(t);
+      btn.disabled      = false;
+      btn.style.display = '';
+      cool.style.display = 'none';
+    }
+  }, 1000);
+
+  try {
+    const res  = await fetch('/api/admin/send-email-otp/', {
+      method:  'POST',
+      headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.warn('send-email-otp error:', data.error || res.status);
+    }
+  } catch(e) {
+    console.error('sendEmailOtp fetch error:', e);
+  }
+}
+
+// ── FIDO2 Admin Authentication ──────────────────────────────────────────────
+// [FIX-A2] Gọi /fido2/admin/auth/begin/ và /fido2/admin/auth/complete/
+//          (admin-specific endpoints, không dùng pre_2fa_user_id)
+// [FIX-A3] Sau khi complete thành công → server set session fido2_auth_ok=True
+//          → submit form POST method=fido2 → verify_2fa_multi xác nhận server-side
+async function authenticatePasskey(){
+  const btn = document.getElementById('fido2-btn');
+  btn.disabled  = true;
+  btn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i> Đang xác thực...';
+
+  try {
+    // BEGIN
+    const optsRes = await fetch('/fido2/admin/auth/begin/', {
+      method:  'POST',
+      headers: {'X-CSRFToken': getCsrf()},
+    });
+    const opts = await optsRes.json();
+    if (opts.status === 'error') {
+      showFido2Error('Lỗi khởi tạo: ' + opts.message);
+      return;
+    }
+
+    // Decode challenge & credential IDs
+    opts.challenge = b64d(opts.challenge);
+    if (opts.allowCredentials) {
+      opts.allowCredentials = opts.allowCredentials.map(c => ({...c, id: b64d(c.id)}));
+    }
+
+    // WebAuthn get
+    const assertion = await navigator.credentials.get({publicKey: opts});
+
+    // COMPLETE
+    const res = await fetch('/fido2/admin/auth/complete/', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+      body: JSON.stringify({
+        id:     assertion.id,
+        rawId:  b64e(assertion.rawId),
+        type:   assertion.type,
+        response: {
+          clientDataJSON:    b64e(assertion.response.clientDataJSON),
+          authenticatorData: b64e(assertion.response.authenticatorData),
+          signature:         b64e(assertion.response.signature),
+        }
+      })
+    });
+    const result = await res.json();
+
+    if (result.status === 'success') {
+      // [FIX-A3] server đã set session['fido2_auth_ok']=True
+      // Submit form POST để verify_2fa_multi xử lý method=fido2
+      document.getElementById('fido2-method-form').submit();
+    } else {
+      showFido2Error('Xác thực thất bại: ' + (result.message || 'Lỗi không xác định'));
+    }
+  } catch(e) {
+    if (e.name === 'NotAllowedError') {
+      showFido2Error('Người dùng từ chối xác thực hoặc hết thời gian chờ.');
+    } else {
+      showFido2Error('Lỗi: ' + e.message);
+    }
+  }
+}
+
+function showFido2Error(msg) {
+  const btn = document.getElementById('fido2-btn');
+  if (btn) {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="fa fa-fingerprint"></i> Xác thực Passkey';
+  }
+  // Hiện thông báo lỗi nhỏ gọn
+  const existing = document.getElementById('fido2-err');
+  if (existing) existing.remove();
+  const errEl = document.createElement('div');
+  errEl.id = 'fido2-err';
+  errEl.className = 'alert alert-error';
+  errEl.style.marginTop = '12px';
+  errEl.innerHTML = `<i class="fa fa-circle-xmark"></i><span>${msg}</span>`;
+  document.querySelector('.fido2-block')?.appendChild(errEl);
+}
+
+// ── Utilities ───────────────────────────────────────────────────────────────
+function getCsrf(){
+  return document.cookie.split(';').find(c=>c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
+}
+const b64e = buf =>
+  btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+const b64d = s => {
+  s = s.replace(/-/g,'+').replace(/_/g,'/');
+  while (s.length % 4) s += '=';
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
+};
+</script>
+</body>
+</html>

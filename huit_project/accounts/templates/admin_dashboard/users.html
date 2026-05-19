@@ -121,7 +121,7 @@
         <div class="grid grid-cols-4 gap-4 mb-6">
             <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5">
                 <div class="text-zinc-500 text-xs uppercase tracking-wide mb-1">Tổng người dùng</div>
-                <div class="text-3xl font-bold text-white">{{ total_users|default:users|length }}</div>
+                <div class="text-3xl font-bold text-white">{{ total_users}}</div>
             </div>
             <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5">
                 <div class="text-zinc-500 text-xs uppercase tracking-wide mb-1">Đang hoạt động</div>
@@ -159,11 +159,11 @@
                 </div>
                 <div class="min-w-[160px]">
                     <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">2FA</label>
-                    <select name="2fa" class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
+                    <select name="twofa" class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
                         <option value="">Tất cả</option>
-                        <option value="enabled"    {% if request.GET.2fa == 'enabled'    %}selected{% endif %}>✅ Đã bật</option>
-                        <option value="disabled"   {% if request.GET.2fa == 'disabled'   %}selected{% endif %}>❌ Chưa kích hoạt</option>
-                        <option value="forced_off" {% if request.GET.2fa == 'forced_off' %}selected{% endif %}>Tắt bởi Admin</option>
+                        <option value="enabled"    {% if request.GET.twofa == 'enabled'    %}selected{% endif %}>✅ Đã bật</option>
+                        <option value="disabled"   {% if request.GET.twofa == 'disabled'   %}selected{% endif %}>❌ Chưa kích hoạt</option>
+                        <option value="forced_off" {% if request.GET.twofa == 'forced_off' %}selected{% endif %}>Tắt bởi Admin</option>
                     </select>
                 </div>
                 <div class="flex gap-2 pt-[22px]">
@@ -286,27 +286,21 @@
                                     </a>
 
                                     {% if not u.is_superuser %}
-                                    <!-- Lock / Unlock -->
-                                    <form action="{% url 'admin_toggle_status' u.id %}" method="POST" style="display:inline;"
-                                          onsubmit="return confirm('{% if u.is_active %}Khóa{% else %}Mở khóa{% endif %} tài khoản [{{ u.username }}]?')">
-                                        {% csrf_token %}
-                                        <button type="submit"
-                                                class="p-2 rounded-lg bg-zinc-800 hover:bg-amber-900/40 text-zinc-400 hover:text-amber-400 border border-zinc-700/40 hover:border-amber-700/30 transition-all"
-                                                title="{% if u.is_active %}Khóa{% else %}Mở khóa{% endif %}">
-                                            <i class="fas {% if u.is_active %}fa-lock{% else %}fa-unlock{% endif %} text-xs"></i>
-                                        </button>
-                                    </form>
+                                    <!-- Lock / Unlock — button + JS (tránh nested form) -->
+                                    <button type="button"
+                                            onclick="postAction('{% url 'admin_toggle_status' u.id %}', '{% if u.is_active %}Kh&#243;a{% else %}M&#7903; kh&#243;a{% endif %} t&#224;i kho&#7843;n [{{ u.username }}]?')"
+                                            class="p-2 rounded-lg bg-zinc-800 hover:bg-amber-900/40 text-zinc-400 hover:text-amber-400 border border-zinc-700/40 hover:border-amber-700/30 transition-all"
+                                            title="{% if u.is_active %}Khóa{% else %}Mở khóa{% endif %}">
+                                        <i class="fas {% if u.is_active %}fa-lock{% else %}fa-unlock{% endif %} text-xs"></i>
+                                    </button>
 
-                                    <!-- Force Logout -->
-                                    <form action="{% url 'admin_force_logout' u.username %}" method="POST" style="display:inline;"
-                                          onsubmit="return confirm('Buộc đăng xuất tất cả phiên của [{{ u.username }}]?')">
-                                        {% csrf_token %}
-                                        <button type="submit"
-                                                class="p-2 rounded-lg bg-zinc-800 hover:bg-red-900/40 text-zinc-400 hover:text-red-400 border border-zinc-700/40 hover:border-red-700/30 transition-all"
-                                                title="Buộc logout">
-                                            <i class="fas fa-sign-out-alt text-xs"></i>
-                                        </button>
-                                    </form>
+                                    <!-- Force Logout — button + JS (tránh nested form) -->
+                                    <button type="button"
+                                            onclick="postAction('{% url 'admin_force_logout' u.username %}', 'Bu&#7897;c &#273;&#259;ng xu&#7845;t t&#7845;t c&#7843; phi&#234;n c&#7911;a [{{ u.username }}]?')"
+                                            class="p-2 rounded-lg bg-zinc-800 hover:bg-red-900/40 text-zinc-400 hover:text-red-400 border border-zinc-700/40 hover:border-red-700/30 transition-all"
+                                            title="Buộc logout">
+                                        <i class="fas fa-sign-out-alt text-xs"></i>
+                                    </button>
                                     {% else %}
                                     <span class="p-2 text-zinc-700 cursor-not-allowed" title="Superuser được bảo vệ">
                                         <i class="fas fa-shield-alt text-xs"></i>
@@ -349,6 +343,17 @@
 </div><!-- /flex -->
 
 <script>
+// Gửi POST request thay thế cho các form lồng nhau (nested forms không hợp lệ HTML)
+function postAction(url, confirmMsg) {
+    if (!confirm(confirmMsg)) return;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrfmiddlewaretoken=' + encodeURIComponent(csrfToken)
+    }).then(res => { if (res.ok || res.redirected) location.reload(); });
+}
+
 function toggleSelectAll() {
     const checked = document.getElementById('select-all').checked;
     document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = checked);

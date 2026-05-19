@@ -264,11 +264,13 @@
             const headers = Array.from(tbl.querySelectorAll('thead th')).map(
                 th => th.textContent.trim().toLowerCase()
             );
+            // headers[0] = '#' (row number), data columns start at index 1
             tbl.querySelectorAll('tbody tr').forEach(function (tr) {
                 const cells = tr.querySelectorAll('td');
-                // cell[0] = số thứ tự (#), cell[i+1] = data column[i-1]
+                // Bỏ qua index 0 (cột '#'), duyệt từ 1 trở đi cho các cột dữ liệu
                 headers.forEach(function (colName, idx) {
-                    const td = cells[idx]; // thead[0]='#' khớp cells[0], data cols từ 1
+                    if (idx === 0) return; // bỏ qua cột số thứ tự '#'
+                    const td = cells[idx];
                     if (!td) return;
                     if (MONO_KEYS.some(k => colName.includes(k))) td.classList.add('col-mono');
                     if (WIDE_KEYS.some(k => colName.includes(k))) td.classList.add('col-wide');
