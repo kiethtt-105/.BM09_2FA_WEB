@@ -738,37 +738,32 @@ def dashboard(request):
 def security_2fa(request):
     """
     Trang tổng quan bảo mật 2FA dành cho user thường.
-
-    Hiển thị:
-      - Trạng thái từng phương thức 2FA (Email OTP, TOTP, HOTP, Passkey/FIDO2)
-      - Điểm bảo mật tổng thể (0–100)
-      - Danh sách thiết bị đang đăng nhập (active sessions)
-      - Lịch sử đăng nhập gần đây (10 bản ghi mới nhất)
-      - Cảnh báo nếu chưa bật bất kỳ 2FA nào
-
+ 
     POST actions:
-      - toggle_push   : bật/tắt xác thực từ thiết bị khác (allow_push_auth)
-      - revoke_device : đăng xuất một thiết bị cụ thể theo device_id
-
-    Không xử lý bật/tắt từng phương thức 2FA trực tiếp —
-    điều hướng về /setup-2fa/?method=... để tái sử dụng luồng đã có.
+      toggle_push    — bật/tắt xác thực từ thiết bị khác
+      revoke_device  — đăng xuất 1 thiết bị cụ thể
+      disable_app    — tắt TOTP ngay (KHÔNG cần OTP xác nhận) [CHANGED]
+      disable_email  — tắt Email OTP ngay [CHANGED]
+      disable_hotp   — tắt HOTP ngay [CHANGED]
+      gen_backup     — tạo mã dự phòng lần đầu [NEW]
+      regen_backup   — tái tạo mã dự phòng (vô hiệu cũ) [NEW]
     """
-
-    # Superuser dùng trang admin riêng
+ 
     if request.user.is_superuser:
         return redirect('admin_dashboard')
-
+ 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     ip         = get_client_ip(request)
     ua         = request.META.get('HTTP_USER_AGENT', 'Unknown')
-
+ 
+    new_backup_codes = None   # hiện mã mới nếu vừa sinh
+ 
     # ── POST handler ──────────────────────────────────────────────────────────
     if request.method == 'POST':
         action = request.POST.get('action')
-
+ 
         # ── Bật / Tắt Push Auth ───────────────────────────────────────────────
         if action == 'toggle_push':
-            # Chỉ cho phép nếu đã có ít nhất 1 phương thức 2FA
             if profile.has_any_2fa:
                 profile.allow_push_auth = not profile.allow_push_auth
                 profile.save(update_fields=['allow_push_auth'])
@@ -778,50 +773,108 @@ def security_2fa(request):
                     user=request.user,
                     username_attempt=request.user.username,
                     action='2fa_enable' if profile.allow_push_auth else '2fa_disable',
-                    ip_address=ip,
-                    user_agent=ua,
+                    ip_address=ip, user_agent=ua,
                 )
             else:
                 messages.warning(request, 'Bạn cần bật ít nhất một phương thức 2FA trước.')
             return redirect('security_2fa')
-
-        # ── Thu hồi / Đăng xuất một thiết bị ─────────────────────────────────
+ 
+        # ── Thu hồi thiết bị ──────────────────────────────────────────────────
         if action == 'revoke_device':
             device_id = request.POST.get('device_id')
             if device_id:
                 try:
-                    device = TrustedDevice.objects.get(
-                        id=int(device_id), user=request.user
-                    )
-                    # Không cho xóa thiết bị hiện tại
+                    device = TrustedDevice.objects.get(id=int(device_id), user=request.user)
                     if device.session_key == request.session.session_key:
                         messages.warning(request, 'Không thể đăng xuất thiết bị đang sử dụng.')
                     else:
                         if device.session_key:
+                            from django.contrib.sessions.models import Session
                             Session.objects.filter(session_key=device.session_key).delete()
                         device.is_active = False
                         device.save(update_fields=['is_active'])
                         ActivityLog.objects.create(
-                            user=request.user,
-                            username_attempt=request.user.username,
-                            action='logout',
-                            ip_address=ip,
-                            user_agent=ua,
+                            user=request.user, username_attempt=request.user.username,
+                            action='logout', ip_address=ip, user_agent=ua,
                         )
                         messages.success(request, f'Đã đăng xuất thiết bị "{device.name}".')
                 except (TrustedDevice.DoesNotExist, ValueError):
                     messages.error(request, 'Thiết bị không tồn tại hoặc không hợp lệ.')
             return redirect('security_2fa')
-
-        # Fallback: action không hợp lệ
+ 
+        # ── [CHANGED] Tắt TOTP ngay — không cần OTP ──────────────────────────
+        if action == 'disable_app':
+            if profile.has_app_otp:
+                profile.has_app_otp = False
+                if not profile.has_hotp:
+                    profile.otp_secret = None
+                profile.save()
+                ActivityLog.objects.create(
+                    user=request.user, username_attempt=request.user.username,
+                    action='2fa_disable', ip_address=ip, user_agent=ua,
+                )
+                messages.success(request, 'Đã tắt Authenticator App (TOTP).')
+            else:
+                messages.warning(request, 'TOTP chưa được bật.')
+            return redirect('security_2fa')
+ 
+        # ── [CHANGED] Tắt Email OTP ngay ─────────────────────────────────────
+        if action == 'disable_email':
+            if profile.has_email_otp:
+                profile.has_email_otp = False
+                profile.save(update_fields=['has_email_otp'])
+                ActivityLog.objects.create(
+                    user=request.user, username_attempt=request.user.username,
+                    action='2fa_disable', ip_address=ip, user_agent=ua,
+                )
+                messages.success(request, 'Đã tắt Email OTP.')
+            else:
+                messages.warning(request, 'Email OTP chưa được bật.')
+            return redirect('security_2fa')
+ 
+        # ── [CHANGED] Tắt HOTP ngay ───────────────────────────────────────────
+        if action == 'disable_hotp':
+            if profile.has_hotp:
+                profile.has_hotp     = False
+                profile.hotp_secret  = None
+                profile.hotp_counter = 0
+                profile.save()
+                ActivityLog.objects.create(
+                    user=request.user, username_attempt=request.user.username,
+                    action='2fa_disable', ip_address=ip, user_agent=ua,
+                )
+                messages.success(request, 'Đã tắt HOTP.')
+            else:
+                messages.warning(request, 'HOTP chưa được bật.')
+            return redirect('security_2fa')
+ 
+        # ── [NEW] Tạo mã dự phòng ─────────────────────────────────────────────
+        if action in ('gen_backup', 'regen_backup'):
+            plain_codes = BackupCode.generate_for_user(request.user)
+            ActivityLog.objects.create(
+                user=request.user, username_attempt=request.user.username,
+                action='2fa_enable', ip_address=ip, user_agent=ua,
+            )
+            if action == 'regen_backup':
+                messages.success(request, 'Đã tái tạo mã dự phòng. Mã cũ đã bị vô hiệu hóa.')
+            else:
+                messages.success(request, 'Đã tạo 8 mã dự phòng. Lưu chúng ở nơi an toàn!')
+            # Lưu mã vào session để hiện 1 lần — xóa ngay sau khi render
+            request.session['new_backup_codes'] = plain_codes
+            return redirect('security_2fa')
+ 
         messages.error(request, 'Hành động không hợp lệ.')
         return redirect('security_2fa')
-
-    # ── GET: thu thập dữ liệu ─────────────────────────────────────────────────
-
+ 
+    # ── GET ───────────────────────────────────────────────────────────────────
+ 
+    # Lấy mã mới từ session (chỉ hiện 1 lần)
+    new_backup_codes = request.session.pop('new_backup_codes', None)
+    if new_backup_codes:
+        request.session.modified = True
+ 
     has_fido2 = request.user.passkeys.exists()
-
-    # Trạng thái từng phương thức
+ 
     methods_status = [
         {
             'key':         'email',
@@ -852,99 +905,84 @@ def security_2fa(request):
             'label':       'Passkey / FIDO2',
             'description': 'Đăng nhập bằng vân tay, Face ID hoặc khoá bảo mật phần cứng.',
             'enabled':     has_fido2,
-            'setup_url':   '/setup-passkey/',   # URL quản lý passkey hiện có
+            'setup_url':   '/setup-passkey/',
             'icon':        'fingerprint',
         },
     ]
-
+ 
     enabled_count = sum(1 for m in methods_status if m['enabled'])
-
-    # ── Điểm bảo mật (0–100) ──────────────────────────────────────────────────
-    # Mỗi phương thức 2FA: +20đ  (tối đa 80đ)
-    # Email đã xác thực:   +10đ
-    # Push auth bật:       +10đ
+ 
     security_score = 0
     security_score += min(enabled_count * 20, 80)
     if request.user.email:
         security_score += 10
     if profile.allow_push_auth and profile.has_any_2fa:
         security_score += 10
-
+ 
     if security_score >= 80:
-        score_level, score_color = 'Rất tốt',  'success'
+        score_level, score_color = 'Rất tốt', 'success'
     elif security_score >= 50:
-        score_level, score_color = 'Khá',      'warning'
+        score_level, score_color = 'Khá', 'warning'
     elif security_score >= 20:
-        score_level, score_color = 'Yếu',      'danger'
+        score_level, score_color = 'Yếu', 'danger'
     else:
         score_level, score_color = 'Chưa bảo mật', 'danger'
-
-    # ── Thiết bị đang hoạt động ───────────────────────────────────────────────
+ 
     current_session_key = request.session.session_key
-    active_devices = TrustedDevice.objects.filter(
-        user=request.user, is_active=True
-    ).order_by('-last_seen')
-
-    # Đánh dấu thiết bị hiện tại
-    devices_with_flag = []
-    for device in active_devices:
-        devices_with_flag.append({
-            'device':     device,
-            'is_current': device.session_key == current_session_key,
-        })
-
-    # ── Lịch sử đăng nhập gần đây ────────────────────────────────────────────
+    active_devices = TrustedDevice.objects.filter(user=request.user, is_active=True).order_by('-last_seen')
+    devices_with_flag = [
+        {'device': d, 'is_current': d.session_key == current_session_key}
+        for d in active_devices
+    ]
+ 
     recent_logs = ActivityLog.objects.filter(
         user=request.user,
         action__in=['login', 'login_failed', 'otp_success', 'otp_fail', 'logout'],
     ).order_by('-timestamp')[:10]
-
-    # ── Cảnh báo ──────────────────────────────────────────────────────────────
+ 
     warnings = []
     if not profile.has_any_2fa:
-        warnings.append({
-            'level': 'danger',
-            'msg': 'Bạn chưa bật bất kỳ phương thức xác thực 2FA nào. Tài khoản đang ở mức bảo mật thấp nhất.',
-        })
+        warnings.append({'level': 'danger', 'msg': 'Bạn chưa bật bất kỳ phương thức xác thực 2FA nào. Tài khoản đang ở mức bảo mật thấp nhất.'})
     if not request.user.email:
-        warnings.append({
-            'level': 'warning',
-            'msg': 'Tài khoản chưa có địa chỉ email. Một số phương thức 2FA sẽ không khả dụng.',
-        })
+        warnings.append({'level': 'warning', 'msg': 'Tài khoản chưa có địa chỉ email. Một số phương thức 2FA sẽ không khả dụng.'})
     if profile.force_disable_2fa:
-        warnings.append({
-            'level': 'warning',
-            'msg': 'Quản trị viên đã tạm thời vô hiệu hoá 2FA của bạn. Liên hệ admin để biết thêm.',
-        })
-
-    # Phát hiện OTPAttempt gần đây (cảnh báo tấn công brute-force)
+        warnings.append({'level': 'warning', 'msg': 'Quản trị viên đã tạm thời vô hiệu hoá 2FA của bạn. Liên hệ admin để biết thêm.'})
+ 
     recent_fails = OTPAttempt.objects.filter(
-        user=request.user,
-        action='login_2fa',
+        user=request.user, action='login_2fa',
         created_at__gte=timezone.now() - timedelta(minutes=30),
     ).count()
     if recent_fails >= 3:
-        warnings.append({
-            'level': 'danger',
-            'msg': f'Phát hiện {recent_fails} lần thử OTP thất bại trong 30 phút qua. Hãy kiểm tra ngay.',
-        })
-
+        warnings.append({'level': 'danger', 'msg': f'Phát hiện {recent_fails} lần thử OTP thất bại trong 30 phút qua. Hãy kiểm tra ngay.'})
+ 
+    # Backup codes info
+    backup_count   = BackupCode.remaining_count(request.user)
+    backup_created = None
+    if backup_count > 0 or BackupCode.objects.filter(user=request.user).exists():
+        latest = request.user.backup_codes.order_by('-created_at').first()
+        if latest:
+            backup_created = latest.created_at
+ 
     context = {
-        'profile':             profile,
-        'methods_status':      methods_status,
-        'enabled_count':       enabled_count,
-        'security_score':      security_score,
-        'score_level':         score_level,
-        'score_color':         score_color,
-        'devices_with_flag':   devices_with_flag,
+        'profile':              profile,
+        'methods_status':       methods_status,
+        'enabled_count':        enabled_count,
+        'security_score':       security_score,
+        'score_level':          score_level,
+        'score_color':          score_color,
+        'devices_with_flag':    devices_with_flag,
         'active_devices_count': active_devices.count(),
-        'recent_logs':         recent_logs,
-        'warnings':            warnings,
-        'has_any_2fa':         profile.has_any_2fa,
-        'allow_push_auth':     profile.allow_push_auth,
-        'passkeys':            request.user.passkeys.all() if has_fido2 else [],
+        'recent_logs':          recent_logs,
+        'warnings':             warnings,
+        'has_any_2fa':          profile.has_any_2fa,
+        'allow_push_auth':      profile.allow_push_auth,
+        'passkeys':             request.user.passkeys.all() if has_fido2 else [],
+        # Backup codes [NEW]
+        'backup_count':         backup_count,
+        'backup_created':       backup_created,
+        'new_backup_codes':     new_backup_codes,
     }
-
+ 
     return render(request, 'accounts/security_2fa.html', context)
 
 @login_required
@@ -1272,6 +1310,31 @@ def verify_2fa(request):
     if method not in enabled_keys:
         return redirect(f'{request.path}?method={enabled_keys[0]}')
 
+    # ── [FIX-EMAIL-AUTO] Tự động gửi email OTP khi user vào tab email lần đầu ──
+    email_just_sent = False
+    if request.method == 'GET' and method == 'email' and profile.has_email_otp:
+        email_send_key = f'email_otp_send_cooldown:{user.id}'
+        has_valid_otp  = EmailOTP.objects.filter(
+            user       = user,
+            action     = 'login_2fa',
+            is_used    = False,
+            is_active  = True,
+            created_at__gt = timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES),
+        ).exists()
+        if not has_valid_otp and not cache.get(email_send_key):
+            try:
+                generate_and_send_email_otp(
+                    user=user, email=user.email, action='login_2fa', ip=ip,
+                )
+                cache.set(email_send_key, 1, timeout=30)
+                email_just_sent = True
+                messages.success(request, f'Đã gửi mã OTP tới {user.email}')
+            except Exception as e:
+                messages.error(request, f'Lỗi gửi email: {str(e)}')
+        elif has_valid_otp:
+            # OTP còn hiệu lực, chỉ hiển thị giao diện nhập
+            email_just_sent = True
+
     push_request_sent = False
 
     if request.method == 'POST':
@@ -1430,6 +1493,7 @@ def verify_2fa(request):
         'has_fido2': has_fido2, 'has_other_devices': other_devices.exists(),
         'other_devices_list': list(other_devices[:3]),
         'push_request_sent': push_request_sent,
+        'email_just_sent': email_just_sent,
     })
 
 
@@ -1721,14 +1785,31 @@ def fido2_auth_begin(request):
         if not passkeys.exists():
             return JsonResponse({'status': 'error', 'message': 'Không có passkey nào'}, status=400)
 
+        # [FIX-FIDO2-USER] Dùng AttestedCredentialData làm credentials thay vì dict thô
+        # để tương thích với fido2 library mới nhất
+        from fido2.cbor import decode as cbor_decode
+        from fido2.webauthn import AttestedCredentialData, PublicKeyCredentialDescriptor, PublicKeyCredentialType
+
+        credential_list = []
+        for pk in passkeys:
+            try:
+                cred_id_bytes = _b64url_to_bytes(pk.credential_id)
+                pk_dict       = cbor_decode(websafe_decode(pk.public_key))
+                acd = AttestedCredentialData.create(
+                    aaguid        = b'\x00' * 16,
+                    credential_id = cred_id_bytes,
+                    public_key    = pk_dict,
+                )
+                credential_list.append(acd)
+            except Exception as pk_err:
+                logger.warning('fido2_auth_begin: skip passkey id=%s err=%s', pk.id, pk_err)
+
+        if not credential_list:
+            return JsonResponse({'status': 'error', 'message': 'Không thể đọc passkey. Vui lòng đăng ký lại.'}, status=400)
+
         auth_data, state = server_local.authenticate_begin(
-            # [BUG-11 FIX] Truyền credential list thực — server bind đúng credential,
-            # tránh authenticator lạ có thể pass qua khi credentials=[]
-            credentials=[
-                {'type': 'public-key', 'id': websafe_decode(pk.credential_id)}
-                for pk in passkeys
-            ],
-            user_verification=UserVerificationRequirement.PREFERRED,
+            credentials       = credential_list,
+            user_verification = UserVerificationRequirement.PREFERRED,
         )
 
         try:
@@ -1948,24 +2029,15 @@ def device_list(request):
 @login_required
 def active_sessions(request):
     devices = TrustedDevice.objects.filter(user=request.user, is_active=True).order_by('-last_seen')
-    # Lấy pending RemoteAuthRequest để thiết bị trusted có thể approve/deny
     pending_auth = (
         RemoteAuthRequest.get_active()
         .filter(user=request.user, status='pending')
         .order_by('-created_at')
         .first()
     )
-    # Kiểm tra thiết bị hiện tại có is_trusted không (để JS biết có poll không)
-    current_trusted = TrustedDevice.objects.filter(
-        user=request.user,
-        session_key=request.session.session_key,
-        is_active=True,
-        is_trusted=True,
-    ).exists()
     return render(request, 'accounts/active_sessions.html', {
-        'devices':           devices,
-        'pending_auth':      pending_auth,
-        'is_current_trusted': current_trusted,
+        'devices':      devices,
+        'pending_auth': pending_auth,
     })
 
 
@@ -2916,12 +2988,30 @@ def fido2_admin_auth_begin(request):
         if not passkeys.exists():
             return JsonResponse({'status': 'error', 'message': 'Tài khoản chưa có Passkey'}, status=400)
 
+        # [FIX-FIDO2-ADMIN-BEGIN] Dùng AttestedCredentialData thay vì dict thô
+        from fido2.cbor import decode as cbor_decode
+        from fido2.webauthn import AttestedCredentialData
+
+        credential_list = []
+        for pk in passkeys:
+            try:
+                cred_id_bytes = _b64url_to_bytes(pk.credential_id)
+                pk_dict       = cbor_decode(websafe_decode(pk.public_key))
+                acd = AttestedCredentialData.create(
+                    aaguid        = b'\x00' * 16,
+                    credential_id = cred_id_bytes,
+                    public_key    = pk_dict,
+                )
+                credential_list.append(acd)
+            except Exception as pk_err:
+                logger.warning('fido2_admin_auth_begin: skip passkey id=%s err=%s', pk.id, pk_err)
+
+        if not credential_list:
+            return JsonResponse({'status': 'error', 'message': 'Không thể đọc Passkey. Vui lòng đăng ký lại.'}, status=400)
+
         auth_data, state = server_local.authenticate_begin(
-            credentials=[
-                {'type': 'public-key', 'id': _b64url_to_bytes(pk.credential_id)}
-                for pk in passkeys
-            ],
-            user_verification=UserVerificationRequirement.PREFERRED,
+            credentials       = credential_list,
+            user_verification = UserVerificationRequirement.PREFERRED,
         )
 
         try:
@@ -2994,8 +3084,9 @@ def fido2_admin_auth_complete(request):
         if not passkey:
             return JsonResponse({'status': 'error', 'message': 'Không tìm thấy Passkey'}, status=400)
 
-        pk_dict = cbor_decode(_b64url_to_bytes(passkey.public_key))
-
+        # [FIX-FIDO2-ADMIN] public_key được lưu bằng websafe_encode → phải decode bằng websafe_decode
+        # Không dùng _b64url_to_bytes vì sẽ sai padding với websafe base64
+        pk_dict = cbor_decode(websafe_decode(passkey.public_key))
 
         credential_data = AttestedCredentialData.create(
             aaguid        = b'\x00' * 16,

@@ -230,29 +230,7 @@ body::before{
 }
 .alert-info i{margin-top:1px;flex-shrink:0;}
 
-/* Disable modal */
-.disable-modal{
-  display:none;position:fixed;inset:0;z-index:200;
-  background:rgba(0,0,0,.72);backdrop-filter:blur(5px);
-  align-items:center;justify-content:center;
-}
-.disable-modal.open{display:flex;}
-.disable-modal-inner{
-  background:var(--bg1);border:1px solid rgba(37,99,235,.22);border-radius:20px;
-  padding:36px 32px;max-width:400px;width:calc(100% - 32px);
-  animation:fadeUp .25s ease both;
-  box-shadow:0 1px 0 rgba(37,99,235,.12) inset,0 32px 64px rgba(2,6,14,.8);
-}
-.modal-icon{font-size:36px;margin-bottom:12px;text-align:center;}
-.modal-title{font-size:18px;font-weight:600;text-align:center;margin-bottom:8px;}
-.modal-sub{font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px;line-height:1.6;}
-.otp-big{
-  width:100%;padding:14px;text-align:center;font-family:var(--mono);
-  font-size:26px;font-weight:700;letter-spacing:8px;background:var(--bg2);
-  border:1px solid var(--border);border-radius:10px;color:var(--text);outline:none;margin-bottom:16px;
-}
-.otp-big:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15);}
-.modal-actions{display:flex;gap:10px;justify-content:center;}
+/* Disable modal removed — tắt thẳng không cần OTP */
 
 /* Trusted devices list */
 .device-row{
@@ -300,57 +278,6 @@ body::before{
 <body>
 
 <div id="toast"><i class="fa fa-bell"></i><span id="toast-msg"></span></div>
-
-<!-- ██ DISABLE MODAL ██ -->
-{% if confirm_disable %}
-<div class="disable-modal open" id="disable-modal">
-  <div class="disable-modal-inner">
-    {% if confirm_disable == 'disable_app' %}
-    <div class="modal-icon">📱</div>
-    <div class="modal-title">Tắt Authenticator App?</div>
-    <div class="modal-sub">Nhập mã TOTP 6 chữ số từ ứng dụng Authenticator để xác nhận.</div>
-    <form method="POST">
-      {% csrf_token %}
-      <input type="hidden" name="confirm_disable_action" value="disable_app">
-      <input type="text" name="disable_otp_code" maxlength="6" class="otp-big"
-             placeholder="000000" autocomplete="one-time-code" autofocus inputmode="numeric">
-      <div class="modal-actions">
-        <button type="submit" class="btn btn-danger-sm"><i class="fa fa-power-off"></i> Xác nhận tắt</button>
-        <a href="{% url 'security_2fa' %}" class="btn btn-ghost">Hủy</a>
-      </div>
-    </form>
-    {% elif confirm_disable == 'disable_email' %}
-    <div class="modal-icon">📧</div>
-    <div class="modal-title">Tắt Email OTP?</div>
-    <div class="modal-sub">Mã xác nhận đã gửi đến <strong>{{ user.email }}</strong>. Nhập mã để tắt.</div>
-    <form method="POST">
-      {% csrf_token %}
-      <input type="hidden" name="confirm_disable_action" value="disable_email">
-      <input type="text" name="disable_otp_code" maxlength="6" class="otp-big"
-             placeholder="000000" autocomplete="one-time-code" autofocus inputmode="numeric">
-      <div class="modal-actions">
-        <button type="submit" class="btn btn-danger-sm"><i class="fa fa-power-off"></i> Xác nhận tắt</button>
-        <a href="{% url 'security_2fa' %}" class="btn btn-ghost">Hủy</a>
-      </div>
-    </form>
-    {% elif confirm_disable == 'disable_hotp' %}
-    <div class="modal-icon">🎟️</div>
-    <div class="modal-title">Tắt HOTP?</div>
-    <div class="modal-sub">Nhập mã HOTP hiện tại từ thiết bị của bạn để xác nhận.</div>
-    <form method="POST">
-      {% csrf_token %}
-      <input type="hidden" name="confirm_disable_action" value="disable_hotp">
-      <input type="text" name="disable_otp_code" maxlength="6" class="otp-big"
-             placeholder="000000" autocomplete="one-time-code" autofocus inputmode="numeric">
-      <div class="modal-actions">
-        <button type="submit" class="btn btn-danger-sm"><i class="fa fa-power-off"></i> Xác nhận tắt</button>
-        <a href="{% url 'security_2fa' %}" class="btn btn-ghost">Hủy</a>
-      </div>
-    </form>
-    {% endif %}
-  </div>
-</div>
-{% endif %}
 
 <div class="layout">
 
@@ -455,7 +382,7 @@ body::before{
         <div class="method-actions">
           {% if profile.has_app_otp %}
             <span class="badge badge-on"><i class="fa fa-circle" style="font-size:5px"></i> Bật</span>
-            <form method="POST" style="margin:0;">
+            <form method="POST" style="margin:0;" onsubmit="return confirm('Tắt Authenticator App (TOTP)?');">
               {% csrf_token %}
               <button type="submit" name="action" value="disable_app" class="btn-danger-sm">
                 <i class="fa fa-power-off"></i> Tắt
@@ -480,7 +407,7 @@ body::before{
         <div class="method-actions">
           {% if profile.has_email_otp %}
             <span class="badge badge-on"><i class="fa fa-circle" style="font-size:5px"></i> Bật</span>
-            <form method="POST" style="margin:0;">
+            <form method="POST" style="margin:0;" onsubmit="return confirm('Tắt Email OTP?');">
               {% csrf_token %}
               <button type="submit" name="action" value="disable_email" class="btn-danger-sm">
                 <i class="fa fa-power-off"></i> Tắt
@@ -524,7 +451,7 @@ body::before{
         <div class="method-actions">
           {% if profile.has_hotp %}
             <span class="badge badge-on"><i class="fa fa-circle" style="font-size:5px"></i> Bật</span>
-            <form method="POST" style="margin:0;">
+            <form method="POST" style="margin:0;" onsubmit="return confirm('Tắt HOTP?');">
               {% csrf_token %}
               <button type="submit" name="action" value="disable_hotp" class="btn-danger-sm">
                 <i class="fa fa-power-off"></i> Tắt
@@ -569,59 +496,68 @@ body::before{
 
       <div class="alert-info">
         <i class="fa fa-circle-info"></i>
-        <span>Mã dự phòng dùng một lần để đăng nhập khi mất thiết bị 2FA. Lưu chúng ở nơi an toàn — mỗi mã chỉ dùng được một lần.</span>
+        <span>Mã dự phòng dùng một lần để đăng nhập khi mất thiết bị 2FA. Mỗi mã chỉ dùng được đúng một lần — lưu ở nơi an toàn.</span>
       </div>
 
-      {% if profile.backup_codes_count %}
-        <div class="method-card">
-          <div class="method-icon success-icon"><i class="fa fa-check-shield"></i></div>
+      {% if new_backup_codes %}
+      <!-- ── Vừa tạo xong: hiện mã ngay ── -->
+      <div style="background:var(--bg2);border:1.5px solid rgba(16,185,129,.25);border-radius:14px;padding:22px 20px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+          <div style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6ee7b7;">
+            <i class="fa fa-check-circle"></i> Mã dự phòng mới — Lưu ngay!
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="copyAllCodes()" class="btn btn-outline" style="font-size:12px;padding:6px 12px;">
+              <i class="fa fa-copy"></i> Sao chép tất cả
+            </button>
+            <button onclick="downloadCodes()" class="btn btn-primary" style="font-size:12px;padding:6px 12px;">
+              <i class="fa fa-download"></i> Tải xuống .txt
+            </button>
+          </div>
+        </div>
+        <div class="codes-grid" id="codes-grid">
+          {% for code in new_backup_codes %}
+          <div class="code-chip" data-code="{{ code }}">{{ code }}</div>
+          {% endfor %}
+        </div>
+        <div style="font-size:12px;color:#fcd34d;margin-top:12px;font-family:var(--mono);display:flex;align-items:center;gap:7px;">
+          <i class="fa fa-triangle-exclamation"></i>
+          Trang này sẽ không hiển thị lại mã này. Sao chép hoặc tải về ngay bây giờ.
+        </div>
+      </div>
+      {% endif %}
+
+      {% if backup_count %}
+        <div class="method-card {% if new_backup_codes %}enabled{% endif %}">
+          <div class="method-icon success-icon"><i class="fa fa-shield-check"></i></div>
           <div class="method-body">
-            <div class="method-name">{{ profile.backup_codes_count }} mã còn lại</div>
-            <div class="method-desc">Đã tạo lần cuối: {{ profile.backup_codes_created|date:"d/m/Y H:i"|default:"—" }}</div>
+            <div class="method-name">{{ backup_count }}/8 mã còn khả dụng</div>
+            <div class="method-desc">
+              Tạo lần cuối: {{ backup_created|date:"d/m/Y H:i"|default:"—" }}
+              {% if backup_count <= 2 %}&nbsp;<span style="color:#fcd34d;font-weight:600;"><i class="fa fa-triangle-exclamation"></i> Còn ít mã — nên tạo lại</span>{% endif %}
+            </div>
           </div>
           <div class="method-actions">
-            <form method="POST" style="margin:0;" onsubmit="return confirm('Tạo lại sẽ vô hiệu hóa tất cả mã cũ. Tiếp tục?');">
+            <form method="POST" style="margin:0;" onsubmit="return confirm('Tạo lại sẽ vô hiệu hóa tất cả {{ backup_count }} mã còn lại. Tiếp tục?');">
               {% csrf_token %}
               <button type="submit" name="action" value="regen_backup" class="btn btn-ghost" style="font-size:12px;">
-                <i class="fa fa-rotate-right"></i> Tạo lại
+                <i class="fa fa-rotate-right"></i> Tạo lại (8 mã mới)
               </button>
             </form>
-            <a href="{% url 'download_backup_codes' %}" class="btn btn-primary" style="font-size:12px;">
-              <i class="fa fa-download"></i> Tải xuống
-            </a>
           </div>
         </div>
-
-        <!-- Hiển thị mã nếu vừa tạo -->
-        {% if new_backup_codes %}
-        <div style="background:var(--bg2);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:18px 20px;margin-top:10px;">
-          <div style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6ee7b7;margin-bottom:12px;">
-            <i class="fa fa-check-circle"></i> Mã dự phòng mới — Lưu ngay
-          </div>
-          <div class="codes-grid">
-            {% for code in new_backup_codes %}
-            <div class="code-chip">{{ code }}</div>
-            {% endfor %}
-          </div>
-          <div style="font-size:12px;color:var(--muted);margin-top:10px;font-family:var(--mono);">
-            <i class="fa fa-triangle-exclamation" style="color:#fcd34d;"></i>
-            Trang này sẽ không hiển thị lại mã này — sao chép hoặc tải xuống ngay.
-          </div>
-        </div>
-        {% endif %}
-
       {% else %}
         <div class="method-card">
           <div class="method-icon warn-icon"><i class="fa fa-triangle-exclamation"></i></div>
           <div class="method-body">
             <div class="method-name">Chưa có mã dự phòng</div>
-            <div class="method-desc">Tạo mã ngay để đảm bảo khôi phục tài khoản khi mất thiết bị</div>
+            <div class="method-desc">Tạo ngay để đảm bảo khôi phục tài khoản khi mất thiết bị</div>
           </div>
           <div class="method-actions">
             <form method="POST" style="margin:0;">
               {% csrf_token %}
               <button type="submit" name="action" value="gen_backup" class="btn btn-primary" style="font-size:12px;">
-                <i class="fa fa-plus"></i> Tạo mã dự phòng
+                <i class="fa fa-plus"></i> Tạo 8 mã dự phòng
               </button>
             </form>
           </div>
@@ -710,6 +646,47 @@ function togglePushAuth(checkbox) {
   })
   .finally(() => { checkbox.disabled = false; });
 }
+
+// ── Backup codes helpers ────────────────────────────────────────────────────
+function copyAllCodes() {
+  const chips = document.querySelectorAll('#codes-grid .code-chip');
+  if (!chips.length) return;
+  const text = [...chips].map(c => c.dataset.code).join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    toast('✅ Đã sao chép tất cả mã dự phòng!');
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('✅ Đã sao chép!');
+  });
+}
+
+function downloadCodes() {
+  const chips = document.querySelectorAll('#codes-grid .code-chip');
+  if (!chips.length) return;
+  const lines = [...chips].map(c => c.dataset.code);
+  const content = [
+    'MÃ DỰ PHÒNG HUIT AUTH',
+    '======================',
+    'Mỗi mã chỉ dùng được 1 lần.',
+    'Lưu file này ở nơi an toàn và không chia sẻ.',
+    '',
+    ...lines,
+    '',
+    `Tạo lúc: ${new Date().toLocaleString('vi-VN')}`,
+  ].join('\n');
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'huit-backup-codes.txt';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('📥 Đã tải xuống mã dự phòng!');
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Animate score ring on load
 document.addEventListener('DOMContentLoaded', () => {

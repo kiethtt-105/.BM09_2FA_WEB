@@ -188,7 +188,14 @@ class UserProfile(models.Model):
     def get_full_name(self) -> str:
         parts = [self.user.first_name, self.middle_name, self.user.last_name]
         return ' '.join(p for p in parts if p)
-
+    @property
+    def backup_codes_count(self) -> int:
+        return self.user.backup_codes.filter(is_used=False).count()
+    
+    @property
+    def backup_codes_created(self):
+        latest = self.user.backup_codes.order_by('-created_at').first()
+        return latest.created_at if latest else None
 
 # ════════════════════════════════════════════════════════════════════════════
 # 2. PendingRegistration
@@ -603,3 +610,95 @@ class UserPasskey(models.Model):
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.get_or_create(user=instance)
+# =════════════════════════════════════════════════════════════════════════════
+# 8. BackupCode
+# ════════════════════════════════════════════════════════════════════════════
+
+class BackupCode(models.Model):
+    """
+    Mã dự phòng một lần cho tài khoản.
+ 
+    Mỗi lần tạo/tái tạo: xóa tất cả mã cũ của user, tạo mới 8 mã.
+    Mã lưu dưới dạng SHA-256 hash — không bao giờ lưu plaintext.
+    Khi dùng: mark_used() → is_used = True, used_at = now().
+    """
+ 
+    CODE_COUNT = 8          # số mã mỗi lần sinh
+    CODE_LENGTH = 8         # ký tự mỗi mã (hex lowercase, nhóm xxxx-xxxx)
+ 
+    user      = models.ForeignKey(User, on_delete=models.CASCADE,
+                                  related_name='backup_codes')
+    code_hash = models.CharField(max_length=64)          # SHA-256 hex
+    is_used   = models.BooleanField(default=False)
+    used_at   = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta:
+        verbose_name        = 'Mã dự phòng'
+        verbose_name_plural = 'Mã dự phòng'
+        indexes = [
+            models.Index(fields=['user', 'is_used'], name='backupcode_user_used_idx'),
+        ]
+ 
+    # ── Classmethods ────────────────────────────────────────────────────────
+ 
+    @classmethod
+    def generate_for_user(cls, user) -> list:
+        """
+        Xóa mã cũ, sinh CODE_COUNT mã mới.
+        Trả list plaintext (dạng 'xxxx-xxxx') — chỉ hiện 1 lần duy nhất.
+        """
+        import secrets as _secrets
+        # Xóa tất cả mã cũ
+        cls.objects.filter(user=user).delete()
+ 
+        plain_codes = []
+        for _ in range(cls.CODE_COUNT):
+            raw = _secrets.token_hex(cls.CODE_LENGTH // 2)   # 4 bytes → 8 hex chars
+            # Nhóm thành xxxx-xxxx
+            plain = f'{raw[:4]}-{raw[4:]}'
+            plain_codes.append(plain)
+ 
+            code_hash = hashlib.sha256(plain.encode()).hexdigest()
+            cls.objects.create(user=user, code_hash=code_hash)
+ 
+        return plain_codes
+ 
+    @classmethod
+    def verify_and_use(cls, user, code_input: str) -> bool:
+        """
+        Xác thực mã dự phòng (chuẩn hóa input trước).
+        Nếu đúng → đánh dấu đã dùng, trả True. Sai → False.
+        """
+        normalized = code_input.strip().lower().replace(' ', '')
+        # Đảm bảo định dạng xxxx-xxxx
+        if len(normalized) == 8 and '-' not in normalized:
+            normalized = f'{normalized[:4]}-{normalized[4:]}'
+ 
+        input_hash = hashlib.sha256(normalized.encode()).hexdigest()
+        obj = (
+            cls.objects
+            .filter(user=user, is_used=False)
+            .filter(code_hash=input_hash)
+            .first()
+        )
+        if obj:
+            obj.mark_used()
+            return True
+        return False
+ 
+    @classmethod
+    def remaining_count(cls, user) -> int:
+        return cls.objects.filter(user=user, is_used=False).count()
+ 
+    # ── Instance methods ────────────────────────────────────────────────────
+ 
+    def mark_used(self):
+        BackupCode.objects.filter(pk=self.pk).update(
+            is_used=True, used_at=timezone.now()
+        )
+        self.is_used = True
+        self.used_at = timezone.now()
+ 
+    def __str__(self):
+        return f'BackupCode({self.user.username} | used={self.is_used})'

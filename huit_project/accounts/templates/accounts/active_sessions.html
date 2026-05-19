@@ -520,8 +520,7 @@ td{padding:14px 18px;vertical-align:middle;}
   </div><!-- /page -->
 </div><!-- /layout -->
 
-{# ── Auth Approval Popup — chỉ hiện khi thiết bị này là trusted ── #}
-{% with current_device=request.session.session_key %}
+{# ── Auth Approval Popup ── #}
 <div id="auth-popup-overlay" class="auth-popup-overlay" style="display:none;">
   <div class="auth-popup">
     <div class="popup-icon">🔐</div>
@@ -544,18 +543,14 @@ td{padding:14px 18px;vertical-align:middle;}
     </div>
   </div>
 </div>
-{% endwith %}
 
 <script>
 // ── Polling: kiểm tra pending auth request mỗi 4 giây ──
-// Chỉ poll khi trang đang active để tiết kiệm request
+// Thiết bị Online (đang dùng) luôn poll — is_trusted chỉ ảnh hưởng hiển thị badge
 let currentReqId  = null;
 let countdownVal  = 300;
 let countdownTick = null;
 let isPolling     = true;
-
-// Kiểm tra thiết bị hiện tại có is_trusted không (server trả qua context)
-const isTrustedDevice = {{ is_current_trusted|yesno:"true,false" }};
 
 function startCountdown(seconds) {
   countdownVal = seconds;
@@ -600,7 +595,6 @@ function respondAuth(action) {
 }
 
 async function pollPendingAuth() {
-  if (!isTrustedDevice) return;       // thiết bị không trusted → không poll
   if (!isPolling) return;
   try {
     const resp = await fetch('/api/get-auth-request/', { credentials: 'same-origin' });
@@ -609,7 +603,6 @@ async function pollPendingAuth() {
     if (data.pending && data.id && data.id !== currentReqId) {
       showPopup(data);
     } else if (!data.pending && currentReqId) {
-      // Request đã được xử lý từ nơi khác
       hidePopup();
     }
   } catch (e) { /* ignore */ }
@@ -617,24 +610,21 @@ async function pollPendingAuth() {
 
 function getCsrf() {
   const name = 'csrftoken';
-  const cookies = document.cookie.split(';');
-  for (const c of cookies) {
+  for (const c of document.cookie.split(';')) {
     const [k, v] = c.trim().split('=');
     if (k === name) return decodeURIComponent(v);
   }
   return '';
 }
 
-// Poll ngay khi load và mỗi 4 giây
-if (isTrustedDevice) {
-  pollPendingAuth();
-  setInterval(pollPendingAuth, 4000);
-}
+// Luôn poll khi mở trang active-sessions (thiết bị đang online)
+pollPendingAuth();
+setInterval(pollPendingAuth, 4000);
 
-// Dừng poll khi tab không active
+// Dừng poll khi tab không active, resume khi quay lại
 document.addEventListener('visibilitychange', () => {
   isPolling = !document.hidden;
-  if (isPolling && isTrustedDevice) pollPendingAuth();
+  if (isPolling) pollPendingAuth();
 });
 </script>-e 
 </body>

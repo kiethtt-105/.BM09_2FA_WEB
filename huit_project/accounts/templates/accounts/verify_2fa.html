@@ -319,7 +319,14 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
 
     {# Hint box theo method #}
     {% if method == 'email' %}
-      <div class="hint-box"><i class="fa fa-envelope" style="margin-right:6px"></i>Mã đã gửi đến <strong>{{ user.email }}</strong></div>
+      <div class="hint-box">
+        <i class="fa fa-envelope" style="margin-right:6px"></i>
+        {% if email_just_sent %}
+          Mã đã gửi đến <strong>{{ user.email }}</strong>
+        {% else %}
+          Nhấn <strong>Gửi mã OTP</strong> để nhận mã qua email <strong>{{ user.email }}</strong>
+        {% endif %}
+      </div>
     {% elif method == 'totp' %}
       {# TOTP: hiển thị countdown 30s #}
       <div class="totp-timer" id="totp-timer">
@@ -359,11 +366,17 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
     <form method="POST" style="margin-top:6px;">
       {% csrf_token %}
       <input type="hidden" name="action" value="send_email_code">
-      <button type="submit" class="btn btn-ghost" id="resend-btn" disabled>
-        <i class="fa fa-rotate-right"></i> Gửi lại mã
+      <button type="submit" class="btn btn-ghost" id="resend-btn"
+              {% if email_just_sent %}disabled{% endif %}>
+        <i class="fa fa-rotate-right"></i>
+        {% if email_just_sent %}Gửi lại mã{% else %}Gửi mã OTP{% endif %}
       </button>
     </form>
-    <div class="countdown" id="countdown">Gửi lại sau: <span class="timer" id="timer">60</span>s</div>
+    {% if email_just_sent %}
+    <div class="countdown" id="countdown">Gửi lại sau: <span class="timer" id="timer">30</span>s</div>
+    {% else %}
+    <div class="countdown" id="countdown" style="display:none;"></div>
+    {% endif %}
     {% endif %}
 
   {% endif %}
@@ -448,14 +461,19 @@ if(boxes.length && hidden && confirmBtn){
 const resendBtn=document.getElementById('resend-btn');
 const timerEl=document.getElementById('timer');
 const cdEl=document.getElementById('countdown');
+{% if email_just_sent %}
 if(resendBtn && timerEl){
-  let t=60;
+  let t=30;
   const tick=setInterval(()=>{
     t--; timerEl.textContent=t;
-    if(t<=20) cdEl.classList.add('warning');
+    if(t<=10) cdEl.classList.add('warning');
     if(t<=0){ clearInterval(tick); cdEl.classList.add('expired'); resendBtn.disabled=false; timerEl.textContent='0'; }
   },1000);
 }
+{% else %}
+// OTP chưa gửi: button enabled ngay, countdown ẩn
+if(resendBtn){ resendBtn.disabled=false; }
+{% endif %}
 
 // ── TOTP 30s countdown ring ──────────────────────────────────────────────
 const totpTimer=document.getElementById('totp-timer');
@@ -484,9 +502,23 @@ async function authenticatePasskey(){
       headers:{'X-CSRFToken':getCookie('csrftoken')}
     });
     const opts=await optRes.json();
+
+    // [FIX-FIDO2-JS] Kiểm tra lỗi từ server trước khi xử lý
+    if(!optRes.ok || opts.status === 'error'){
+      alert('Lỗi passkey: ' + (opts.message || 'Không thể khởi tạo xác thực'));
+      return;
+    }
+    if(!opts.challenge){
+      alert('Lỗi passkey: Server không trả về challenge hợp lệ');
+      return;
+    }
+
     opts.challenge=base64url.decode(opts.challenge);
     if(opts.allowCredentials)
-      opts.allowCredentials=opts.allowCredentials.map(c=>({...c,id:base64url.decode(c.id)}));
+      opts.allowCredentials=opts.allowCredentials.map(c=>({
+        ...c,
+        id: c.id ? base64url.decode(c.id) : c.id
+      }));
     const cred=await navigator.credentials.get({publicKey:opts});
     const authData={
       id:cred.id,
@@ -509,7 +541,11 @@ async function authenticatePasskey(){
     else alert('Xác thực thất bại: '+(result.message||'Unknown error'));
   }catch(e){
     console.error(e);
-    alert('Lỗi passkey: '+e.message);
+    if(e.name==='NotAllowedError'){
+      alert('Người dùng từ chối xác thực hoặc hết thời gian chờ.');
+    } else {
+      alert('Lỗi passkey: '+e.message);
+    }
   }
 }
 
