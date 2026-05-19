@@ -2740,7 +2740,11 @@ def fido2_admin_auth_complete(request):
         if not passkey:
             return JsonResponse({'status': 'error', 'message': 'Không tìm thấy Passkey'}, status=400)
 
-        pk_dict = cbor_decode(websafe_decode(passkey.public_key))
+        #pk_dict = cbor_decode(websafe_decode(passkey.public_key))
+        pk_bytes_raw = passkey.public_key
+        pk_bytes_raw += '=' * (4 - len(pk_bytes_raw) % 4)
+        pk_dict = cbor_decode(websafe_decode(pk_bytes_raw))
+
         credential_data = AttestedCredentialData.create(
             aaguid        = b'\x00' * 16,
             credential_id = _b64url_to_bytes(credential_id),
