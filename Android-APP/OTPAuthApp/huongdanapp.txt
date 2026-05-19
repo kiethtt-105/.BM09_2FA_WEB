@@ -1,0 +1,9 @@
+#Cài eas
+npm install -g eas-cli
+eas login
+#Cấu hình mở file file eas.json để ghi các thông tin cấu hình
+eas build:configure
+#Xuất file apk
+eas build -p android --profile preview 
+#câu lệnh để test app mà không cần tải app về chỉ cần tải expo go trên CHPLAY xong quét mã
+npx expo start --dev-client
