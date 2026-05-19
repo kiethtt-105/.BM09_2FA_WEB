@@ -1,38 +1,4 @@
-"""
-models.py — Hệ thống HUIT 2FA  [PATCHED v2]
-=============================================
-THAY ĐỔI SO VỚI BẢN NỘP:
 
-  [FIX-1]  UserProfile.is_2fa_enabled gọi self.has_fido2 (property DB query)
-           → N+1 query khi list user. Tách has_fido2 ra khỏi is_2fa_enabled.
-           is_2fa_enabled giờ chỉ kiểm tra BooleanField, không query DB thêm.
-
-  [FIX-2]  force_disable_2fa không reset hotp_secret, hotp_counter.
-           → Thêm disable_all_2fa() tập trung, gọi từ middleware + login_view.
-
-  [FIX-3]  decrypt_hotp_secret() không kiểm tra tiền tố 'gAAAA' trước Fernet
-           → InvalidToken raise thay vì trả None khi giá trị lạ.
-           → Dùng _decrypt() helper chung, guard đầy đủ.
-
-  [FIX-4]  PendingRegistration.verify() dùng .first() không có order_by
-           → Khi resend nhanh có 2 bản ghi, lấy sai bản ghi cũ.
-           → Thêm order_by('-created_at').
-
-  [FIX-5]  EmailOTP.mark_used() dùng save() → chạy lại toàn bộ save logic.
-           → Đổi sang update() trực tiếp + đồng bộ instance trong RAM.
-           Tương tự disable() cũng dùng update().
-
-  [FIX-6]  ActivityLog thiếu index → chậm khi admin query lịch sử.
-           → Thêm composite index trên (user, timestamp), (action, timestamp),
-             (ip_address, action).
-
-  [FIX-7]  RemoteAuthRequest.is_expired là property → không dùng được trong
-           filter(). Thêm get_active() classmethod trả queryset chuẩn.
-
-  [KEEP]   Tất cả logic đúng từ bản nộp: PendingRegistration hash (BUG-7),
-           RemoteAuthRequest expires_at (WARN-2), OTPAttempt rate limiting,
-           EmailOTP hash + hmac.compare_digest, hotp_secret field riêng.
-"""
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -539,8 +505,8 @@ class RemoteAuthRequest(models.Model):
         ('denied',   'Đã từ chối'),
     ]
 
-    # [FIX-PUSH-EXPIRY] 30 giây hết hạn thay vì 5 phút
-    EXPIRY_SECONDS = 30
+    # [FIX-PUSH-EXPIRY] 120 giây hết hạn — đủ để user mở app, đọc và bấm xác nhận
+    EXPIRY_SECONDS = 120
 
     user        = models.ForeignKey(User, on_delete=models.CASCADE)
     session_key = models.CharField(max_length=40, db_index=True)
@@ -587,8 +553,13 @@ class RemoteAuthRequest(models.Model):
 
     @classmethod
     def cleanup_expired(cls):
-        """Xóa request hết hạn. Gọi từ check_auth_status hoặc celery beat."""
-        cls.objects.filter(expires_at__lt=timezone.now()).delete()
+        """
+        Xóa request đã hết hạn trên 10 phút — giữ lại lịch sử gần để
+        trang auth_approval hiện history sau khi user vừa approve/deny.
+        Chỉ xóa hẳn sau khi đã qua đủ thời gian giữ lại.
+        """
+        cutoff = timezone.now() - datetime.timedelta(minutes=10)
+        cls.objects.filter(expires_at__lt=cutoff).delete()
 
     def __str__(self):
         return f'RemoteAuth({self.user.username} | {self.status})'
