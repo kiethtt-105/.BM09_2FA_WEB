@@ -1441,7 +1441,7 @@ def verify_2fa(request):
                 'has_app_otp': profile.has_app_otp, 'has_email_otp': profile.has_email_otp,
                 'has_fido2': has_fido2, 'has_other_devices': other_devices.exists(),
                 'other_devices_list': list(other_devices[:3]), 'push_request_sent': True,
-                'push_expiry_seconds': 30,
+                'push_expiry_seconds': 120,
             })
 
         # ── Gửi Email OTP ────────────────────────────────────────────────────
@@ -1698,17 +1698,17 @@ def check_auth_status(request):
     ).order_by('-created_at').first()
 
     if not req:
-        # [FIX-PUSH-EXPIRED] Không tìm thấy request active → có thể đã hết hạn 30s
-        # Kiểm tra xem có request nào của session này đã expired không
+        # Không tìm thấy request active → kiểm tra xem có request hết hạn gần đây không
+        # [FIX] KHÔNG delete expired record — giữ lại để auth_approval vẫn hiện history.
+        # cleanup_expired() trong models.py sẽ dọn sau 10 phút.
         expired_req = RemoteAuthRequest.objects.filter(
             session_key=session_key,
             expires_at__lte=timezone.now(),
         ).order_by('-created_at').first()
         if expired_req:
-            expired_req.delete()
             return JsonResponse({
                 'status': 'expired',
-                'message': 'Yêu cầu xác thực đã hết hạn (30 giây). Vui lòng thử lại.',
+                'message': 'Yêu cầu xác thực đã hết hạn. Vui lòng thử lại.',
             })
         return JsonResponse({'status': 'pending'})
 
@@ -1717,13 +1717,15 @@ def check_auth_status(request):
             user = User.objects.get(id=uid)
             # [BUG-5] Xác minh request thuộc đúng user này
             if req.user_id != user.id:
+                # Không match user — xóa luôn request lạ này
                 req.delete()
                 return JsonResponse({'status': 'error', 'detail': 'user_mismatch'}, status=403)
 
             user.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, user)
             request.session.pop('pre_2fa_user_id', None)
-            req.delete()
+            # [FIX] KHÔNG delete req — giữ lại để history_logs trên auth_approval còn record.
+            # Record sẽ được cleanup_expired() dọn sau 10 phút.
 
             TrustedDevice.objects.update_or_create(
                 session_key=request.session.session_key,
@@ -1745,7 +1747,7 @@ def check_auth_status(request):
             return JsonResponse({'status': 'error'}, status=400)
 
     elif req.status == 'denied':
-        req.delete()
+        # [FIX] KHÔNG delete req — giữ lại để history_logs còn record 'denied'.
         # [FIX-PUSH-DENIED] Xóa pre_2fa_user_id để client biết phải quay lại chọn method khác.
         # Không xóa session hoàn toàn — user vẫn có thể dùng TOTP/Email/FIDO2.
         request.session.pop('pre_2fa_user_id', None)
@@ -1760,8 +1762,6 @@ def check_auth_status(request):
             'message': 'Yêu cầu đăng nhập đã bị từ chối. Vui lòng chọn phương thức xác thực khác.',
         })
 
-    # [FIX-PUSH-EXPIRED] Request hết hạn (tồn tại nhưng expires_at < now không lọc được ở trên)
-    # → trả expired để frontend hiển thị đúng
     return JsonResponse({'status': 'pending'})
 
 
