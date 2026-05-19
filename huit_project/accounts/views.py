@@ -450,7 +450,8 @@ def login_view(request):
 
             # ── Luồng 1b: User thường có 2FA → verify_2fa ───────────────────
             if profile.has_app_otp or profile.has_email_otp or profile.has_hotp or has_fido2:
-                request.session['pre_2fa_user_id'] = user.id
+                request.session['pre_2fa_user_id']   = user.id
+                request.session['pre_2fa_trust_dev'] = (request.POST.get('trust_device') == '1')
 
                 other_devices = TrustedDevice.objects.filter(
                     user=user, is_active=True
@@ -483,6 +484,7 @@ def login_view(request):
             if not request.session.session_key:
                 request.session.create()
 
+            trust_this_device = request.POST.get('trust_device') == '1'
             TrustedDevice.objects.update_or_create(
                 session_key=request.session.session_key,
                 defaults={
@@ -491,6 +493,7 @@ def login_view(request):
                     'ip_address': ip,
                     'last_seen':  timezone.now(),
                     'is_active':  True,
+                    'is_trusted': trust_this_device,
                 }
             )
 
@@ -1387,11 +1390,13 @@ def verify_2fa(request):
             if not request.session.session_key:
                 request.session.create()
 
+            trust_this_device = request.session.pop('pre_2fa_trust_dev', False)
             TrustedDevice.objects.update_or_create(
                 session_key=request.session.session_key,
                 defaults={
                     'user': user, 'user_agent': user_agent,
-                    'ip_address': ip, 'last_seen': timezone.now(), 'is_active': True,
+                    'ip_address': ip, 'last_seen': timezone.now(),
+                    'is_active': True, 'is_trusted': trust_this_device,
                 }
             )
 
@@ -1943,7 +1948,38 @@ def device_list(request):
 @login_required
 def active_sessions(request):
     devices = TrustedDevice.objects.filter(user=request.user, is_active=True).order_by('-last_seen')
-    return render(request, 'accounts/active_sessions.html', {'devices': devices})
+    # Lấy pending RemoteAuthRequest để thiết bị trusted có thể approve/deny
+    pending_auth = (
+        RemoteAuthRequest.get_active()
+        .filter(user=request.user, status='pending')
+        .order_by('-created_at')
+        .first()
+    )
+    # Kiểm tra thiết bị hiện tại có is_trusted không (để JS biết có poll không)
+    current_trusted = TrustedDevice.objects.filter(
+        user=request.user,
+        session_key=request.session.session_key,
+        is_active=True,
+        is_trusted=True,
+    ).exists()
+    return render(request, 'accounts/active_sessions.html', {
+        'devices':           devices,
+        'pending_auth':      pending_auth,
+        'is_current_trusted': current_trusted,
+    })
+
+
+@login_required
+@require_POST
+def trust_device(request, device_id):
+    """Bật/tắt is_trusted cho một thiết bị trong active_sessions."""
+    device = get_object_or_404(TrustedDevice, id=device_id, user=request.user)
+    # Không cho trust chính thiết bị đang dùng từ button (tuỳ UX), nhưng vẫn cho phép
+    device.is_trusted = not device.is_trusted
+    device.save(update_fields=['is_trusted'])
+    state = 'tin cậy' if device.is_trusted else 'không tin cậy'
+    messages.success(request, f'Thiết bị "{device.name}" đã được đánh dấu {state}.')
+    return redirect('active_sessions')
 
 
 @login_required

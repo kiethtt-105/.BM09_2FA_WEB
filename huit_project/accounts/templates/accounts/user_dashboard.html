@@ -137,6 +137,75 @@ input::placeholder{color:var(--muted);}
 }
 .flash-success{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:#6ee7b7;}
 .flash-error{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#fca5a5;}
+.flash-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);color:#fcd34d;}
+
+/* Section divider */
+.section-sep{height:1px;background:var(--border);margin:28px 0;}
+.section-title{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;color:var(--muted);margin-bottom:14px;
+}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Stat cards */
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:0;}
+.stat-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:11px;
+  padding:14px 16px;
+}
+.stat-label{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+.stat-val{font-size:20px;font-weight:700;color:var(--blue3);font-family:var(--mono);}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+
+/* 2FA summary strip */
+.twofa-strip{
+  background:var(--bg2);border:1px solid var(--border);border-radius:11px;
+  padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.twofa-methods{display:flex;gap:8px;flex-wrap:wrap;flex:1;}
+.method-pill{
+  display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;
+  font-size:11px;font-weight:600;font-family:var(--mono);
+}
+.pill-on{background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.20);color:#6ee7b7;}
+.pill-off{background:var(--bg3);border:1px solid var(--border);color:var(--muted);}
+.pill-dot{width:5px;height:5px;border-radius:50%;}
+.dot-on{background:#10b981;}
+.dot-off{background:var(--muted);}
+
+/* Activity log */
+.act-row{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 0;border-bottom:1px solid var(--border);
+}
+.act-row:last-child{border-bottom:none;}
+.act-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.act-dot.ok{background:var(--success);}
+.act-dot.fail{background:var(--danger);}
+.act-dot.out{background:var(--muted);}
+.act-info{flex:1;}
+.act-label{font-size:12px;font-weight:600;}
+.act-meta{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:1px;}
+.act-time{font-family:var(--mono);font-size:11px;color:var(--muted);flex-shrink:0;}
+
+/* Password change */
+.pwd-box{background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:20px 22px;}
+input[type=password]{
+  width:100%;padding:10px 12px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+input[type=password]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.10);}
+input[type=password]::placeholder{color:var(--muted);}
+.pwd-strength{height:3px;border-radius:99px;background:var(--bg3);margin-top:6px;overflow:hidden;}
+.pwd-strength-fill{height:100%;border-radius:99px;transition:width .3s,background .3s;}
+
+/* Badge */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--mono);}
+.badge-success{background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.20);color:#6ee7b7;}
+.badge-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.18);color:#fcd34d;}
+.badge-muted{background:var(--bg3);border:1px solid var(--border);color:var(--muted);}
 
 /* Toast */
 #toast{
@@ -177,7 +246,7 @@ input::placeholder{color:var(--muted);}
     <a href="{% url 'active_sessions' %}" class="nav-item">
       <i class="fa fa-laptop"></i> Phiên đăng nhập
     </a>
-    
+  
     <a href="{% url 'manage_passkeys' %}" class="nav-item">
       <i class="fa fa-fingerprint"></i> Quản lý Passkey
     </a>
@@ -197,21 +266,21 @@ input::placeholder{color:var(--muted);}
   <!-- ███ MAIN ███ -->
   <div class="main">
 
-    <!-- Flash messages -->
+    <!-- Flash -->
     {% if messages %}
       {% for message in messages %}
-        <div class="flash {% if message.tags == 'error' %}flash-error{% else %}flash-success{% endif %}">
-          <i class="fa {% if message.tags == 'error' %}fa-circle-exclamation{% else %}fa-circle-check{% endif %}"></i>
+        <div class="flash {% if message.tags == 'error' %}flash-error{% elif 'warning' in message.tags %}flash-warn{% else %}flash-success{% endif %}">
+          <i class="fa {% if message.tags == 'error' %}fa-circle-xmark{% elif 'warning' in message.tags %}fa-triangle-exclamation{% else %}fa-circle-check{% endif %}"></i>
           {{ message }}
         </div>
       {% endfor %}
     {% endif %}
 
-    <!-- ══ HỒ SƠ CÁ NHÂN ══ -->
+    <!-- ══ 1. HỒ SƠ CÁ NHÂN ══ -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
       <div>
         <div class="panel-title">Hồ sơ cá nhân</div>
-        <div class="panel-sub">Thông tin tài khoản của bạn</div>
+        <div class="panel-sub" style="margin-bottom:0;">Thông tin tài khoản của bạn</div>
       </div>
       <button onclick="toggleEdit()" class="btn btn-outline btn-sm" id="edit-btn">
         <i class="fa fa-pen"></i> Chỉnh sửa
@@ -227,15 +296,37 @@ input::placeholder{color:var(--muted);}
       </div>
       <div class="info-item">
         <div class="ilabel">Họ và tên</div>
-        <div class="ivalue">{{ user.first_name }} {{ profile.middle_name }} {{ user.last_name }}</div>
+        <div class="ivalue">
+          {% if user.first_name or user.last_name %}
+            {{ user.first_name }} {% if profile.middle_name %}{{ profile.middle_name }} {% endif %}{{ user.last_name }}
+          {% else %}<span class="empty">Chưa cập nhật</span>{% endif %}
+        </div>
       </div>
       <div class="info-item">
         <div class="ilabel">Email</div>
-        <div class="ivalue {% if not user.email %}empty{% endif %}">{{ user.email|default:"Chưa cập nhật" }}</div>
+        <div class="ivalue {% if not user.email %}empty{% endif %}">
+          {{ user.email|default:"Chưa cập nhật" }}
+        </div>
       </div>
       <div class="info-item">
         <div class="ilabel">Điện thoại</div>
-        <div class="ivalue {% if not profile.phone_number %}empty{% endif %}">{{ profile.phone_number|default:"Chưa cập nhật" }}</div>
+        <div class="ivalue {% if not profile.phone_number %}empty{% endif %}">
+          {{ profile.phone_number|default:"Chưa cập nhật" }}
+        </div>
+      </div>
+      <div class="info-item">
+        <div class="ilabel">Ngày tham gia</div>
+        <div class="ivalue">{{ user.date_joined|date:"d/m/Y" }}</div>
+      </div>
+      <div class="info-item">
+        <div class="ilabel">Trạng thái</div>
+        <div class="ivalue">
+          {% if user.is_active %}
+            <span class="badge badge-success"><i class="fa fa-circle" style="font-size:5px;"></i> Hoạt động</span>
+          {% else %}
+            <span class="badge badge-warn"><i class="fa fa-circle" style="font-size:5px;"></i> Bị khoá</span>
+          {% endif %}
+        </div>
       </div>
     </div>
 
@@ -285,6 +376,156 @@ input::placeholder{color:var(--muted);}
             <i class="fa fa-floppy-disk"></i> Lưu thay đổi
           </button>
           <button type="button" onclick="toggleEdit()" class="btn btn-ghost">Hủy</button>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+
+    <!-- ══ 2. THỐNG KÊ TÀI KHOẢN ══ -->
+    <div class="section-sep"></div>
+    <div class="section-title"><i class="fa fa-chart-simple" style="color:var(--blue3);"></i> Thống kê tài khoản</div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Ngày tạo</div>
+        <div class="stat-val" style="font-size:15px;margin-top:2px;">{{ user.date_joined|date:"d/m/Y" }}</div>
+        <div class="stat-sub">{{ user.date_joined|timesince }} trước</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Phiên hoạt động</div>
+        <div class="stat-val">{{ active_sessions_count|default:"1" }}</div>
+        <div class="stat-sub">thiết bị đang đăng nhập</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Đăng nhập gần nhất</div>
+        <div class="stat-val" style="font-size:14px;margin-top:2px;">
+          {% if last_login_log %}{{ last_login_log.timestamp|date:"H:i" }}{% else %}—{% endif %}
+        </div>
+        <div class="stat-sub">
+          {% if last_login_log %}{{ last_login_log.timestamp|date:"d/m/Y" }} · {{ last_login_log.ip_address }}{% else %}Chưa có dữ liệu{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 3. BẢO MẬT 2FA TÓM TẮT ══ -->
+    <div class="section-sep"></div>
+    <div class="section-title"><i class="fa fa-shield-halved" style="color:var(--blue3);"></i> Trạng thái bảo mật 2FA</div>
+    <div class="twofa-strip">
+      <div class="twofa-methods">
+        <span class="method-pill {% if profile.has_email_otp %}pill-on{% else %}pill-off{% endif %}">
+          <span class="pill-dot {% if profile.has_email_otp %}dot-on{% else %}dot-off{% endif %}"></span>
+          Email OTP
+        </span>
+        <span class="method-pill {% if profile.has_app_otp %}pill-on{% else %}pill-off{% endif %}">
+          <span class="pill-dot {% if profile.has_app_otp %}dot-on{% else %}dot-off{% endif %}"></span>
+          Authenticator
+        </span>
+        <span class="method-pill {% if profile.has_hotp %}pill-on{% else %}pill-off{% endif %}">
+          <span class="pill-dot {% if profile.has_hotp %}dot-on{% else %}dot-off{% endif %}"></span>
+          HOTP
+        </span>
+        <span class="method-pill {% if has_passkey %}pill-on{% else %}pill-off{% endif %}">
+          <span class="pill-dot {% if has_passkey %}dot-on{% else %}dot-off{% endif %}"></span>
+          Passkey
+        </span>
+      </div>
+      <a href="{% url 'security_2fa' %}" class="btn btn-ghost btn-sm" style="flex-shrink:0;">
+        <i class="fa fa-gear"></i> Quản lý
+      </a>
+    </div>
+    {% if not profile.has_any_2fa %}
+    <div style="margin-top:10px;padding:10px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.16);border-radius:8px;font-size:12px;color:#fcd34d;display:flex;align-items:center;gap:8px;">
+      <i class="fa fa-triangle-exclamation"></i>
+      Chưa bật phương thức bảo mật 2FA nào. <a href="{% url 'security_2fa' %}" style="color:#fcd34d;text-decoration:underline;margin-left:4px;">Bật ngay</a>
+    </div>
+    {% endif %}
+
+    <!-- ══ 4. HOẠT ĐỘNG GẦN ĐÂY ══ -->
+    <div class="section-sep"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div class="section-title" style="margin-bottom:0;flex:1;">
+        <i class="fa fa-clock-rotate-left" style="color:var(--blue3);"></i> Hoạt động gần đây
+      </div>
+      <a href="{% url 'login_history' %}" style="font-size:11px;color:var(--blue3);font-family:var(--mono);text-decoration:none;white-space:nowrap;">
+        Xem tất cả <i class="fa fa-arrow-right" style="font-size:9px;"></i>
+      </a>
+    </div>
+    {% if recent_activity %}
+      {% for log in recent_activity %}
+      <div class="act-row">
+        <div class="act-dot {% if log.action == 'login' or log.action == 'otp_success' %}ok{% elif log.action == 'logout' %}out{% else %}fail{% endif %}"></div>
+        <div class="act-info">
+          <div class="act-label">
+            {% if log.action == 'login' %}Đăng nhập thành công
+            {% elif log.action == 'logout' %}Đăng xuất
+            {% elif log.action == 'otp_success' %}Xác thực 2FA thành công
+            {% elif log.action == 'otp_fail' %}Xác thực 2FA thất bại
+            {% elif log.action == 'login_failed' %}Đăng nhập thất bại
+            {% elif log.action == '2fa_enable' %}Bật phương thức 2FA
+            {% elif log.action == '2fa_disable' %}Tắt phương thức 2FA
+            {% else %}{{ log.get_action_display }}{% endif %}
+          </div>
+          <div class="act-meta">{{ log.ip_address|default:"—" }}{% if log.user_agent %} · {{ log.user_agent|truncatechars:40 }}{% endif %}</div>
+        </div>
+        <div class="act-time">{{ log.timestamp|timesince }} trước</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="text-align:center;padding:24px 0;color:var(--muted);font-size:13px;">
+        <i class="fa fa-clock" style="font-size:22px;display:block;margin-bottom:8px;color:var(--bg3);"></i>
+        Chưa có hoạt động nào được ghi lại
+      </div>
+    {% endif %}
+
+    <!-- ══ 5. ĐỔI MẬT KHẨU ══ -->
+    <div class="section-sep"></div>
+    <div class="section-title"><i class="fa fa-lock" style="color:var(--blue3);"></i> Đổi mật khẩu</div>
+    <div class="pwd-box">
+      {% if show_pwd_otp %}
+      <!-- Bước 2: nhập OTP xác nhận -->
+      <div style="text-align:center;">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px;">Xác nhận đổi mật khẩu</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Nhập mã OTP đã gửi đến <strong>{{ user.email }}</strong></div>
+        <form method="POST">
+          {% csrf_token %}
+          <input type="hidden" name="change_password_action" value="confirm_pwd_otp">
+          <input type="text" name="pwd_otp_code" maxlength="6" class="otp-big" placeholder="000000" autocomplete="one-time-code" inputmode="numeric">
+          <div class="btn-row" style="justify-content:center;">
+            <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Xác nhận</button>
+            <a href="{% url 'dashboard' %}" class="btn btn-ghost">Hủy</a>
+          </div>
+        </form>
+      </div>
+      {% else %}
+      <!-- Bước 1: nhập mật khẩu mới -->
+      <form method="POST" id="pwd-form">
+        {% csrf_token %}
+        <input type="hidden" name="change_password_action" value="request_pwd_change">
+        <div class="row2">
+          <div class="field">
+            <label class="flabel">Mật khẩu hiện tại</label>
+            <input type="password" name="current_password" placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <div class="field" style="grid-column:1/-1;"></div>
+          <div class="field">
+            <label class="flabel">Mật khẩu mới</label>
+            <input type="password" name="new_password1" placeholder="••••••••" id="pwd-new" oninput="checkPwd()" autocomplete="new-password">
+            <div class="pwd-strength"><div class="pwd-strength-fill" id="pwd-fill" style="width:0%;"></div></div>
+          </div>
+          <div class="field">
+            <label class="flabel">Nhập lại mật khẩu mới</label>
+            <input type="password" name="new_password2" placeholder="••••••••" id="pwd-confirm" autocomplete="new-password">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:14px;">
+          Tối thiểu 8 ký tự · Gồm chữ hoa, chữ thường, số
+          {% if profile.has_email_otp or profile.has_app_otp %}
+          · Sẽ gửi OTP xác nhận qua email
+          {% endif %}
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="fa fa-key"></i> Đổi mật khẩu
+          </button>
         </div>
       </form>
       {% endif %}

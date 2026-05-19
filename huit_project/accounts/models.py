@@ -499,12 +499,18 @@ class TrustedDevice(models.Model):
     ip_address  = models.CharField(max_length=50, blank=True, null=True)
     last_seen   = models.DateTimeField(auto_now=True)
     is_active   = models.BooleanField(default=True)
+    is_trusted  = models.BooleanField(
+        default=False,
+        verbose_name='Thiết bị tin cậy (nhận thông báo xác nhận)',
+        help_text='Thiết bị này có thể nhận và xử lý yêu cầu xác nhận đăng nhập từ thiết bị khác.'
+    )
 
     class Meta:
         verbose_name        = 'Thiết bị tin cậy'
         verbose_name_plural = 'Thiết bị tin cậy'
         indexes = [
-            models.Index(fields=['user', 'is_active'], name='trusteddev_user_active_idx'),
+            models.Index(fields=['user', 'is_active'],          name='trusteddev_user_active_idx'),
+            models.Index(fields=['user', 'is_active', 'is_trusted'], name='trusteddev_trusted_idx'),
         ]
 
     def __str__(self):

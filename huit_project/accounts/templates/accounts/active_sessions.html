@@ -109,6 +109,73 @@ td{padding:14px 18px;vertical-align:middle;}
   font-family:var(--mono);
 }
 
+/* Trust badge */
+.badge-trusted{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:5px;font-size:10px;font-weight:700;font-family:var(--mono);
+  background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.22);color:var(--blue2);
+  margin-left:6px;vertical-align:middle;letter-spacing:.5px;
+}
+.btn-trust{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;
+  background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.20);color:var(--blue2);
+  cursor:pointer;font-family:var(--font);transition:all .15s;
+}
+.btn-trust:hover{background:rgba(37,99,235,.18);border-color:rgba(37,99,235,.40);}
+.btn-untrust{
+  background:rgba(100,116,139,.08);border-color:rgba(100,116,139,.20);color:var(--muted2);
+}
+.btn-untrust:hover{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.20);color:#fca5a5;}
+
+/* Action column two-btn group */
+.action-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+
+/* ── Auth Approval Popup ── */
+.auth-popup-overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(2,6,14,.7);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;
+  animation:fadeIn .25s ease both;
+}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.auth-popup{
+  width:100%;max-width:380px;margin:16px;
+  background:var(--bg1);border:1px solid rgba(37,99,235,.28);border-radius:18px;
+  padding:32px 28px;text-align:center;
+  box-shadow:0 0 0 1px rgba(37,99,235,.10) inset,0 32px 64px rgba(2,6,14,.7);
+  animation:slideUp .3s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.popup-icon{
+  width:64px;height:64px;border-radius:16px;
+  background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.28);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;margin:0 auto 18px;
+}
+.popup-title{font-size:18px;font-weight:700;margin-bottom:6px;}
+.popup-sub{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:6px;}
+.popup-device{
+  display:inline-flex;align-items:center;gap:7px;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:8px;padding:7px 14px;
+  font-family:var(--mono);font-size:12px;color:var(--blue2);
+  margin:10px 0 18px;
+}
+.popup-timer{
+  font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:20px;
+}
+.popup-timer span{color:var(--blue2);font-weight:700;}
+.popup-btns{display:flex;gap:10px;}
+.popup-btns button{
+  flex:1;padding:12px;border-radius:10px;border:none;
+  font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;
+  transition:opacity .15s,transform .15s;
+}
+.popup-btns button:hover{opacity:.85;transform:translateY(-1px);}
+.btn-approve{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.35);}
+.btn-deny{background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.20)!important;color:#fca5a5;}
+
   /* ── BLUE PRO OVERRIDES ── */
   body::before {
     background:
@@ -358,6 +425,7 @@ td{padding:14px 18px;vertical-align:middle;}
           <th>Địa chỉ IP</th>
           <th>Hoạt động cuối</th>
           <th>Trạng thái</th>
+          <th>Hành động</th>
         </tr>
       </thead>
       <tbody>
@@ -373,7 +441,12 @@ td{padding:14px 18px;vertical-align:middle;}
                 {% endif %}
               </div>
               <div>
-                <div class="dev-name">{{ d.name }}</div>
+                <div class="dev-name">
+                  {{ d.name }}
+                  {% if d.is_trusted %}
+                    <span class="badge-trusted"><i class="fa fa-shield-check"></i> Tin cậy</span>
+                  {% endif %}
+                </div>
                 <div class="dev-ua" title="{{ d.user_agent }}">{{ d.user_agent }}</div>
               </div>
             </div>
@@ -393,13 +466,36 @@ td{padding:14px 18px;vertical-align:middle;}
                 <span class="dot-pulse"></span> Online
               </span>
             {% else %}
-              <form method="POST" action="{% url 'logout_device' d.id %}" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" class="btn-logout-dev">
-                  <i class="fa fa-user-slash" style="font-size:11px"></i> Đăng xuất
-                </button>
-              </form>
+              <span style="font-size:12px;color:var(--muted);font-family:var(--mono);">Offline</span>
             {% endif %}
+          </td>
+          <td>
+            <div class="action-group">
+              {% if d.session_key != request.session.session_key %}
+                {# Nút đăng xuất #}
+                <form method="POST" action="{% url 'logout_device' d.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-logout-dev">
+                    <i class="fa fa-user-slash" style="font-size:11px"></i> Đăng xuất
+                  </button>
+                </form>
+              {% endif %}
+              {# Nút tin tưởng / bỏ tin tưởng #}
+              <form method="POST" action="{% url 'trust_device' d.id %}" style="display:inline;">
+                {% csrf_token %}
+                {% if d.is_trusted %}
+                  <button type="submit" class="btn-trust btn-untrust"
+                          title="Bỏ tin tưởng thiết bị này">
+                    <i class="fa fa-shield-xmark"></i> Bỏ tin cậy
+                  </button>
+                {% else %}
+                  <button type="submit" class="btn-trust"
+                          title="Đánh dấu tin tưởng — thiết bị này sẽ nhận thông báo xác nhận đăng nhập">
+                    <i class="fa fa-shield-check"></i> Tin cậy
+                  </button>
+                {% endif %}
+              </form>
+            </div>
           </td>
         </tr>
         {% empty %}
@@ -420,8 +516,126 @@ td{padding:14px 18px;vertical-align:middle;}
     <i class="fa fa-circle-info"></i>
     <span>Nếu thấy thiết bị lạ, hãy đăng xuất ngay và đổi mật khẩu.</span>
   </div>
-</div>
+
   </div><!-- /page -->
 </div><!-- /layout -->
+
+{# ── Auth Approval Popup — chỉ hiện khi thiết bị này là trusted ── #}
+{% with current_device=request.session.session_key %}
+<div id="auth-popup-overlay" class="auth-popup-overlay" style="display:none;">
+  <div class="auth-popup">
+    <div class="popup-icon">🔐</div>
+    <div class="popup-title">Yêu cầu đăng nhập mới</div>
+    <div class="popup-sub">Ai đó đang đăng nhập vào tài khoản của bạn từ thiết bị:</div>
+    <div class="popup-device">
+      <i class="fa fa-laptop"></i>
+      <span id="popup-device-info">...</span>
+    </div>
+    <div class="popup-timer">
+      Hết hạn sau <span id="popup-countdown">300</span>s
+    </div>
+    <div class="popup-btns">
+      <button class="btn-approve" onclick="respondAuth('approved')">
+        <i class="fa fa-circle-check"></i> Xác nhận
+      </button>
+      <button class="btn-deny" onclick="respondAuth('denied')">
+        <i class="fa fa-circle-xmark"></i> Từ chối
+      </button>
+    </div>
+  </div>
+</div>
+{% endwith %}
+
+<script>
+// ── Polling: kiểm tra pending auth request mỗi 4 giây ──
+// Chỉ poll khi trang đang active để tiết kiệm request
+let currentReqId  = null;
+let countdownVal  = 300;
+let countdownTick = null;
+let isPolling     = true;
+
+// Kiểm tra thiết bị hiện tại có is_trusted không (server trả qua context)
+const isTrustedDevice = {{ is_current_trusted|yesno:"true,false" }};
+
+function startCountdown(seconds) {
+  countdownVal = seconds;
+  clearInterval(countdownTick);
+  countdownTick = setInterval(() => {
+    countdownVal--;
+    const el = document.getElementById('popup-countdown');
+    if (el) el.textContent = countdownVal;
+    if (countdownVal <= 0) {
+      clearInterval(countdownTick);
+      hidePopup();
+    }
+  }, 1000);
+}
+
+function showPopup(req) {
+  currentReqId = req.id;
+  document.getElementById('popup-device-info').textContent = req.device_info;
+  const remaining = Math.max(0, Math.floor((new Date(req.expires_at) - Date.now()) / 1000));
+  startCountdown(remaining);
+  document.getElementById('auth-popup-overlay').style.display = 'flex';
+}
+
+function hidePopup() {
+  document.getElementById('auth-popup-overlay').style.display = 'none';
+  currentReqId = null;
+  clearInterval(countdownTick);
+}
+
+function respondAuth(action) {
+  if (!currentReqId) return;
+  const reqId = currentReqId;
+  hidePopup();
+  fetch(`/api/respond-auth/${reqId}/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCsrf(),
+    },
+    body: JSON.stringify({ action }),
+  }).catch(console.error);
+}
+
+async function pollPendingAuth() {
+  if (!isTrustedDevice) return;       // thiết bị không trusted → không poll
+  if (!isPolling) return;
+  try {
+    const resp = await fetch('/api/get-auth-request/', { credentials: 'same-origin' });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.pending && data.id && data.id !== currentReqId) {
+      showPopup(data);
+    } else if (!data.pending && currentReqId) {
+      // Request đã được xử lý từ nơi khác
+      hidePopup();
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function getCsrf() {
+  const name = 'csrftoken';
+  const cookies = document.cookie.split(';');
+  for (const c of cookies) {
+    const [k, v] = c.trim().split('=');
+    if (k === name) return decodeURIComponent(v);
+  }
+  return '';
+}
+
+// Poll ngay khi load và mỗi 4 giây
+if (isTrustedDevice) {
+  pollPendingAuth();
+  setInterval(pollPendingAuth, 4000);
+}
+
+// Dừng poll khi tab không active
+document.addEventListener('visibilitychange', () => {
+  isPolling = !document.hidden;
+  if (isPolling && isTrustedDevice) pollPendingAuth();
+});
+</script>-e 
 </body>
 </html>

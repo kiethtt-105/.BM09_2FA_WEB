@@ -1,4 +1,3 @@
-
 from django.urls import path
 from . import views
 
@@ -23,6 +22,7 @@ urlpatterns = [
     path('login-history/', views.login_history, name='login_history'),
     path('active-sessions/', views.active_sessions, name='active_sessions'),
     path('logout-device/<int:device_id>/', views.logout_device, name='logout_device'),
+    path('trust-device/<int:device_id>/',  views.trust_device,  name='trust_device'),
     path('logout-all-devices/', views.logout_all_devices, name='logout_all_devices'),
     path('confirm-device/', views.confirm_device, name='confirm_device'),
     path('toggle-push-auth/', views.toggle_push_auth, name='toggle_push_auth'),
