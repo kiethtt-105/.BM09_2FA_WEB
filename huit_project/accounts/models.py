@@ -539,10 +539,18 @@ class RemoteAuthRequest(models.Model):
         ('denied',   'Đã từ chối'),
     ]
 
-    EXPIRY_MINUTES = 5
+    # [FIX-PUSH-EXPIRY] 30 giây hết hạn thay vì 5 phút
+    EXPIRY_SECONDS = 30
 
     user        = models.ForeignKey(User, on_delete=models.CASCADE)
     session_key = models.CharField(max_length=40, db_index=True)
+    # [FIX-PUSH-TARGET] Lưu session_key của thiết bị tin cậy được chỉ định nhận push
+    # → chỉ đúng thiết bị đó mới thấy popup, không broadcast tất cả
+    target_device_session = models.CharField(
+        max_length=40, blank=True, default='',
+        verbose_name='Session của thiết bị nhận push',
+        help_text='Session key của trusted device được chọn để xác nhận yêu cầu này.',
+    )
     device_info = models.CharField(max_length=255)
     status      = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at  = models.DateTimeField(auto_now_add=True)
@@ -552,12 +560,14 @@ class RemoteAuthRequest(models.Model):
         verbose_name        = 'Yêu cầu xác thực từ xa'
         verbose_name_plural = 'Yêu cầu xác thực từ xa'
         indexes = [
-            models.Index(fields=['session_key', 'expires_at'], name='remoteauth_session_exp_idx'),
+            models.Index(fields=['session_key', 'expires_at'],        name='remoteauth_session_exp_idx'),
+            models.Index(fields=['target_device_session', 'status'],  name='remoteauth_target_status_idx'),
         ]
 
     def save(self, *args, **kwargs):
         if not self.expires_at:
-            self.expires_at = timezone.now() + datetime.timedelta(minutes=self.EXPIRY_MINUTES)
+            # [FIX-PUSH-EXPIRY] Hết hạn sau EXPIRY_SECONDS giây
+            self.expires_at = timezone.now() + datetime.timedelta(seconds=self.EXPIRY_SECONDS)
         super().save(*args, **kwargs)
 
     @property

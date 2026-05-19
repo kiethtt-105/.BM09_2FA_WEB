@@ -409,11 +409,13 @@ td{padding:14px 18px;vertical-align:middle;}
       <div class="page-sub">Danh sách thiết bị đã đăng nhập</div>
     </div>
     {% if devices|length > 1 %}
-    <a href="{% url 'logout_all_devices' %}"
-       onclick="return confirm('Đăng xuất tất cả thiết bị khác?')"
-       class="btn-logout-all">
-      <i class="fa fa-right-from-bracket"></i> Đăng xuất tất cả thiết bị khác
-    </a>
+    <form method="POST" action="{% url 'logout_all_devices' %}" style="margin:0;"
+          onsubmit="return confirm('Đăng xuất tất cả thiết bị khác? Bạn sẽ vẫn đăng nhập trên thiết bị này.');">
+      {% csrf_token %}
+      <button type="submit" class="btn-logout-all">
+        <i class="fa fa-right-from-bracket"></i> Đăng xuất tất cả thiết bị khác
+      </button>
+    </form>
     {% endif %}
   </div>
 
@@ -434,7 +436,7 @@ td{padding:14px 18px;vertical-align:middle;}
           <td>
             <div class="device-cell">
               <div class="dev-icon">
-                {% if 'Mobile' in d.user_agent or 'Android' in d.user_agent or 'iPhone' in d.user_agent %}
+                {% if 'Mobile' in d.device.user_agent or 'Android' in d.device.user_agent or 'iPhone' in d.device.user_agent %}
                   <i class="fa fa-mobile-screen"></i>
                 {% else %}
                   <i class="fa fa-laptop"></i>
@@ -442,28 +444,32 @@ td{padding:14px 18px;vertical-align:middle;}
               </div>
               <div>
                 <div class="dev-name">
-                  {{ d.name }}
+                  {{ d.device.name }}
                   {% if d.is_trusted %}
                     <span class="badge-trusted"><i class="fa fa-shield-check"></i> Tin cậy</span>
                   {% endif %}
                 </div>
-                <div class="dev-ua" title="{{ d.user_agent }}">{{ d.user_agent }}</div>
+                <div class="dev-ua" title="{{ d.device.user_agent }}">{{ d.device.user_agent }}</div>
               </div>
             </div>
           </td>
           <td>
-            <span class="ip-badge">{{ d.ip_address }}</span>
+            <span class="ip-badge">{{ d.device.ip_address }}</span>
           </td>
           <td>
             <div class="time-cell">
-              <div class="t">{{ d.last_seen|date:"H:i" }}</div>
-              <div class="d">{{ d.last_seen|date:"d/m/Y" }}</div>
+              <div class="t">{{ d.device.last_seen|date:"H:i" }}</div>
+              <div class="d">{{ d.device.last_seen|date:"d/m/Y" }}</div>
             </div>
           </td>
           <td>
-            {% if d.session_key == request.session.session_key %}
+            {% if d.is_current %}
               <span class="badge-online">
-                <span class="dot-pulse"></span> Online
+                <span class="dot-pulse"></span> Online · Thiết bị này
+              </span>
+            {% elif d.is_online %}
+              <span class="badge-online" style="background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.15);">
+                <span class="dot-pulse" style="background:#6ee7b7;"></span> Online
               </span>
             {% else %}
               <span style="font-size:12px;color:var(--muted);font-family:var(--mono);">Offline</span>
@@ -471,9 +477,9 @@ td{padding:14px 18px;vertical-align:middle;}
           </td>
           <td>
             <div class="action-group">
-              {% if d.session_key != request.session.session_key %}
+              {% if not d.is_current %}
                 {# Nút đăng xuất #}
-                <form method="POST" action="{% url 'logout_device' d.id %}" style="display:inline;">
+                <form method="POST" action="{% url 'logout_device' d.device.id %}" style="display:inline;">
                   {% csrf_token %}
                   <button type="submit" class="btn-logout-dev">
                     <i class="fa fa-user-slash" style="font-size:11px"></i> Đăng xuất
@@ -481,7 +487,7 @@ td{padding:14px 18px;vertical-align:middle;}
                 </form>
               {% endif %}
               {# Nút tin tưởng / bỏ tin tưởng #}
-              <form method="POST" action="{% url 'trust_device' d.id %}" style="display:inline;">
+              <form method="POST" action="{% url 'trust_device' d.device.id %}" style="display:inline;">
                 {% csrf_token %}
                 {% if d.is_trusted %}
                   <button type="submit" class="btn-trust btn-untrust"
@@ -590,7 +596,7 @@ function respondAuth(action) {
       'Content-Type': 'application/json',
       'X-CSRFToken': getCsrf(),
     },
-    body: JSON.stringify({ action }),
+    body: JSON.stringify({ status: action }),  // API expects 'status' field
   }).catch(console.error);
 }
 
@@ -617,9 +623,13 @@ function getCsrf() {
   return '';
 }
 
-// Luôn poll khi mở trang active-sessions (thiết bị đang online)
-pollPendingAuth();
-setInterval(pollPendingAuth, 4000);
+// Chỉ poll nếu thiết bị này được đánh dấu tin cậy
+// Server trả {'pending': false} ngay nếu không trusted, nhưng ta tránh poll vô ích
+const IS_TRUSTED_DEVICE = {{ current_device_trusted|yesno:"true,false" }};
+if (IS_TRUSTED_DEVICE) {
+  pollPendingAuth();
+  setInterval(pollPendingAuth, 4000);
+}
 
 // Dừng poll khi tab không active, resume khi quay lại
 document.addEventListener('visibilitychange', () => {

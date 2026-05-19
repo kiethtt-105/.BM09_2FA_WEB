@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.contrib.sessions.models import Session as DjSession
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
@@ -453,16 +454,23 @@ def login_view(request):
                 request.session['pre_2fa_user_id']   = user.id
                 request.session['pre_2fa_trust_dev'] = (request.POST.get('trust_device') == '1')
 
-                other_devices = TrustedDevice.objects.filter(
-                    user=user, is_active=True
+                from django.contrib.sessions.models import Session as _DjSession
+                _trusted_qs = TrustedDevice.objects.filter(
+                    user=user, is_active=True, is_trusted=True,
                 ).exclude(session_key=request.session.session_key)
+                _t_keys = list(_trusted_qs.values_list('session_key', flat=True))
+                _live   = set(_DjSession.objects.filter(
+                    session_key__in=_t_keys,
+                    expire_date__gt=timezone.now(),
+                ).values_list('session_key', flat=True))
+                trusted_online_devices = _trusted_qs.filter(session_key__in=_live)
 
                 methods_enabled = []
-                if profile.has_app_otp:                                  methods_enabled.append('Authenticator')
-                if profile.has_email_otp:                                methods_enabled.append('Email OTP')
-                if profile.has_hotp:                                     methods_enabled.append('HOTP')
-                if has_fido2:                                            methods_enabled.append('Passkey')
-                if other_devices.exists() and profile.allow_push_auth and not user.is_staff:
+                if profile.has_app_otp:                                       methods_enabled.append('Authenticator')
+                if profile.has_email_otp:                                     methods_enabled.append('Email OTP')
+                if profile.has_hotp:                                          methods_enabled.append('HOTP')
+                if has_fido2:                                                 methods_enabled.append('Passkey')
+                if trusted_online_devices.exists() and profile.allow_push_auth and not user.is_staff:
                     methods_enabled.append('Thiết bị khác')
 
                 if len(methods_enabled) > 1:
@@ -1286,9 +1294,17 @@ def verify_2fa(request):
     ip         = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
-    other_devices = TrustedDevice.objects.filter(
-        user=user, is_active=True
+    from django.contrib.sessions.models import Session as _DjSession
+    _trusted_qs = TrustedDevice.objects.filter(
+        user=user, is_active=True, is_trusted=True,
     ).exclude(session_key=request.session.session_key)
+    _t_keys  = list(_trusted_qs.values_list('session_key', flat=True))
+    _live    = set(_DjSession.objects.filter(
+        session_key__in=_t_keys,
+        expire_date__gt=timezone.now(),
+    ).values_list('session_key', flat=True))
+    other_devices = _trusted_qs.filter(session_key__in=_live)
+
     has_fido2 = user.passkeys.exists()
 
     methods = []
@@ -1296,8 +1312,7 @@ def verify_2fa(request):
     if profile.has_email_otp: methods.append({'key': 'email', 'name': 'Email OTP',     'icon': '📧'})
     if profile.has_hotp:      methods.append({'key': 'hotp',  'name': 'HOTP',          'icon': '🔢'})
     if has_fido2:             methods.append({'key': 'fido2', 'name': 'Passkey',       'icon': '🔑'})
-    # [SEC-PUSH-1] Chỉ thêm push khi user bật allow_push_auth VÀ có thiết bị online khác
-    # [SEC-PUSH-ADMIN] Admin (is_staff) không bao giờ được dùng Push Auth
+    # Push chỉ hiện khi có trusted device đang online thực sự
     if other_devices.exists() and profile.allow_push_auth and not user.is_staff:
         methods.append({'key': 'push', 'name': 'Thiết bị khác', 'icon': '🔔'})
 
@@ -1341,22 +1356,53 @@ def verify_2fa(request):
         action = request.POST.get('action')
         code   = request.POST.get('otp_code', '').strip()
 
-        # ── Push: gửi yêu cầu tới thiết bị online khác ──────────────────────
+        # ── Push: gửi yêu cầu tới thiết bị tin cậy đang online ─────────────
         if action == 'send_push_request':
+            # [FIX-PUSH-TARGET] Chỉ gửi tới trusted device đang online thực sự.
+            # Lấy lại fresh tại thời điểm bấm (tránh race condition với other_devices ở trên).
+            _t_keys_fresh = list(TrustedDevice.objects.filter(
+                user=user, is_active=True, is_trusted=True,
+            ).exclude(session_key=request.session.session_key
+            ).values_list('session_key', flat=True))
+
+            _live_now = set(DjSession.objects.filter(
+                session_key__in=_t_keys_fresh,
+                expire_date__gt=timezone.now(),
+            ).values_list('session_key', flat=True))
+
+            if not _live_now:
+                # Không còn thiết bị tin cậy nào online → báo rõ, không tạo request
+                messages.warning(
+                    request,
+                    'Không có thiết bị tin cậy nào đang online. Vui lòng chọn phương thức khác.'
+                )
+                return redirect(f'{request.path}?method={enabled_keys[0]}')
+
+            # Chọn thiết bị tin cậy online có last_seen mới nhất
+            target_device = TrustedDevice.objects.filter(
+                user=user, is_active=True, is_trusted=True,
+                session_key__in=_live_now,
+            ).order_by('-last_seen').first()
+
+            # Xóa request cũ của session này
             RemoteAuthRequest.objects.filter(
                 user=user, session_key=request.session.session_key
             ).delete()
+
             RemoteAuthRequest.objects.create(
-                user        = user,
-                session_key = request.session.session_key,
-                status      = 'pending',
-                device_info = request.META.get('HTTP_USER_AGENT', 'Thiết bị lạ')[:255],
+                user                  = user,
+                session_key           = request.session.session_key,
+                target_device_session = target_device.session_key,
+                status                = 'pending',
+                device_info           = request.META.get('HTTP_USER_AGENT', 'Thiết bị lạ')[:255],
+                # expires_at tự set = now + 30s trong model.save()
             )
             return render(request, 'accounts/verify_2fa.html', {
                 'methods': methods, 'method': 'push', 'profile': profile,
                 'has_app_otp': profile.has_app_otp, 'has_email_otp': profile.has_email_otp,
                 'has_fido2': has_fido2, 'has_other_devices': other_devices.exists(),
                 'other_devices_list': list(other_devices[:3]), 'push_request_sent': True,
+                'push_expiry_seconds': 30,
             })
 
         # ── Gửi Email OTP ────────────────────────────────────────────────────
@@ -1501,22 +1547,43 @@ def verify_2fa(request):
 
 @login_required
 def get_pending_auth_request(request):
-    """API polling: thiết bị online kiểm tra có yêu cầu xác thực mới không."""
-    # Dọn request hết hạn
+    """
+    [FIX-PUSH-TRUSTED] Chỉ thiết bị đã được đánh dấu is_trusted=True mới
+    nhận popup push auth. Thiết bị không tin cậy không được nhận thông báo.
+    """
     RemoteAuthRequest.cleanup_expired()
 
+    # Kiểm tra thiết bị hiện tại có is_trusted không
+    current_device = TrustedDevice.objects.filter(
+        user=request.user,
+        session_key=request.session.session_key,
+        is_active=True,
+        is_trusted=True,           # [FIX] chỉ trusted device mới nhận push
+    ).first()
+
+    if not current_device:
+        # Thiết bị này không được tin cậy → không nhận push auth
+        return JsonResponse({'pending': False})
+
+    # [FIX-PUSH-TARGET] Chỉ lấy request có target_device_session = session hiện tại
+    # → đúng thiết bị được chỉ định mới nhận popup, không broadcast
     req = RemoteAuthRequest.objects.filter(
-        user=request.user, status='pending',
-        expires_at__gt=timezone.now(),      # [WARN-2] lọc chưa hết hạn
+        user=request.user,
+        status='pending',
+        expires_at__gt=timezone.now(),
+        target_device_session=request.session.session_key,
     ).order_by('-created_at').first()
 
     if req:
+        remaining = max(0, int((req.expires_at - timezone.now()).total_seconds()))
         return JsonResponse({
-            'has_request': True,
-            'request_id':  req.id,
+            'pending':     True,
+            'id':          req.id,
             'device_info': req.device_info,
+            'expires_at':  req.expires_at.isoformat(),
+            'remaining':   remaining,
         })
-    return JsonResponse({'has_request': False})
+    return JsonResponse({'pending': False})
 
 
 @login_required
@@ -1537,11 +1604,20 @@ def respond_auth_request(request, req_id):
 
     updated = RemoteAuthRequest.objects.filter(
         id=req_id, user=request.user,
-        expires_at__gt=timezone.now(),  # [WARN-2] không xử lý request hết hạn
+        expires_at__gt=timezone.now(),
     ).update(status=status)
 
     if not updated:
         return JsonResponse({'error': 'Request not found or expired'}, status=404)
+
+    # [FIX-PUSH-DENIED] Log denied ngay tại đây để có user context đầy đủ
+    if status == 'denied':
+        ActivityLog.objects.create(
+            user=request.user, username_attempt=request.user.username,
+            action='login_push_denied',
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+        )
 
     return JsonResponse({'status': 'success'})
 
@@ -1571,6 +1647,18 @@ def check_auth_status(request):
     ).order_by('-created_at').first()
 
     if not req:
+        # [FIX-PUSH-EXPIRED] Không tìm thấy request active → có thể đã hết hạn 30s
+        # Kiểm tra xem có request nào của session này đã expired không
+        expired_req = RemoteAuthRequest.objects.filter(
+            session_key=session_key,
+            expires_at__lte=timezone.now(),
+        ).order_by('-created_at').first()
+        if expired_req:
+            expired_req.delete()
+            return JsonResponse({
+                'status': 'expired',
+                'message': 'Yêu cầu xác thực đã hết hạn (30 giây). Vui lòng thử lại.',
+            })
         return JsonResponse({'status': 'pending'})
 
     if req.status == 'approved':
@@ -1607,12 +1695,22 @@ def check_auth_status(request):
 
     elif req.status == 'denied':
         req.delete()
+        # [FIX-PUSH-DENIED] Xóa pre_2fa_user_id để client biết phải quay lại chọn method khác.
+        # Không xóa session hoàn toàn — user vẫn có thể dùng TOTP/Email/FIDO2.
+        request.session.pop('pre_2fa_user_id', None)
         ActivityLog.objects.create(
-            username_attempt='Unknown', action='login_failed',
+            username_attempt=f'uid:{uid}', action='login_push_denied',
             ip_address=ip, user_agent=user_agent,
         )
-        return JsonResponse({'status': 'denied'})
+        return JsonResponse({
+            'status': 'denied',
+            # redirect về verify_2fa không có method push để chọn phương thức khác
+            'redirect': '/verify-2fa/',
+            'message': 'Yêu cầu đăng nhập đã bị từ chối. Vui lòng chọn phương thức xác thực khác.',
+        })
 
+    # [FIX-PUSH-EXPIRED] Request hết hạn (tồn tại nhưng expires_at < now không lọc được ở trên)
+    # → trả expired để frontend hiển thị đúng
     return JsonResponse({'status': 'pending'})
 
 
@@ -2025,19 +2123,72 @@ def device_list(request):
     devices = request.user.trusted_devices.all().order_by('-last_seen')
     return render(request, 'accounts/devices.html', {'devices': devices})
 
-
 @login_required
 def active_sessions(request):
-    devices = TrustedDevice.objects.filter(user=request.user, is_active=True).order_by('-last_seen')
+    """
+    [FIX-ONLINE] Xác định thiết bị "online" thực sự bằng cách cross-check
+    session_key với django_session table. Nếu session không còn trong DB
+    → thiết bị đó đã logout (session expired hoặc bị xóa) → "Offline".
+
+    Hiển thị:
+      - is_current  : đây là thiết bị đang gửi request
+      - is_online   : session còn trong django_session DB (active)
+      - is_trusted  : đã được đánh dấu tin cậy (nhận push auth)
+    """
+    from django.contrib.sessions.models import Session
+
+    raw_devices = TrustedDevice.objects.filter(
+        user=request.user, is_active=True
+    ).order_by('-last_seen')
+
+    current_session_key = request.session.session_key
+
+    # Lấy tất cả session_key còn tồn tại trong DB (chưa expire)
+    device_session_keys = [d.session_key for d in raw_devices if d.session_key]
+    live_session_keys = set(
+        Session.objects.filter(
+            session_key__in=device_session_keys,
+            expire_date__gt=timezone.now(),
+        ).values_list('session_key', flat=True)
+    )
+
+    devices = []
+    for d in raw_devices:
+        is_current = d.session_key == current_session_key
+        # Thiết bị online = session còn sống HOẶC đây là thiết bị hiện tại
+        is_online  = is_current or (d.session_key in live_session_keys)
+
+        # Nếu session đã chết mà device vẫn is_active → lazy cleanup
+        if not is_online and not is_current:
+            # Vẫn hiển thị nhưng mark offline — để user thấy và có thể xóa
+            pass
+
+        devices.append({
+            'device':      d,
+            'is_current':  is_current,
+            'is_online':   is_online,
+            'is_trusted':  d.is_trusted,
+        })
+
     pending_auth = (
         RemoteAuthRequest.get_active()
         .filter(user=request.user, status='pending')
         .order_by('-created_at')
         .first()
     )
+
+    # Kiểm tra thiết bị hiện tại có is_trusted không (dùng trong template cho JS poll)
+    current_device_trusted = TrustedDevice.objects.filter(
+        user=request.user,
+        session_key=current_session_key,
+        is_trusted=True,
+        is_active=True,
+    ).exists()
+
     return render(request, 'accounts/active_sessions.html', {
-        'devices':      devices,
-        'pending_auth': pending_auth,
+        'devices':                devices,
+        'pending_auth':           pending_auth,
+        'current_device_trusted': current_device_trusted,  # cho JS polling
     })
 
 
