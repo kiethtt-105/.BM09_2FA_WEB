@@ -1491,7 +1491,7 @@ def verify_2fa(request):
             # [BUG-B] phải dùng decrypt_hotp_secret(), không phải decrypt_secret()
             raw_secret = profile.decrypt_hotp_secret()
             if raw_secret:
-                ok, new_counter = verify_hotp(raw_secret, profile.hotp_counter, code)
+                ok, new_counter = verify_hotp(raw_secret, profile.hotp_counter, code, look_ahead=20)
                 if ok:
                     # [BUG-9 FIX] Lưu new_counter vào local var, defer save() về sau login()
                     # tránh counter tăng khi login() chưa thành công

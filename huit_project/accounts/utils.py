@@ -97,7 +97,7 @@ def compute_hotp(secret: str, counter: int, digits: int = 6) -> str:
 
 
 def verify_hotp(secret: str, counter: int, otp_input: str,
-                look_ahead: int = 5) -> tuple[bool, int]:
+                look_ahead: int = 20) -> tuple[bool, int]:
     logger.warning(
         'HOTP_VERIFY: secret=%s... counter=%d input=%s',
         secret[:4], counter, otp_input
