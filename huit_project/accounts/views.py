@@ -1598,10 +1598,7 @@ def verify_2fa(request):
 
 @login_required
 def get_pending_auth_request(request):
-    """
-    [FIX-PUSH-TRUSTED] Chỉ thiết bị đã được đánh dấu is_trusted=True mới
-    nhận popup push auth. Thiết bị không tin cậy không được nhận thông báo.
-    """
+   
     RemoteAuthRequest.cleanup_expired()
 
     # Kiểm tra thiết bị hiện tại có is_trusted không
@@ -1623,7 +1620,7 @@ def get_pending_auth_request(request):
         status='pending',
         expires_at__gt=timezone.now(),
         target_device_session=request.session.session_key,
-    ).order_by('-created_at').first()
+    ).select_related('user').order_by('-created_at').first()
 
     if req:
         remaining = max(0, int((req.expires_at - timezone.now()).total_seconds()))
@@ -2125,6 +2122,7 @@ def auth_approval(request):
     history_logs = (
         RemoteAuthRequest.objects
         .filter(user=request.user)
+        .select_related('user')
         .order_by('-created_at')[:30]
     )
 

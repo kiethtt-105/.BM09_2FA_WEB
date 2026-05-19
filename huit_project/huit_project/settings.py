@@ -76,6 +76,7 @@ JAZZMIN_UI_CONFIG = {
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -216,3 +217,19 @@ WEB_SSO_CALLBACK_URL = config(
 # ===========================================================
 
 ENCRYPTION_KEY = config('ENCRYPTION_KEY')
+
+# ===========================================================
+# TỐI ƯU & BẢO MẬT STATIC FILES
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'huit-auth-cache',
+    }
+}
+
+# Dùng cache cho session thay vì DB
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
