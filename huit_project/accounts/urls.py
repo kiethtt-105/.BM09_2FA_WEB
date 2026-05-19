@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     path('', views.home, name='home'),
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
+    path('security-2fa/', views.security_2fa, name='security_2fa'),
     path('verify-2fa-multi/', views.verify_2fa_multi, name='verify_2fa_multi'),
     path('register/', views.register, name='register'),
     path('register/verify-otp/', views.verify_register_otp, name='verify_register_otp'),

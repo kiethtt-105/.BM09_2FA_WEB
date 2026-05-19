@@ -726,6 +726,224 @@ def dashboard(request):
     })
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECURITY 2FA — Trang tổng quan bảo mật cho user thường
+# Thêm vào views.py (section C hoặc F, sau dashboard)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+def security_2fa(request):
+    """
+    Trang tổng quan bảo mật 2FA dành cho user thường.
+
+    Hiển thị:
+      - Trạng thái từng phương thức 2FA (Email OTP, TOTP, HOTP, Passkey/FIDO2)
+      - Điểm bảo mật tổng thể (0–100)
+      - Danh sách thiết bị đang đăng nhập (active sessions)
+      - Lịch sử đăng nhập gần đây (10 bản ghi mới nhất)
+      - Cảnh báo nếu chưa bật bất kỳ 2FA nào
+
+    POST actions:
+      - toggle_push   : bật/tắt xác thực từ thiết bị khác (allow_push_auth)
+      - revoke_device : đăng xuất một thiết bị cụ thể theo device_id
+
+    Không xử lý bật/tắt từng phương thức 2FA trực tiếp —
+    điều hướng về /setup-2fa/?method=... để tái sử dụng luồng đã có.
+    """
+
+    # Superuser dùng trang admin riêng
+    if request.user.is_superuser:
+        return redirect('admin_dashboard')
+
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    ip         = get_client_ip(request)
+    ua         = request.META.get('HTTP_USER_AGENT', 'Unknown')
+
+    # ── POST handler ──────────────────────────────────────────────────────────
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        # ── Bật / Tắt Push Auth ───────────────────────────────────────────────
+        if action == 'toggle_push':
+            # Chỉ cho phép nếu đã có ít nhất 1 phương thức 2FA
+            if profile.has_any_2fa:
+                profile.allow_push_auth = not profile.allow_push_auth
+                profile.save(update_fields=['allow_push_auth'])
+                state = 'bật' if profile.allow_push_auth else 'tắt'
+                messages.success(request, f'Đã {state} xác thực từ thiết bị khác.')
+                ActivityLog.objects.create(
+                    user=request.user,
+                    username_attempt=request.user.username,
+                    action='2fa_enable' if profile.allow_push_auth else '2fa_disable',
+                    ip_address=ip,
+                    user_agent=ua,
+                )
+            else:
+                messages.warning(request, 'Bạn cần bật ít nhất một phương thức 2FA trước.')
+            return redirect('security_2fa')
+
+        # ── Thu hồi / Đăng xuất một thiết bị ─────────────────────────────────
+        if action == 'revoke_device':
+            device_id = request.POST.get('device_id')
+            if device_id:
+                try:
+                    device = TrustedDevice.objects.get(
+                        id=int(device_id), user=request.user
+                    )
+                    # Không cho xóa thiết bị hiện tại
+                    if device.session_key == request.session.session_key:
+                        messages.warning(request, 'Không thể đăng xuất thiết bị đang sử dụng.')
+                    else:
+                        if device.session_key:
+                            Session.objects.filter(session_key=device.session_key).delete()
+                        device.is_active = False
+                        device.save(update_fields=['is_active'])
+                        ActivityLog.objects.create(
+                            user=request.user,
+                            username_attempt=request.user.username,
+                            action='logout',
+                            ip_address=ip,
+                            user_agent=ua,
+                        )
+                        messages.success(request, f'Đã đăng xuất thiết bị "{device.name}".')
+                except (TrustedDevice.DoesNotExist, ValueError):
+                    messages.error(request, 'Thiết bị không tồn tại hoặc không hợp lệ.')
+            return redirect('security_2fa')
+
+        # Fallback: action không hợp lệ
+        messages.error(request, 'Hành động không hợp lệ.')
+        return redirect('security_2fa')
+
+    # ── GET: thu thập dữ liệu ─────────────────────────────────────────────────
+
+    has_fido2 = request.user.passkeys.exists()
+
+    # Trạng thái từng phương thức
+    methods_status = [
+        {
+            'key':         'email',
+            'label':       'Email OTP',
+            'description': 'Mã OTP gửi qua email mỗi lần đăng nhập.',
+            'enabled':     profile.has_email_otp,
+            'setup_url':   '/setup-2fa/?method=email',
+            'icon':        'envelope',
+        },
+        {
+            'key':         'totp',
+            'label':       'Authenticator App (TOTP)',
+            'description': 'Ứng dụng Google Authenticator hoặc tương đương.',
+            'enabled':     profile.has_app_otp,
+            'setup_url':   '/setup-2fa/?method=totp',
+            'icon':        'mobile-alt',
+        },
+        {
+            'key':         'hotp',
+            'label':       'HOTP (mã theo sự kiện)',
+            'description': 'Mã OTP dựa trên bộ đếm, không phụ thuộc thời gian.',
+            'enabled':     profile.has_hotp,
+            'setup_url':   '/setup-2fa/?method=hotp',
+            'icon':        'key',
+        },
+        {
+            'key':         'fido2',
+            'label':       'Passkey / FIDO2',
+            'description': 'Đăng nhập bằng vân tay, Face ID hoặc khoá bảo mật phần cứng.',
+            'enabled':     has_fido2,
+            'setup_url':   '/setup-passkey/',   # URL quản lý passkey hiện có
+            'icon':        'fingerprint',
+        },
+    ]
+
+    enabled_count = sum(1 for m in methods_status if m['enabled'])
+
+    # ── Điểm bảo mật (0–100) ──────────────────────────────────────────────────
+    # Mỗi phương thức 2FA: +20đ  (tối đa 80đ)
+    # Email đã xác thực:   +10đ
+    # Push auth bật:       +10đ
+    security_score = 0
+    security_score += min(enabled_count * 20, 80)
+    if request.user.email:
+        security_score += 10
+    if profile.allow_push_auth and profile.has_any_2fa:
+        security_score += 10
+
+    if security_score >= 80:
+        score_level, score_color = 'Rất tốt',  'success'
+    elif security_score >= 50:
+        score_level, score_color = 'Khá',      'warning'
+    elif security_score >= 20:
+        score_level, score_color = 'Yếu',      'danger'
+    else:
+        score_level, score_color = 'Chưa bảo mật', 'danger'
+
+    # ── Thiết bị đang hoạt động ───────────────────────────────────────────────
+    current_session_key = request.session.session_key
+    active_devices = TrustedDevice.objects.filter(
+        user=request.user, is_active=True
+    ).order_by('-last_seen')
+
+    # Đánh dấu thiết bị hiện tại
+    devices_with_flag = []
+    for device in active_devices:
+        devices_with_flag.append({
+            'device':     device,
+            'is_current': device.session_key == current_session_key,
+        })
+
+    # ── Lịch sử đăng nhập gần đây ────────────────────────────────────────────
+    recent_logs = ActivityLog.objects.filter(
+        user=request.user,
+        action__in=['login', 'login_failed', 'otp_success', 'otp_fail', 'logout'],
+    ).order_by('-timestamp')[:10]
+
+    # ── Cảnh báo ──────────────────────────────────────────────────────────────
+    warnings = []
+    if not profile.has_any_2fa:
+        warnings.append({
+            'level': 'danger',
+            'msg': 'Bạn chưa bật bất kỳ phương thức xác thực 2FA nào. Tài khoản đang ở mức bảo mật thấp nhất.',
+        })
+    if not request.user.email:
+        warnings.append({
+            'level': 'warning',
+            'msg': 'Tài khoản chưa có địa chỉ email. Một số phương thức 2FA sẽ không khả dụng.',
+        })
+    if profile.force_disable_2fa:
+        warnings.append({
+            'level': 'warning',
+            'msg': 'Quản trị viên đã tạm thời vô hiệu hoá 2FA của bạn. Liên hệ admin để biết thêm.',
+        })
+
+    # Phát hiện OTPAttempt gần đây (cảnh báo tấn công brute-force)
+    recent_fails = OTPAttempt.objects.filter(
+        user=request.user,
+        action='login_2fa',
+        created_at__gte=timezone.now() - timedelta(minutes=30),
+    ).count()
+    if recent_fails >= 3:
+        warnings.append({
+            'level': 'danger',
+            'msg': f'Phát hiện {recent_fails} lần thử OTP thất bại trong 30 phút qua. Hãy kiểm tra ngay.',
+        })
+
+    context = {
+        'profile':             profile,
+        'methods_status':      methods_status,
+        'enabled_count':       enabled_count,
+        'security_score':      security_score,
+        'score_level':         score_level,
+        'score_color':         score_color,
+        'devices_with_flag':   devices_with_flag,
+        'active_devices_count': active_devices.count(),
+        'recent_logs':         recent_logs,
+        'warnings':            warnings,
+        'has_any_2fa':         profile.has_any_2fa,
+        'allow_push_auth':     profile.allow_push_auth,
+        'passkeys':            request.user.passkeys.all() if has_fido2 else [],
+    }
+
+    return render(request, 'accounts/security_2fa.html', context)
+
 @login_required
 def setup_2fa(request):
     """
