@@ -738,13 +738,38 @@ def dashboard(request):
         if latest:
             backup_created = latest.created_at
 
+    # [FIX] Hoạt động gần đây — truyền đúng biến cho template
+    recent_activity = ActivityLog.objects.filter(
+        user=request.user,
+        action__in=['login', 'login_failed', 'otp_success', 'otp_fail',
+                    'logout', '2fa_enable', '2fa_disable'],
+    ).order_by('-timestamp')[:5]
+
+    # [FIX] Đăng nhập gần nhất
+    last_login_log = ActivityLog.objects.filter(
+        user=request.user, action='login',
+    ).order_by('-timestamp').first()
+
+    # [FIX] Số phiên hoạt động thực tế
+    active_sessions_count = TrustedDevice.objects.filter(
+        user=request.user, is_active=True,
+    ).count()
+
+    # [FIX] Trạng thái passkey cho pills 2FA
+    has_passkey = request.user.passkeys.exists()
+
     return render(request, 'accounts/user_dashboard.html', {
-        'profile':           profile,
-        'confirm_disable':   confirm_disable,
-        'pending_update':    request.session.get('pending_update'),
-        'show_device_alert': bool(device and not device.is_active),
-        'backup_count':      backup_count,
-        'backup_created':    backup_created,
+        'profile':               profile,
+        'confirm_disable':       confirm_disable,
+        'pending_update':        request.session.get('pending_update'),
+        'show_device_alert':     bool(device and not device.is_active),
+        'backup_count':          backup_count,
+        'backup_created':        backup_created,
+        # [FIX] Các biến bị thiếu
+        'recent_activity':       recent_activity,
+        'last_login_log':        last_login_log,
+        'active_sessions_count': active_sessions_count,
+        'has_passkey':           has_passkey,
     })
 
 

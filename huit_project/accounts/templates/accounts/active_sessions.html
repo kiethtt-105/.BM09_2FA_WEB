@@ -48,6 +48,42 @@ body::before{
 }
 .btn-logout-all:hover{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);}
 
+/* ── Current Device Card ── */
+.current-device-section{margin-bottom:20px;}
+.section-label{
+  font-family:var(--mono);font-size:9px;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+  margin-bottom:10px;padding:0 2px;
+  display:flex;align-items:center;gap:8px;
+}
+.section-label::after{
+  content:'';flex:1;height:1px;background:var(--border);
+}
+
+.current-device-card{
+  background:var(--bg2);border:1px solid rgba(37,99,235,.22);border-radius:14px;
+  padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  box-shadow:0 0 0 1px rgba(37,99,235,.08) inset;
+}
+.current-device-card.is-trusted{
+  border-color:rgba(37,99,235,.35);
+  box-shadow:0 0 0 1px rgba(37,99,235,.12) inset,0 0 20px rgba(37,99,235,.06);
+}
+
+.current-dev-left{display:flex;align-items:center;gap:14px;flex:1;min-width:0;}
+.current-dev-icon{
+  width:42px;height:42px;border-radius:10px;
+  background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.25);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;color:var(--blue2);flex-shrink:0;
+}
+.current-dev-info{min-width:0;}
+.current-dev-name{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.current-dev-ua{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px;}
+.current-dev-meta{display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;}
+
+.current-dev-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;}
+
 /* Table card */
 .table-card{
   background:var(--bg1);border:1px solid var(--border);border-radius:14px;overflow:hidden;
@@ -114,7 +150,7 @@ td{padding:14px 18px;vertical-align:middle;}
   display:inline-flex;align-items:center;gap:5px;
   padding:3px 9px;border-radius:5px;font-size:10px;font-weight:700;font-family:var(--mono);
   background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.22);color:var(--blue2);
-  margin-left:6px;vertical-align:middle;letter-spacing:.5px;
+  vertical-align:middle;letter-spacing:.5px;
 }
 .btn-trust{
   display:inline-flex;align-items:center;gap:5px;
@@ -176,29 +212,68 @@ td{padding:14px 18px;vertical-align:middle;}
 .btn-approve{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.35);}
 .btn-deny{background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.20)!important;color:#fca5a5;}
 
+/* ── Trust Confirm Popup ── */
+.trust-popup-overlay{
+  position:fixed;inset:0;z-index:1000;
+  background:rgba(2,6,14,.75);backdrop-filter:blur(5px);
+  display:flex;align-items:center;justify-content:center;
+  animation:fadeIn .2s ease both;
+}
+.trust-popup{
+  width:100%;max-width:400px;margin:16px;
+  background:var(--bg1);border:1px solid rgba(37,99,235,.30);border-radius:18px;
+  padding:30px 26px;text-align:center;
+  box-shadow:0 0 0 1px rgba(37,99,235,.10) inset,0 32px 64px rgba(2,6,14,.8);
+  animation:slideUp .28s cubic-bezier(.16,1,.3,1) both;
+}
+.trust-popup .popup-icon{
+  background:rgba(37,99,235,.12);border-color:rgba(37,99,235,.30);
+}
+.trust-popup .popup-icon.untrust-icon{
+  background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.22);
+}
+.trust-popup-title{font-size:17px;font-weight:700;margin-bottom:8px;}
+.trust-popup-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:6px;}
+.trust-popup-device{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:8px;padding:8px 15px;
+  font-family:var(--mono);font-size:12px;color:var(--blue2);
+  margin:12px 0 20px;
+}
+.trust-popup-note{
+  font-size:11px;color:var(--muted);font-family:var(--mono);
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:8px;padding:9px 12px;margin-bottom:20px;
+  text-align:left;line-height:1.6;
+}
+.trust-popup-note i{color:var(--blue2);margin-right:4px;}
+.trust-popup-btns{display:flex;gap:10px;}
+.trust-popup-btns button{
+  flex:1;padding:12px;border-radius:10px;border:none;
+  font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;
+  transition:opacity .15s,transform .1s;
+}
+.trust-popup-btns button:hover{opacity:.88;transform:translateY(-1px);}
+.btn-trust-confirm{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.35);}
+.btn-untrust-confirm{background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.20)!important;color:#fca5a5;}
+.btn-cancel-trust{background:var(--bg2);border:1px solid var(--border)!important;color:var(--muted2);}
+
   /* ── BLUE PRO OVERRIDES ── */
   body::before {
     background:
       radial-gradient(ellipse 700px 400px at 20% -10%, rgba(37,99,235,0.09) 0%, transparent 65%),
       radial-gradient(ellipse 400px 300px at 80% 100%, rgba(59,130,246,0.05) 0%, transparent 65%);
   }
-  /* Sharper card border with subtle top glow */
   .card, .wrap, .panel, .list-card, .table-card, .sidebar, .main {
     border-color: rgba(37,99,235,0.16) !important;
     box-shadow: 0 1px 0 0 rgba(37,99,235,0.12) inset, 0 24px 48px -12px rgba(2,6,14,0.6);
   }
-  /* Primary button — blue gradient */
   .btn-primary {
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
     box-shadow: 0 2px 12px rgba(37,99,235,0.30);
     letter-spacing: 0.01em;
   }
-  .btn-primary:hover:not(:disabled) {
-    box-shadow: 0 4px 20px rgba(37,99,235,0.45);
-    opacity: 1 !important;
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-  }
-  /* Ghost button */
   .btn-ghost, .back-link, .back-btn {
     background: rgba(13,22,38,0.7) !important;
     border-color: rgba(37,99,235,0.16) !important;
@@ -207,129 +282,51 @@ td{padding:14px 18px;vertical-align:middle;}
   .btn-ghost:hover, .back-link:hover, .back-btn:hover {
     border-color: rgba(37,99,235,0.35) !important;
     background: rgba(37,99,235,0.08) !important;
-    color: var(--blue3) !important;
   }
-  /* Input focus */
   input[type=text]:focus, input[type=email]:focus,
   input[type=tel]:focus, input[type=password]:focus,
   .otp-box:focus {
     border-color: var(--blue) !important;
     box-shadow: 0 0 0 3px rgba(37,99,235,0.18) !important;
   }
-  /* Active nav item */
   .nav-item.active {
     background: rgba(37,99,235,0.12) !important;
-    color: var(--blue3) !important;
     border-color: rgba(37,99,235,0.22) !important;
   }
   .nav-item:hover { 
     background: rgba(37,99,235,0.07) !important; 
     color: var(--text) !important;
   }
-  /* Brand dot */
   .brand-dot, .logo-dot { background: var(--blue2) !important; }
-  /* OTP box filled state */
   .otp-box.filled { border-color: rgba(37,99,235,0.45) !important; }
-  /* Method tabs in verify_2fa */
   .method.active {
     border-color: var(--blue) !important;
-    color: var(--blue3) !important;
     background: rgba(37,99,235,0.10) !important;
   }
-  /* Badge online pulse */
   .dot-pulse, .dot-live { background: var(--success) !important; }
-  /* Toggle checked */
   .toggle input:checked + .toggle-track { background: var(--blue) !important; }
-  /* Table hover */
   tbody tr:hover { background: rgba(37,99,235,0.05) !important; }
-  /* TOTP progress fill */
   .totp-ring-fg { stroke: var(--blue2) !important; }
-  /* Stat cards */
   .stat-val { color: var(--blue3) !important; }
-  /* pk-icon */
-  .pk-icon, .dev-icon, .method-icon {
+  .pk-icon, .dev-icon, .method-icon, .current-dev-icon {
     background: rgba(37,99,235,0.10) !important;
     border-color: rgba(37,99,235,0.22) !important;
     color: var(--blue3) !important;
   }
-  /* Badge status on */
   .badge-status.on, .badge-on, .badge-online {
     background: rgba(16,185,129,0.09) !important;
     border-color: rgba(16,185,129,0.20) !important;
     color: #6ee7b7 !important;
   }
-  .badge-status.off {
-    background: rgba(37,99,235,0.10) !important;
-    border-color: rgba(37,99,235,0.22) !important;
-    color: var(--blue3) !important;
-  }
-  /* email badge */
-  .email-badge {
-    background: rgba(37,99,235,0.10) !important;
-    border-color: rgba(37,99,235,0.22) !important;
-    color: var(--blue3) !important;
-  }
-  /* method badge in setup_2fa */
-  .method-badge {
-    border-color: rgba(37,99,235,0.28) !important;
-  }
-  .badge-icon {
-    background: rgba(37,99,235,0.12) !important;
-    border-color: rgba(37,99,235,0.28) !important;
-    color: var(--blue2) !important;
-  }
-  /* Confirm box */
-  .confirm-box, .disable-confirm {
-    border-color: rgba(37,99,235,0.22) !important;
-  }
-  /* ip badge */
   .ip-badge {
     background: rgba(37,99,235,0.08) !important;
     border-color: rgba(37,99,235,0.16) !important;
     color: var(--blue3) !important;
   }
-  /* expiry badge */
-  .expiry { border-color: rgba(245,158,11,0.18) !important; }
-  /* alert info */
-  .alert-info, .msg-info, .msg-warning {
-    background: rgba(37,99,235,0.08) !important;
-    border-color: rgba(37,99,235,0.20) !important;
-    color: var(--blue3) !important;
-  }
-  /* secret chip */
-  .secret-chip {
-    color: var(--blue3) !important;
-    border-color: rgba(37,99,235,0.20) !important;
-  }
-  .secret-chip:hover { border-color: rgba(37,99,235,0.40) !important; }
-  /* btn-purple → blue style */
-  .btn-purple {
-    background: rgba(37,99,235,0.12) !important;
-    border-color: rgba(37,99,235,0.28) !important;
-    color: var(--blue3) !important;
-  }
-  .btn-purple:hover:not(:disabled) {
-    background: rgba(37,99,235,0.20) !important;
-  }
-  /* TOTP bar fill */
-  #totp-fill, .totp-bar { background: var(--blue2) !important; }
-  /* Panel hint bar */
-  .panel-hint { color: var(--blue3) !important; }
-  .panel-hint i { color: var(--blue2) !important; }
-  /* list-title icon */
-  .list-title i { color: var(--blue3) !important; }
-  /* page-title area */
-  .icon-wrap {
-    background: rgba(37,99,235,0.10) !important;
-    border-color: rgba(37,99,235,0.24) !important;
-  }
-  /* thead */
   thead tr { background: rgba(8,15,28,0.8) !important; }
-  /* smooth all transitions */
   *, *::before, *::after { transition-timing-function: cubic-bezier(0.4,0,0.2,1); }
 
-
-/* ── Sidebar (copy from dashboard) ── */
+/* ── Sidebar ── */
 .layout{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;max-width:1000px;margin:0 auto;}
 @media(max-width:700px){.layout{grid-template-columns:1fr;}}
 .sidebar{
@@ -419,6 +416,61 @@ td{padding:14px 18px;vertical-align:middle;}
     {% endif %}
   </div>
 
+  {# ── SECTION: Thiết bị hiện tại ── #}
+  {% for d in devices %}{% if d.is_current %}
+  <div class="current-device-section">
+    <div class="section-label"><i class="fa fa-circle-dot" style="color:var(--blue2);"></i> Thiết bị này</div>
+    <div class="current-device-card {% if d.is_trusted %}is-trusted{% endif %}">
+      <div class="current-dev-left">
+        <div class="current-dev-icon">
+          {% if 'Mobile' in d.device.user_agent or 'Android' in d.device.user_agent or 'iPhone' in d.device.user_agent %}
+            <i class="fa fa-mobile-screen"></i>
+          {% else %}
+            <i class="fa fa-laptop"></i>
+          {% endif %}
+        </div>
+        <div class="current-dev-info">
+          <div class="current-dev-name">
+            {{ d.device.name }}
+            <span class="badge-online" style="font-size:10px;padding:3px 8px;">
+              <span class="dot-pulse"></span> Online · Đang dùng
+            </span>
+            {% if d.is_trusted %}
+              <span class="badge-trusted"><i class="fa fa-shield-halved"></i> Tin cậy</span>
+            {% endif %}
+          </div>
+          <div class="current-dev-ua" title="{{ d.device.user_agent }}">{{ d.device.user_agent }}</div>
+          <div class="current-dev-meta">
+            <span class="ip-badge">{{ d.device.ip_address }}</span>
+            <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">
+              {{ d.device.last_seen|date:"H:i · d/m/Y" }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="current-dev-actions">
+        {% if d.is_trusted %}
+          <button type="button"
+            class="btn-trust btn-untrust"
+            onclick="openTrustPopup({{ d.device.id }}, '{{ d.device.name|escapejs }}', true)">
+            <i class="fa fa-shield-slash"></i> Bỏ tin cậy
+          </button>
+        {% else %}
+          <button type="button"
+            class="btn-trust"
+            onclick="openTrustPopup({{ d.device.id }}, '{{ d.device.name|escapejs }}', false)">
+            <i class="fa fa-shield-halved"></i> Tin cậy thiết bị này
+          </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}{% endfor %}
+
+  {# ── SECTION: Thiết bị khác ── #}
+  {% with other_count=devices|length %}
+  {% if other_count > 1 %}
+  <div class="section-label" style="margin-bottom:10px;"><i class="fa fa-devices" style="color:var(--muted2);"></i> Thiết bị khác</div>
   <div class="table-card">
     <table>
       <thead>
@@ -432,6 +484,7 @@ td{padding:14px 18px;vertical-align:middle;}
       </thead>
       <tbody>
         {% for d in devices %}
+        {% if not d.is_current %}
         <tr>
           <td>
             <div class="device-cell">
@@ -463,11 +516,7 @@ td{padding:14px 18px;vertical-align:middle;}
             </div>
           </td>
           <td>
-            {% if d.is_current %}
-              <span class="badge-online">
-                <span class="dot-pulse"></span> Online · Thiết bị này
-              </span>
-            {% elif d.is_online %}
+            {% if d.is_online %}
               <span class="badge-online" style="background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.15);">
                 <span class="dot-pulse" style="background:#6ee7b7;"></span> Online
               </span>
@@ -477,32 +526,27 @@ td{padding:14px 18px;vertical-align:middle;}
           </td>
           <td>
             <div class="action-group">
-              {% if not d.is_current %}
-                {# Nút đăng xuất #}
-                <form method="POST" action="{% url 'logout_device' d.device.id %}" style="display:inline;">
-                  {% csrf_token %}
-                  <button type="submit" class="btn-logout-dev">
-                    <i class="fa fa-user-slash" style="font-size:11px"></i> Đăng xuất
-                  </button>
-                </form>
-              {% endif %}
-              
+              <form method="POST" action="{% url 'logout_device' d.device.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-logout-dev">
+                  <i class="fa fa-user-slash" style="font-size:11px"></i> Đăng xuất
+                </button>
+              </form>
             </div>
           </td>
         </tr>
-        {% empty %}
-        <tr>
-          <td colspan="4">
-            <div class="empty">
-              <div class="empty-icon"><i class="fa fa-box-open"></i></div>
-              <div class="empty-text">Không có dữ liệu phiên đăng nhập</div>
-            </div>
-          </td>
-        </tr>
+        {% endif %}
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {% endif %}
+  {% endwith %}
+
+  {% comment %}Nếu chỉ có thiết bị hiện tại, không có thiết bị nào khác{% endcomment %}
+  {% with other_devices_exist=False %}
+  {% for d in devices %}{% if not d.is_current %}{% with other_devices_exist=True %}{% endwith %}{% endif %}{% endfor %}
+  {% endwith %}
 
   <div class="note">
     <i class="fa fa-circle-info"></i>
@@ -536,9 +580,96 @@ td{padding:14px 18px;vertical-align:middle;}
   </div>
 </div>
 
+{# ── Trust Confirm Popup ── #}
+<div id="trust-popup-overlay" class="trust-popup-overlay" style="display:none;"
+     onclick="if(event.target===this) closeTrustPopup()">
+  <div class="trust-popup">
+    <div class="popup-icon" id="trust-popup-icon">🛡️</div>
+    <div class="trust-popup-title" id="trust-popup-title">Tin cậy thiết bị này?</div>
+    <div class="trust-popup-desc" id="trust-popup-desc">
+      Thiết bị được đánh dấu tin cậy sẽ có thể xác nhận các yêu cầu đăng nhập từ thiết bị khác.
+    </div>
+    <div class="trust-popup-device">
+      <i class="fa fa-laptop" id="trust-popup-dev-icon"></i>
+      <span id="trust-popup-device-name">...</span>
+    </div>
+    <div class="trust-popup-note" id="trust-popup-note">
+      <i class="fa fa-circle-info"></i>
+      Thiết bị tin cậy sẽ nhận thông báo và có thể phê duyệt đăng nhập mới — chỉ bật cho thiết bị cá nhân của bạn.
+    </div>
+    <form id="trust-popup-form" method="POST" action="" style="margin:0;">
+      {% csrf_token %}
+      <div class="trust-popup-btns" id="trust-popup-btns">
+        <button type="button" class="btn-cancel-trust" onclick="closeTrustPopup()">
+          <i class="fa fa-xmark"></i> Huỷ
+        </button>
+        <button type="submit" class="btn-trust-confirm" id="trust-popup-submit">
+          <i class="fa fa-shield-halved"></i> Xác nhận
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
-// ── Polling: kiểm tra pending auth request mỗi 4 giây ──
-// Thiết bị Online (đang dùng) luôn poll — is_trusted chỉ ảnh hưởng hiển thị badge
+// ─── Trust Popup ───────────────────────────────────────────────────────────
+function openTrustPopup(deviceId, deviceName, isCurrentlyTrusted) {
+  const overlay  = document.getElementById('trust-popup-overlay');
+  const form     = document.getElementById('trust-popup-form');
+  const icon     = document.getElementById('trust-popup-icon');
+  const title    = document.getElementById('trust-popup-title');
+  const desc     = document.getElementById('trust-popup-desc');
+  const note     = document.getElementById('trust-popup-note');
+  const devName  = document.getElementById('trust-popup-device-name');
+  const devIcon  = document.getElementById('trust-popup-dev-icon');
+  const submit   = document.getElementById('trust-popup-submit');
+
+  devName.textContent = deviceName;
+
+  // Cập nhật URL action của form
+  form.action = `/trust-device/${deviceId}/`;
+
+  if (isCurrentlyTrusted) {
+    // Chế độ BỎ tin cậy
+    icon.textContent = '🚫';
+    icon.className   = 'popup-icon untrust-icon';
+    title.textContent = 'Bỏ tin cậy thiết bị?';
+    desc.textContent  = 'Thiết bị này sẽ không còn nhận yêu cầu xác thực từ các thiết bị khác.';
+    note.innerHTML    = '<i class="fa fa-triangle-exclamation" style="color:#f59e0b;margin-right:4px;"></i>Sau khi bỏ tin cậy, bạn sẽ cần xác thực lại từ thiết bị khác khi đăng nhập.';
+    submit.className  = 'btn-untrust-confirm';
+    submit.innerHTML  = '<i class="fa fa-shield-slash"></i> Bỏ tin cậy';
+    devIcon.className = 'fa fa-laptop';
+  } else {
+    // Chế độ TIN CẬY
+    icon.textContent = '🛡️';
+    icon.className   = 'popup-icon';
+    title.textContent = 'Tin cậy thiết bị này?';
+    desc.textContent  = 'Thiết bị được đánh dấu tin cậy sẽ có thể xác nhận các yêu cầu đăng nhập từ thiết bị khác.';
+    note.innerHTML    = '<i class="fa fa-circle-info"></i> Chỉ bật cho thiết bị cá nhân — không bật trên thiết bị công cộng hoặc dùng chung.';
+    submit.className  = 'btn-trust-confirm';
+    submit.innerHTML  = '<i class="fa fa-shield-halved"></i> Tin cậy thiết bị';
+    devIcon.className = 'fa fa-laptop';
+  }
+
+  overlay.style.display = 'flex';
+  // Prevent body scroll
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTrustPopup() {
+  document.getElementById('trust-popup-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// Đóng popup khi bấm Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeTrustPopup();
+    hidePopup(); // auth popup
+  }
+});
+
+// ─── Auth Approval Polling ─────────────────────────────────────────────────
 let currentReqId  = null;
 let countdownVal  = 300;
 let countdownTick = null;
@@ -582,7 +713,7 @@ function respondAuth(action) {
       'Content-Type': 'application/json',
       'X-CSRFToken': getCsrf(),
     },
-    body: JSON.stringify({ status: action }),  // API expects 'status' field
+    body: JSON.stringify({ status: action }),
   }).catch(console.error);
 }
 
@@ -609,19 +740,16 @@ function getCsrf() {
   return '';
 }
 
-// Chỉ poll nếu thiết bị này được đánh dấu tin cậy
-// Server trả {'pending': false} ngay nếu không trusted, nhưng ta tránh poll vô ích
 const IS_TRUSTED_DEVICE = {{ current_device_trusted|yesno:"true,false" }};
 if (IS_TRUSTED_DEVICE) {
   pollPendingAuth();
   setInterval(pollPendingAuth, 4000);
 }
 
-// Dừng poll khi tab không active, resume khi quay lại
 document.addEventListener('visibilitychange', () => {
   isPolling = !document.hidden;
   if (isPolling) pollPendingAuth();
 });
-</script>-e 
+</script>
 </body>
 </html>

@@ -301,6 +301,10 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
         <a href="?method=push" class="method {% if method == 'push' %}active{% endif %}">
           <i class="fa fa-bell"></i> Push
         </a>
+      {% elif m.key == 'backup' %}
+        <a href="?method=backup" class="method {% if method == 'backup' %}active{% endif %}" title="Mã dự phòng một lần">
+          <i class="fa fa-shield-halved"></i> Dự phòng
+        </a>
       {% endif %}
     {% endfor %}
   </div>
@@ -314,8 +318,8 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
     {% endfor %}
   {% endif %}
 
-  {# ── OTP input — hiện với mọi method trừ fido2 và push ─────────────── #}
-  {% if method != 'fido2' and method != 'push' %}
+  {# ── OTP input — hiện với mọi method trừ fido2, push, backup ─────────── #}
+  {% if method != 'fido2' and method != 'push' and method != 'backup' %}
 
     {# Hint box theo method #}
     {% if method == 'email' %}
@@ -379,6 +383,82 @@ h2{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;}
     {% endif %}
     {% endif %}
 
+  {% endif %}
+
+  {# ── Mã dự phòng (Backup Code) ──────────────────────────────────────── #}
+  {% if method == 'backup' %}
+  <div class="hint-box">
+    <i class="fa fa-shield-halved" style="margin-right:6px;color:var(--blue2)"></i>
+    Nhập mã dự phòng dạng <strong>xxxx-xxxx</strong>
+    {% if backup_remaining %}
+      &nbsp;·&nbsp; Còn <strong style="color:var(--blue2)">{{ backup_remaining }}</strong> mã
+    {% endif %}
+  </div>
+
+  {% if backup_remaining == 0 %}
+  <div class="msg msg-error">
+    <i class="fas fa-circle-xmark"></i>
+    Bạn đã dùng hết tất cả mã dự phòng. Hãy đăng nhập bằng phương thức khác rồi vào <strong>Bảo mật 2FA</strong> để tạo mã mới.
+  </div>
+  {% else %}
+  <form method="POST" action="?method=backup" id="backup-form">
+    {% csrf_token %}
+    <input type="hidden" name="method" value="backup">
+    <input type="text" name="otp_code" id="backup-input"
+      placeholder="xxxx-xxxx"
+      maxlength="9"
+      autocomplete="one-time-code"
+      autocorrect="off" autocapitalize="none" spellcheck="false"
+      style="
+        width:100%; padding:13px 16px; margin:14px 0 12px;
+        background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+        font-size:1.35rem; font-weight:700; font-family:var(--mono);
+        text-align:center; letter-spacing:.18em; color:var(--text);
+        outline:none; transition:border-color .2s,box-shadow .2s;
+      "
+      onfocus="this.style.borderColor='var(--blue)';this.style.boxShadow='0 0 0 3px rgba(37,99,235,.18)'"
+      onblur="this.style.borderColor='';this.style.boxShadow=''"
+    >
+    <button type="submit" class="btn btn-primary" id="backup-btn" disabled>
+      <i class="fa fa-arrow-right"></i> Xác minh
+    </button>
+  </form>
+
+  <div style="margin-top:8px;font-size:12px;color:var(--muted);font-family:var(--mono);text-align:center;">
+    <i class="fa fa-circle-info" style="margin-right:4px;color:var(--blue2)"></i>
+    Mỗi mã chỉ dùng được <strong>một lần</strong>
+  </div>
+
+  <script>
+  (function(){
+    const inp = document.getElementById('backup-input');
+    const btn = document.getElementById('backup-btn');
+    if(!inp || !btn) return;
+
+    function fmt(raw){
+      let s = raw.toLowerCase().replace(/[^0-9a-f]/g,'').slice(0,8);
+      return s.length > 4 ? s.slice(0,4)+'-'+s.slice(4) : s;
+    }
+
+    inp.addEventListener('input', function(){
+      const pos = this.selectionStart;
+      const v   = fmt(this.value);
+      this.value = v;
+      try { this.setSelectionRange(Math.min(pos,v.length), Math.min(pos,v.length)); } catch(e){}
+      btn.disabled = (v.replace('-','').length < 8);
+    });
+
+    inp.addEventListener('paste', function(e){
+      e.preventDefault();
+      const pasted = (e.clipboardData||window.clipboardData).getData('text');
+      this.value = fmt(pasted);
+      btn.disabled = (this.value.replace('-','').length < 8);
+    });
+
+    inp.focus();
+  })();
+  </script>
+  {% endif %}
   {% endif %}
 
   {# ── FIDO2 / Passkey ────────────────────────────────────────────────── #}
