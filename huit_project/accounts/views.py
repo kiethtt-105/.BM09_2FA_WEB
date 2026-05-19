@@ -2664,7 +2664,7 @@ def fido2_admin_auth_begin(request):
 
         auth_data, state = server_local.authenticate_begin(
             credentials=[
-                {'type': 'public-key', 'id': websafe_decode(pk.credential_id)}
+                {'type': 'public-key', 'id': _b64url_to_bytes(pk.credential_id)}
                 for pk in passkeys
             ],
             user_verification=UserVerificationRequirement.PREFERRED,
@@ -2740,10 +2740,8 @@ def fido2_admin_auth_complete(request):
         if not passkey:
             return JsonResponse({'status': 'error', 'message': 'Không tìm thấy Passkey'}, status=400)
 
-        #pk_dict = cbor_decode(websafe_decode(passkey.public_key))
-        pk_bytes_raw = passkey.public_key
-        pk_bytes_raw += '=' * (4 - len(pk_bytes_raw) % 4)
-        pk_dict = cbor_decode(websafe_decode(pk_bytes_raw))
+        pk_dict = cbor_decode(_b64url_to_bytes(passkey.public_key))
+
 
         credential_data = AttestedCredentialData.create(
             aaguid        = b'\x00' * 16,
