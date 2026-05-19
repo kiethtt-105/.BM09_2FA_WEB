@@ -427,6 +427,13 @@ input[type=password]::placeholder{color:var(--muted);}
           <span class="pill-dot {% if has_passkey %}dot-on{% else %}dot-off{% endif %}"></span>
           Passkey
         </span>
+        {% if backup_count is not None %}
+        <span class="method-pill {% if backup_count > 0 %}pill-on{% else %}pill-off{% endif %}"
+              title="{% if backup_count > 0 %}Còn {{ backup_count }} mã dự phòng chưa dùng{% else %}Hết mã dự phòng — hãy tạo mới{% endif %}">
+          <span class="pill-dot {% if backup_count > 0 %}dot-on{% else %}dot-off{% endif %}"></span>
+          Dự phòng{% if backup_count > 0 %} ({{ backup_count }}){% endif %}
+        </span>
+        {% endif %}
       </div>
       <a href="{% url 'security_2fa' %}" class="btn btn-ghost btn-sm" style="flex-shrink:0;">
         <i class="fa fa-gear"></i> Quản lý

@@ -45,7 +45,8 @@ from .models import (
     RemoteAuthRequest, TrustedDevice,
     EmailOTP, UserProfile, PendingRegistration,
     ActivityLog, UserPasskey,
-    OTPAttempt,   # [FIX-RATELIMIT]
+    OTPAttempt,   
+    BackupCode,
 )
 from .utils import (
     get_totp_token, verify_totp,
@@ -729,11 +730,21 @@ def dashboard(request):
         user=request.user, session_key=current_session
     ).first()
 
+    # Backup codes summary
+    backup_count   = BackupCode.remaining_count(request.user)
+    backup_created = None
+    if BackupCode.objects.filter(user=request.user).exists():
+        latest = request.user.backup_codes.order_by('-created_at').first()
+        if latest:
+            backup_created = latest.created_at
+
     return render(request, 'accounts/user_dashboard.html', {
         'profile':           profile,
         'confirm_disable':   confirm_disable,
         'pending_update':    request.session.get('pending_update'),
         'show_device_alert': bool(device and not device.is_active),
+        'backup_count':      backup_count,
+        'backup_created':    backup_created,
     })
 
 
@@ -1308,13 +1319,16 @@ def verify_2fa(request):
     has_fido2 = user.passkeys.exists()
 
     methods = []
-    if profile.has_app_otp:   methods.append({'key': 'totp',  'name': 'Authenticator', 'icon': '📱'})
-    if profile.has_email_otp: methods.append({'key': 'email', 'name': 'Email OTP',     'icon': '📧'})
-    if profile.has_hotp:      methods.append({'key': 'hotp',  'name': 'HOTP',          'icon': '🔢'})
-    if has_fido2:             methods.append({'key': 'fido2', 'name': 'Passkey',       'icon': '🔑'})
+    if profile.has_app_otp:   methods.append({'key': 'totp',   'name': 'Authenticator', 'icon': '📱'})
+    if profile.has_email_otp: methods.append({'key': 'email',  'name': 'Email OTP',     'icon': '📧'})
+    if profile.has_hotp:      methods.append({'key': 'hotp',   'name': 'HOTP',          'icon': '🔢'})
+    if has_fido2:             methods.append({'key': 'fido2',  'name': 'Passkey',       'icon': '🔑'})
     # Push chỉ hiện khi có trusted device đang online thực sự
     if other_devices.exists() and profile.allow_push_auth and not user.is_staff:
-        methods.append({'key': 'push', 'name': 'Thiết bị khác', 'icon': '🔔'})
+        methods.append({'key': 'push',   'name': 'Thiết bị khác', 'icon': '🔔'})
+    # Mã dự phòng — luôn hiện nếu user đã có ít nhất 1 mã còn dùng được
+    if BackupCode.objects.filter(user=user, is_used=False).exists():
+        methods.append({'key': 'backup', 'name': 'Mã dự phòng',   'icon': '🛡️'})
 
     if not methods:
         messages.error(request, 'Tài khoản chưa thiết lập 2FA!')
@@ -1464,6 +1478,17 @@ def verify_2fa(request):
             if otp_obj:
                 valid = True
 
+        # ── Mã dự phòng (backup code) ────────────────────────────────────────
+        elif method == 'backup':
+            if BackupCode.verify_and_use(user, code):
+                valid = True
+                # Cảnh báo nếu sắp hết mã
+                remaining = BackupCode.remaining_count(user)
+                if remaining == 0:
+                    messages.warning(request, '⚠️ Bạn đã dùng hết tất cả mã dự phòng. Hãy vào Bảo mật 2FA để tạo mã mới.')
+                elif remaining <= 2:
+                    messages.warning(request, f'⚠️ Chỉ còn {remaining} mã dự phòng. Hãy tạo lại sớm để tránh mất truy cập.')
+
         if valid:
             # [C1-FIX] TOTP anti-replay: cache mã đã dùng 90s (3 chu kỳ)
             if method in ('app', 'totp'):
@@ -1540,6 +1565,7 @@ def verify_2fa(request):
         'other_devices_list': list(other_devices[:3]),
         'push_request_sent': push_request_sent,
         'email_just_sent': email_just_sent,
+        'backup_remaining': BackupCode.remaining_count(user),
     })
 
 

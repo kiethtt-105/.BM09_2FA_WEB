@@ -486,21 +486,7 @@ td{padding:14px 18px;vertical-align:middle;}
                   </button>
                 </form>
               {% endif %}
-              {# Nút tin tưởng / bỏ tin tưởng #}
-              <form method="POST" action="{% url 'trust_device' d.device.id %}" style="display:inline;">
-                {% csrf_token %}
-                {% if d.is_trusted %}
-                  <button type="submit" class="btn-trust btn-untrust"
-                          title="Bỏ tin tưởng thiết bị này">
-                    <i class="fa fa-shield-xmark"></i> Bỏ tin cậy
-                  </button>
-                {% else %}
-                  <button type="submit" class="btn-trust"
-                          title="Đánh dấu tin tưởng — thiết bị này sẽ nhận thông báo xác nhận đăng nhập">
-                    <i class="fa fa-shield-check"></i> Tin cậy
-                  </button>
-                {% endif %}
-              </form>
+              
             </div>
           </td>
         </tr>
