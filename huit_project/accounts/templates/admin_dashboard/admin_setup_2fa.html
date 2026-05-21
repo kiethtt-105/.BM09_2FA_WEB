@@ -198,7 +198,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <i class="fa fa-triangle-exclamation"></i>
       <div>
         <strong>Bắt buộc thiết lập 2FA</strong>
-        <p>Tài khoản admin phải bật ít nhất 2 phương thức xác thực 2FA trước khi truy cập Dashboard. Không thể bỏ qua bước này.</p>
+        <p>Tài khoản admin phải bật ít nhất 1 phương thức xác thực 2FA trước khi truy cập Dashboard. Không thể bỏ qua bước này.</p>
       </div>
     </div>
     {% endif %}
@@ -208,7 +208,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
     <div class="card-header">
       <div class="card-title"><i class="fa fa-list-check"></i> Chọn phương thức 2FA cho Admin</div>
-      <div class="card-sub">Phải chọn ≥ 2 phương thức · Push Auth không được phép cho tài khoản admin</div>
+      <div class="card-sub">Chọn ít nhất 1 phương thức · Push Auth không được phép cho tài khoản admin</div>
     </div>
 
     <div class="card-body">
@@ -493,7 +493,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div style="font-size:20px;font-weight:700;margin-bottom:8px;">Thiết lập 2FA hoàn tất!</div>
       <div style="font-size:13px;color:var(--muted2);margin-bottom:24px;line-height:1.6;">
         Tài khoản admin đã được bảo vệ bởi {{ setup_done_count }} phương thức xác thực.
-        Mỗi lần đăng nhập bạn sẽ phải xác thực tất cả các phương thức này.
+        Nếu đã bật từ 2 phương thức trở lên, mỗi lần đăng nhập bạn sẽ phải xác thực tất cả.
       </div>
       <div class="method-list" style="text-align:left;">
         {% for m in setup_methods %}
@@ -593,7 +593,7 @@ initOtpBoxes('#email-boxes','email-hidden','email-btn');
   tick();
 })();
 
-// ── Method checkbox UX (chỉ chọn được ≥2) ─────────────────────
+// ── Method checkbox UX (chọn ≥1, push bị cấm) ─────────────────
 (function(){
   const checkboxes = [...document.querySelectorAll('input[name=methods]:not(:disabled)')];
   const btn = document.getElementById('select-btn');
@@ -602,10 +602,11 @@ initOtpBoxes('#email-boxes','email-hidden','email-btn');
     const checked = document.querySelectorAll('input[name=methods]:checked').length;
     // Count also disabled+checked (already enabled)
     const alreadyOn = document.querySelectorAll('input[name=methods]:disabled').length;
-    btn.disabled = (checked + alreadyOn) < 2;
-    btn.textContent = (checked + alreadyOn) >= 2
-      ? ` Tiếp tục (${checked + alreadyOn} phương thức)`
-      : ' Phải chọn ít nhất 2 phương thức';
+    const total = checked + alreadyOn;
+    btn.disabled = total < 1;
+    btn.innerHTML = total >= 1
+      ? `<i class="fa fa-arrow-right"></i> Tiếp tục (${total} phương thức)`
+      : '<i class="fa fa-arrow-right"></i> Phải chọn ít nhất 1 phương thức';
   }
   checkboxes.forEach(cb => cb.addEventListener('change', update));
   update();

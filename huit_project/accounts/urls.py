@@ -15,6 +15,7 @@ urlpatterns = [
 
     # ── Admin 2FA bắt buộc ──────────────────────────────────────────────────
     path('admin-setup-2fa/', views.admin_setup_2fa, name='admin_setup_2fa'),
+    path('admin-manage-2fa/', views.admin_manage_2fa, name='admin_manage_2fa'),
 
     path('verify-2fa/', views.verify_2fa, name='verify_2fa'),
     path('export-users/', views.export_users_excel, name='export_users'),

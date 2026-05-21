@@ -185,7 +185,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
     <div class="sec-banner">
       <i class="fa fa-lock"></i>
-      <p><strong>Xác thực đa lớp bắt buộc</strong> · Phải xác thực tất cả {{ required }} phương thức. Push Auth bị vô hiệu cho tài khoản Admin.</p>
+      <p><strong>Xác thực bắt buộc</strong> · Phải hoàn thành {% if required > 1 %}tất cả {{ required }} phương thức{% else %}xác thực 2FA{% endif %}. Push Auth bị vô hiệu cho tài khoản Admin.</p>
     </div>
 
     <div class="card-header">

@@ -433,22 +433,30 @@ def login_view(request):
                 methods = _get_admin_enabled_methods(user)
                 login(request, user)
 
-                # [FIX-A5] Chỉ vào verify_2fa_multi khi đã đủ ≥2 method
-                if _admin_2fa_ready(user):
+                if len(methods) == 0:
+                    # Chưa bật method nào → bắt buộc setup ít nhất 1
+                    request.session['force_2fa_setup'] = True
+                    messages.warning(
+                        request,
+                        'Tài khoản admin phải bật ít nhất 1 phương thức xác thực 2FA '
+                        'trước khi vào Dashboard.'
+                    )
+                    return redirect('admin_setup_2fa')
+
+                elif len(methods) == 1:
+                    # Đúng 1 method → đã đủ yêu cầu, vào thẳng dashboard
+                    # (không bắt xác thực lại — đã xác thực qua password)
+                    _complete_admin_2fa(request)
+                    messages.success(request, f'Chào mừng trở lại, {user.username}!')
+                    return redirect('admin_dashboard')
+
+                else:
+                    # ≥2 method → bắt xác thực TẤT CẢ qua verify_2fa_multi
                     request.session['2fa_methods_required'] = methods
                     request.session['2fa_required_count']   = len(methods)
                     request.session['2fa_verified']         = []
                     request.session['2fa_complete']         = False
                     return redirect('verify_2fa_multi')
-                else:
-                    # Chưa đủ → bắt buộc setup thêm
-                    request.session['force_2fa_setup'] = True
-                    messages.warning(
-                        request,
-                        'Tài khoản admin phải bật ít nhất 2 phương thức xác thực 2FA '
-                        'trước khi vào Dashboard.'
-                    )
-                    return redirect('admin_setup_2fa')
 
             # ── Luồng 1b: User thường có 2FA → verify_2fa ───────────────────
             if profile.has_app_otp or profile.has_email_otp or profile.has_hotp or has_fido2:
@@ -2316,9 +2324,9 @@ def login_history(request):
 def admin_dashboard(request):
     """
     [FIX-A4] Guard đầy đủ:
-      - Nếu chưa setup 2FA (methods rỗng) → redirect setup, không tạo session rỗng
-      - Nếu chưa xác thực 2FA              → restore session rồi redirect verify
-      - Nếu đã xác thực                    → vào dashboard
+      - 0 method  → force setup
+      - 1 method  → 2fa_complete đủ để vào (không cần verify_2fa_multi)
+      - ≥2 method → phải xác thực TẤT CẢ qua verify_2fa_multi
     """
     if request.session.get('2fa_complete'):
         return redirect('/admin-dashboard/users/')
@@ -2326,12 +2334,17 @@ def admin_dashboard(request):
     # Chưa có 2fa_complete → kiểm tra admin đã setup chưa
     methods = _get_admin_enabled_methods(request.user)
 
-    if not _admin_2fa_ready(request.user):
-        # Chưa đủ method → bắt setup
+    if len(methods) == 0:
+        # Chưa bật method nào → bắt setup
         request.session['force_2fa_setup'] = True
         return redirect('admin_setup_2fa')
 
-    # Đã setup đủ → khôi phục / tạo session 2FA rồi redirect verify
+    if len(methods) == 1:
+        # Chỉ 1 method → không cần multi-factor verify, đánh dấu complete luôn
+        _complete_admin_2fa(request)
+        return redirect('/admin-dashboard/users/')
+
+    # ≥2 method → bắt xác thực tất cả qua verify_2fa_multi
     if not request.session.get('2fa_methods_required'):
         request.session['2fa_methods_required'] = methods
         request.session['2fa_required_count']   = len(methods)
@@ -3346,8 +3359,10 @@ def fido2_admin_auth_complete(request):
 # Helper function để kiểm tra nếu admin đã bật đủ 2FA methods cho multi-factor verification.
 def _admin_2fa_ready(user) -> bool:
     """
-    Trả True nếu admin đã bật ít nhất 2 trong các phương thức:
-    fido2, totp, hotp, email.
+    Trả True nếu admin đã bật ít nhất 1 phương thức 2FA.
+    - 0 method  → force setup (bắt buộc bật ít nhất 1)
+    - 1 method  → login thẳng vào admin_dashboard (không cần verify_2fa_multi)
+    - ≥2 method → phải xác thực TẤT CẢ qua verify_2fa_multi
     """
     profile   = getattr(user, 'profile', None)
     has_fido2 = user.passkeys.exists()
@@ -3357,7 +3372,7 @@ def _admin_2fa_ready(user) -> bool:
         bool(profile and profile.has_hotp),
         bool(profile and profile.has_email_otp),
     ])
-    return count >= 2
+    return count >= 1
 
 
 # Helper function để lấy list các phương thức 2FA đang bật theo thứ tự ưu tiên.
@@ -3434,8 +3449,8 @@ def admin_setup_2fa(request):
                 if enabled and m not in chosen:
                     chosen.append(m)
 
-            if len(chosen) < 2:
-                messages.error(request, 'Phải chọn ít nhất 2 phương thức xác thực!')
+            if len(chosen) < 1:
+                messages.error(request, 'Phải chọn ít nhất 1 phương thức xác thực!')
                 return redirect('/admin-setup-2fa/?step=select')
 
             # Sắp xếp theo thứ tự: fido2 → totp → hotp → email
@@ -3704,9 +3719,8 @@ def admin_setup_2fa(request):
     # BƯỚC 3 — Done
     # ════════════════════════════════════════════════════════════════════════
     elif step == 'done':
-        # Clear force_setup flag
+        # Clear force_setup flag và temp session data
         request.session.pop('force_2fa_setup', None)
-        # Clear temp session data
         for key in ['admin_2fa_selected_methods', 'admin_2fa_setup_done',
                     'temp_admin_totp_secret', 'temp_admin_totp_secret_at',
                     'temp_admin_hotp_secret', 'temp_admin_hotp_token']:
@@ -3718,13 +3732,11 @@ def admin_setup_2fa(request):
             action='2fa_enable', ip_address=ip, user_agent=ua,
         )
 
-        return render(request, 'admin_dashboard/admin_setup_2fa.html', {
-            'step':              'done',
-            'setup_methods':     selected_methods or _get_admin_enabled_methods(request.user),
-            'setup_done_count':  len(selected_methods or _get_admin_enabled_methods(request.user)),
-            'already_enabled':   already_enabled,
-            'force_setup':       False,
-        })
+        # Setup xong = đã xác minh danh tính trong phiên này → đánh dấu complete
+        # và vào thẳng dashboard (không bắt verify_2fa_multi lại)
+        _complete_admin_2fa(request)
+        messages.success(request, '\u2705 Thi\u1ebft l\u1eadp 2FA ho\u00e0n t\u1ea5t! Ch\u00e0o m\u1eebng v\u00e0o Dashboard.')
+        return redirect('admin_dashboard')
 
     return redirect('/admin-setup-2fa/?step=select')
 
@@ -3742,3 +3754,206 @@ def _get_valid_otp_admin(user, otp_code: str, action: str):
         user=user, otp_hash=otp_hash, is_used=False, is_active=True, action=action,
         created_at__gt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES),
     ).order_by('-created_at').first()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K. ADMIN 2FA MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def admin_manage_2fa(request):
+    """
+    Trang quản lý 2FA cho Admin sau khi đã setup.
+
+    Hiển thị trạng thái từng phương thức đang bật/tắt.
+    Cho phép tắt từng phương thức (có xác nhận OTP).
+    Điều kiện an toàn: luôn phải còn ít nhất 1 phương thức sau khi tắt.
+
+    POST actions:
+      disable_totp   — yêu cầu mã TOTP xác nhận
+      disable_hotp   — yêu cầu mã HOTP xác nhận
+      disable_email  — yêu cầu Email OTP xác nhận
+      disable_fido2  — xóa tất cả passkey (cần ít nhất 1 method khác còn lại)
+      confirm_disable — xử lý mã xác nhận để thực sự tắt
+    """
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    ip = get_client_ip(request)
+    ua = request.META.get('HTTP_USER_AGENT', 'Unknown')
+    has_fido2 = request.user.passkeys.exists()
+
+    # Số phương thức đang bật
+    active_methods_count = sum([
+        has_fido2,
+        profile.has_app_otp,
+        profile.has_hotp,
+        profile.has_email_otp,
+    ])
+
+    confirm_disable = request.session.pop('admin_2fa_confirm_disable', None)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        # ── Yêu cầu xác nhận tắt TOTP ────────────────────────────────────────
+        if action == 'disable_totp':
+            if active_methods_count <= 1:
+                messages.error(request, 'Không thể tắt: phải giữ ít nhất 1 phương thức 2FA.')
+                return redirect('admin_manage_2fa')
+            request.session['admin_2fa_confirm_disable'] = 'totp'
+            return redirect('admin_manage_2fa')
+
+        # ── Yêu cầu xác nhận tắt HOTP ────────────────────────────────────────
+        elif action == 'disable_hotp':
+            if active_methods_count <= 1:
+                messages.error(request, 'Không thể tắt: phải giữ ít nhất 1 phương thức 2FA.')
+                return redirect('admin_manage_2fa')
+            request.session['admin_2fa_confirm_disable'] = 'hotp'
+            return redirect('admin_manage_2fa')
+
+        # ── Yêu cầu xác nhận tắt Email OTP ───────────────────────────────────
+        elif action == 'disable_email':
+            if active_methods_count <= 1:
+                messages.error(request, 'Không thể tắt: phải giữ ít nhất 1 phương thức 2FA.')
+                return redirect('admin_manage_2fa')
+            try:
+                generate_and_send_email_otp(
+                    user=request.user, email=request.user.email,
+                    action='admin_disable_2fa', ip=ip,
+                )
+                request.session['admin_2fa_confirm_disable'] = 'email'
+                messages.info(request, f'Đã gửi mã xác nhận tới {request.user.email}')
+            except Exception as e:
+                messages.error(request, f'Lỗi gửi email: {str(e)}')
+            return redirect('admin_manage_2fa')
+
+        # ── Tắt FIDO2 (xóa tất cả passkey) ───────────────────────────────────
+        elif action == 'disable_fido2':
+            if active_methods_count <= 1:
+                messages.error(request, 'Không thể tắt: phải giữ ít nhất 1 phương thức 2FA.')
+                return redirect('admin_manage_2fa')
+            request.user.passkeys.all().delete()
+            ActivityLog.objects.create(
+                user=request.user, username_attempt=request.user.username,
+                action='2fa_disable', ip_address=ip, user_agent=ua,
+            )
+            messages.success(request, '✅ Đã xóa tất cả Passkey FIDO2.')
+            return redirect('admin_manage_2fa')
+
+        # ── Xử lý mã xác nhận để thực sự tắt ────────────────────────────────
+        elif action == 'confirm_disable':
+            target = request.POST.get('target')
+            code   = request.POST.get('confirm_code', '').strip()
+            valid  = False
+
+            if target == 'totp' and profile.has_app_otp:
+                raw_secret = profile.decrypt_secret()
+                if raw_secret and verify_totp(raw_secret, code):
+                    valid = True
+
+            elif target == 'hotp' and profile.has_hotp:
+                raw_secret = profile.decrypt_hotp_secret()
+                if raw_secret:
+                    ok, new_counter = verify_hotp(raw_secret, profile.hotp_counter, code, look_ahead=5)
+                    if ok:
+                        valid = True
+
+            elif target == 'email' and profile.has_email_otp:
+                otp_obj = EmailOTP.objects.filter(
+                    user=request.user,
+                    otp_hash=hashlib.sha256(code.encode('utf-8')).hexdigest(),
+                    is_used=False, is_active=True,
+                    action='admin_disable_2fa',
+                    created_at__gt=timezone.now() - timedelta(minutes=EmailOTP.OTP_VALID_MINUTES),
+                ).order_by('-created_at').first()
+                if otp_obj:
+                    otp_obj.mark_used()
+                    valid = True
+
+            if valid:
+                if target == 'totp':
+                    profile.has_app_otp = False
+                    if not profile.has_hotp:
+                        profile.otp_secret = None
+                    profile.save()
+                elif target == 'hotp':
+                    profile.has_hotp    = False
+                    profile.hotp_secret = None
+                    profile.hotp_counter = 0
+                    profile.save()
+                elif target == 'email':
+                    profile.has_email_otp = False
+                    profile.save()
+
+                ActivityLog.objects.create(
+                    user=request.user, username_attempt=request.user.username,
+                    action='2fa_disable', ip_address=ip, user_agent=ua,
+                )
+                messages.success(request, f'✅ Đã tắt {target.upper()} thành công.')
+            else:
+                messages.error(request, '❌ Mã xác nhận không đúng hoặc đã hết hạn.')
+                request.session['admin_2fa_confirm_disable'] = target
+
+            return redirect('admin_manage_2fa')
+
+    # ── GET: chuẩn bị context ─────────────────────────────────────────────────
+    passkeys = request.user.passkeys.all()
+    has_fido2 = passkeys.exists()
+
+    active_methods_count = sum([
+        has_fido2,
+        profile.has_app_otp,
+        profile.has_hotp,
+        profile.has_email_otp,
+    ])
+
+    methods = [
+        {
+            'key':         'totp',
+            'label':       'Authenticator App (TOTP)',
+            'description': 'Google Authenticator hoặc tương đương. Mã thay đổi mỗi 30 giây.',
+            'icon':        'fa-mobile-alt',
+            'enabled':     profile.has_app_otp,
+            'setup_url':   '/admin-setup-2fa/?step=select',
+        },
+        {
+            'key':         'hotp',
+            'label':       'HOTP (mã theo sự kiện)',
+            'description': 'Mã OTP theo bộ đếm (RFC 4226). Counter hiện tại: ' + str(profile.hotp_counter),
+            'icon':        'fa-key',
+            'enabled':     profile.has_hotp,
+            'setup_url':   '/admin-setup-2fa/?step=select',
+        },
+        {
+            'key':         'email',
+            'label':       'Email OTP',
+            'description': f'Gửi mã OTP qua email {request.user.email or "(chưa có email)"}.',
+            'icon':        'fa-envelope',
+            'enabled':     profile.has_email_otp,
+            'setup_url':   '/admin-setup-2fa/?step=select',
+        },
+        {
+            'key':         'fido2',
+            'label':       'Passkey / FIDO2',
+            'description': f'Vân tay, Face ID hoặc khoá bảo mật. Đang có {passkeys.count()} passkey.',
+            'icon':        'fa-fingerprint',
+            'enabled':     has_fido2,
+            'setup_url':   '/admin-setup-2fa/?step=select',
+        },
+    ]
+
+    recent_logs = ActivityLog.objects.filter(
+        user=request.user,
+        action__in=['2fa_enable', '2fa_disable', 'login', 'otp_success', 'otp_fail'],
+    ).order_by('-timestamp')[:8]
+
+    return render(request, 'admin_dashboard/admin_manage_2fa.html', {
+        'profile':             profile,
+        'methods':             methods,
+        'has_fido2':           has_fido2,
+        'passkeys':            passkeys,
+        'active_methods_count': active_methods_count,
+        'confirm_disable':     confirm_disable,
+        'recent_logs':         recent_logs,
+        'can_disable':         active_methods_count > 1,
+    })
