@@ -1,0 +1,204 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HUIT · Audit Log</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+        .nav-link { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; font-size:0.875rem; font-weight:500; transition:all 0.15s; color:#a1a1aa; text-decoration:none; border:1px solid transparent; }
+        .nav-link:hover { background:#27272a; color:#e4e4e7; }
+        .nav-link.active { background:rgba(124,58,237,0.12); color:#a78bfa; border-color:rgba(124,58,237,0.25); }
+        .nav-icon { width:18px; text-align:center; font-size:15px; }
+        aside { position:fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+        .main-content { margin-left:256px; min-height:100vh; overflow-y:auto; }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<div class="flex">
+
+<!-- SIDEBAR -->
+<aside class="w-64 bg-zinc-900 border-r border-zinc-800/70 flex flex-col" style="z-index:40;">
+    <div class="p-6 border-b border-zinc-800/70">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-violet-600/30">H</div>
+            <div>
+                <div class="font-bold text-white text-base leading-tight">HUIT</div>
+                <div class="text-zinc-500 text-xs">Admin Dashboard</div>
+            </div>
+        </div>
+    </div>
+    <nav class="flex-1 p-4 space-y-1">
+        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
+        <a href="{% url 'admin_overview' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Tổng quan
+        </a>
+        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
+        <a href="{% url 'admin_users' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-users"></i></span> Người dùng
+        </a>
+        <a href="{% url 'admin_session_manager' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-display"></i></span> Phiên đăng nhập
+        </a>
+        <a href="{% url 'admin_otp_history' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-key"></i></span> Lịch sử OTP
+        </a>
+        <a href="{% url 'admin_login_history' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> Hoạt động Đăng nhập
+        </a>
+        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
+        <a href="{% url 'admin_security_alerts' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-triangle-exclamation"></i></span> Cảnh báo bảo mật
+        </a>
+        <a href="{% url 'admin_audit_log' %}" class="nav-link active">
+            <span class="nav-icon"><i class="fas fa-scroll"></i></span> Audit Log
+        </a>
+        <a href="{% url 'dtb_admin' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-database"></i></span> DTB Admin
+        </a>
+        <a href="{% url 'admin_manage_2fa' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-shield-halved"></i></span> Admin 2FA
+        </a>
+        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
+        <a href="{% url 'admin_announcements' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-bullhorn"></i></span> Thông báo
+        </a>
+        <a href="{% url 'admin_system_settings' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-gear"></i></span> Cài đặt
+        </a>
+    </nav>
+    <div class="p-4 border-t border-zinc-800/70">
+        <div class="flex items-center gap-3 px-3 py-2 mb-3">
+            <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-400 text-xs font-bold">
+                {{ request.user.username|slice:":2"|upper|default:"AD" }}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-zinc-200 truncate">{{ request.user.username|default:"Admin" }}</div>
+                <div class="text-xs text-zinc-500">Superuser</div>
+            </div>
+        </div>
+        <form method="POST" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-400 hover:bg-red-600/20 transition-all">
+                <i class="fas fa-sign-out-alt w-4 text-center"></i> Đăng xuất
+            </button>
+        </form>
+    </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main-content flex-1 p-8">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-white">Audit Log — Admin</h1>
+        <p class="text-zinc-500 text-sm mt-1">{{ total }} bản ghi hành động admin</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-5 mb-6">
+        <form method="GET" class="flex flex-wrap gap-3 items-end">
+            <div class="min-w-[160px]">
+                <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Action</label>
+                <select name="action" class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-violet-500">
+                    <option value="">Tất cả</option>
+                    {% for a in admin_actions %}
+                    <option value="{{ a }}" {% if action_filter == a %}selected{% endif %}>{{ a }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="min-w-[160px]">
+                <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Từ ngày</label>
+                <input type="date" name="date_from" value="{{ date_from }}"
+                       class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-violet-500">
+            </div>
+            <div class="min-w-[160px]">
+                <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Đến ngày</label>
+                <input type="date" name="date_to" value="{{ date_to }}"
+                       class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-violet-500">
+            </div>
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Tìm kiếm</label>
+                <input type="text" name="search" value="{{ search }}" placeholder="Username, IP, action..."
+                       class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
+            </div>
+            <div class="flex gap-2 pt-[22px]">
+                <button type="submit" class="bg-violet-600 hover:bg-violet-500 px-5 py-3 rounded-xl text-sm font-medium flex items-center gap-2 transition-all">
+                    <i class="fas fa-filter"></i> Lọc
+                </button>
+                <a href="{% url 'admin_audit_log' %}" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-xl flex items-center border border-zinc-700/60 transition-all">
+                    <i class="fas fa-sync-alt text-xs"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Log Table -->
+    <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl overflow-hidden">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-zinc-800/70">
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Thời gian</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Admin</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Hành động</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">IP</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">User Agent</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-800/30">
+                {% for log in page_obj %}
+                <tr class="hover:bg-zinc-800/20 transition-colors">
+                    <td class="px-6 py-3 text-xs text-zinc-400 whitespace-nowrap">{{ log.timestamp|date:"d/m/Y H:i:s" }}</td>
+                    <td class="px-6 py-3 font-medium text-zinc-200">{{ log.user.username }}</td>
+                    <td class="px-6 py-3">
+                        {% if log.action == 'login' %}
+                            <span class="bg-emerald-500/15 text-emerald-400 text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/20">{{ log.action }}</span>
+                        {% elif log.action == 'login_failed' or log.action == 'otp_fail' %}
+                            <span class="bg-red-500/15 text-red-400 text-[11px] px-2 py-0.5 rounded-full border border-red-500/20">{{ log.action }}</span>
+                        {% elif '2fa' in log.action %}
+                            <span class="bg-blue-500/15 text-blue-400 text-[11px] px-2 py-0.5 rounded-full border border-blue-500/20">{{ log.action }}</span>
+                        {% else %}
+                            <span class="bg-zinc-700/50 text-zinc-300 text-[11px] px-2 py-0.5 rounded-full">{{ log.action }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-3 font-mono text-xs text-violet-300">{{ log.ip_address|default:"—" }}</td>
+                    <td class="px-6 py-3 text-xs text-zinc-500 max-w-[240px] truncate" title="{{ log.user_agent }}">{{ log.user_agent|truncatechars:50 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="px-6 py-12 text-center text-zinc-500 text-sm">
+                        <i class="fas fa-scroll text-2xl mb-2 block opacity-20"></i>
+                        Không có bản ghi nào.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="px-6 py-4 border-t border-zinc-800/50 flex items-center justify-between">
+            <span class="text-xs text-zinc-500">Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&search={{ search }}&action={{ action_filter }}&date_from={{ date_from }}&date_to={{ date_to }}"
+                   class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-all">← Trước</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&search={{ search }}&action={{ action_filter }}&date_from={{ date_from }}&date_to={{ date_to }}"
+                   class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-all">Sau →</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+</div>
+</body>
+</html>

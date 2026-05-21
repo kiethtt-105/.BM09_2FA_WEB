@@ -83,3 +83,4 @@ urlpatterns = [
     path('admin-dashboard/export-dtb/', views.export_dtb, name='export_dtb'),
     path('admin-manage-2fa/', views.admin_manage_2fa, name='admin_manage_2fa'),
 ]
+

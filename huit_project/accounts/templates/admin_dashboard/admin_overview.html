@@ -1,0 +1,272 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HUIT · Tổng quan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+        .nav-link { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; font-size:0.875rem; font-weight:500; transition:all 0.15s; color:#a1a1aa; text-decoration:none; border:1px solid transparent; }
+        .nav-link:hover { background:#27272a; color:#e4e4e7; }
+        .nav-link.active { background:rgba(124,58,237,0.12); color:#a78bfa; border-color:rgba(124,58,237,0.25); }
+        .nav-icon { width:18px; text-align:center; font-size:15px; }
+        aside { position:fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+        .main-content { margin-left:256px; min-height:100vh; overflow-y:auto; }
+        .stat-card { background:linear-gradient(135deg,#18181b 0%,#27272a 100%); }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<div class="flex">
+
+<!-- SIDEBAR -->
+<aside class="w-64 bg-zinc-900 border-r border-zinc-800/70 flex flex-col" style="z-index:40;">
+    <div class="p-6 border-b border-zinc-800/70">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-violet-600/30">H</div>
+            <div>
+                <div class="font-bold text-white text-base leading-tight">HUIT</div>
+                <div class="text-zinc-500 text-xs">Admin Dashboard</div>
+            </div>
+        </div>
+    </div>
+    <nav class="flex-1 p-4 space-y-1">
+        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
+        <a href="{% url 'admin_overview' %}" class="nav-link active">
+            <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Tổng quan
+        </a>
+        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
+        <a href="{% url 'admin_users' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-users"></i></span> Người dùng
+        </a>
+        <a href="{% url 'admin_session_manager' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-display"></i></span> Phiên đăng nhập
+        </a>
+        <a href="{% url 'admin_otp_history' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-key"></i></span> Lịch sử OTP
+        </a>
+        <a href="{% url 'admin_login_history' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> Hoạt động Đăng nhập
+        </a>
+        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
+        <a href="{% url 'admin_security_alerts' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-triangle-exclamation"></i></span> Cảnh báo bảo mật
+        </a>
+        <a href="{% url 'admin_audit_log' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-scroll"></i></span> Audit Log
+        </a>
+        <a href="{% url 'dtb_admin' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-database"></i></span> DTB Admin
+        </a>
+        <a href="{% url 'admin_manage_2fa' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-shield-halved"></i></span> Admin 2FA
+        </a>
+        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
+        <a href="{% url 'admin_announcements' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-bullhorn"></i></span> Thông báo
+        </a>
+        <a href="{% url 'admin_system_settings' %}" class="nav-link">
+            <span class="nav-icon"><i class="fas fa-gear"></i></span> Cài đặt
+        </a>
+    </nav>
+    <div class="p-4 border-t border-zinc-800/70">
+        <div class="flex items-center gap-3 px-3 py-2 mb-3">
+            <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-400 text-xs font-bold">
+                {{ request.user.username|slice:":2"|upper|default:"AD" }}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-zinc-200 truncate">{{ request.user.username|default:"Admin" }}</div>
+                <div class="text-xs text-zinc-500">Superuser</div>
+            </div>
+        </div>
+        <form method="POST" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-400 hover:bg-red-600/20 transition-all">
+                <i class="fas fa-sign-out-alt w-4 text-center"></i> Đăng xuất
+            </button>
+        </form>
+    </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main-content flex-1 p-8">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-white">Tổng quan hệ thống</h1>
+        <p class="text-zinc-500 text-sm mt-1">Theo dõi hoạt động và thống kê realtime</p>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="stat-card border border-zinc-800/70 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-zinc-400 text-xs font-medium uppercase tracking-wider">Tổng User</span>
+                <div class="w-8 h-8 bg-violet-600/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-users text-violet-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white">{{ total_users }}</div>
+            <div class="text-xs text-zinc-500 mt-1">{{ active_users }} đang hoạt động</div>
+        </div>
+        <div class="stat-card border border-zinc-800/70 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-zinc-400 text-xs font-medium uppercase tracking-wider">Active Hôm nay</span>
+                <div class="w-8 h-8 bg-emerald-600/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-circle-check text-emerald-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white">{{ users_today }}</div>
+            <div class="text-xs text-zinc-500 mt-1">{{ users_week }} trong tuần này</div>
+        </div>
+        <div class="stat-card border border-zinc-800/70 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-zinc-400 text-xs font-medium uppercase tracking-wider">Bật 2FA</span>
+                <div class="w-8 h-8 bg-blue-600/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-shield-halved text-blue-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white">{{ users_2fa }}</div>
+            <div class="text-xs text-zinc-500 mt-1">
+                {% if total_users %}{% widthratio users_2fa total_users 100 %}%{% else %}0%{% endif %} tổng số user
+            </div>
+        </div>
+        <div class="stat-card border border-zinc-800/70 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-zinc-400 text-xs font-medium uppercase tracking-wider">Chưa 2FA</span>
+                <div class="w-8 h-8 bg-amber-600/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-lock-open text-amber-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white">{{ total_users|add:"-"|add:users_2fa }}</div>
+            <div class="text-xs text-zinc-500 mt-1">Chưa kích hoạt xác thực 2 bước</div>
+        </div>
+    </div>
+
+    <!-- Chart + Top IPs -->
+    <div class="grid grid-cols-3 gap-6 mb-8">
+        <!-- Login Chart -->
+        <div class="col-span-2 bg-zinc-900 border border-zinc-800/70 rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h2 class="text-base font-semibold text-white">Biểu đồ đăng nhập</h2>
+                    <p class="text-xs text-zinc-500 mt-0.5">24 giờ gần nhất (UTC+7)</p>
+                </div>
+                <div class="flex items-center gap-4 text-xs">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Thành công</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> Thất bại</span>
+                </div>
+            </div>
+            <canvas id="loginChart" height="180"></canvas>
+        </div>
+
+        <!-- Top IPs -->
+        <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-6">
+            <h2 class="text-base font-semibold text-white mb-4">Top IP đăng nhập</h2>
+            <div class="space-y-2.5">
+                {% for ip in top_ips %}
+                <div class="flex items-center justify-between">
+                    <span class="font-mono text-xs text-violet-300">{{ ip.ip_address|default:"—" }}</span>
+                    <span class="bg-zinc-800 text-zinc-300 text-[11px] px-2 py-0.5 rounded-full">{{ ip.count }}</span>
+                </div>
+                {% empty %}
+                <p class="text-zinc-500 text-sm text-center py-4">Chưa có dữ liệu</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Logins -->
+    <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-zinc-800/70">
+            <h2 class="text-base font-semibold text-white">Đăng nhập gần đây</h2>
+        </div>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-zinc-800/70">
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">User</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">IP</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Thời gian</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Trạng thái</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-800/50">
+                {% for log in recent_logins %}
+                <tr class="hover:bg-zinc-800/30 transition-colors">
+                    <td class="px-6 py-3 font-medium text-zinc-200">{{ log.user.username }}</td>
+                    <td class="px-6 py-3 font-mono text-xs text-violet-300">{{ log.ip_address|default:"—" }}</td>
+                    <td class="px-6 py-3 text-zinc-400 text-xs">{{ log.timestamp|date:"d/m/Y H:i" }}</td>
+                    <td class="px-6 py-3">
+                        <span class="bg-emerald-500/15 text-emerald-400 text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/20">Thành công</span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="px-6 py-10 text-center text-zinc-500 text-sm">Chưa có dữ liệu</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</div>
+
+<script>
+const chartData = {{ chart_data_json|safe }};
+const ctx = document.getElementById('loginChart').getContext('2d');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: chartData.labels,
+        datasets: [
+            {
+                label: 'Thành công',
+                data: chartData.success,
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                borderRadius: 4,
+                borderSkipped: false,
+            },
+            {
+                label: 'Thất bại',
+                data: chartData.fail,
+                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                borderRadius: 4,
+                borderSkipped: false,
+            },
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#18181b',
+                borderColor: '#3f3f46',
+                borderWidth: 1,
+                titleColor: '#e4e4e7',
+                bodyColor: '#a1a1aa',
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#71717a', font: { size: 10 } },
+                grid: { color: 'rgba(63,63,70,0.3)' },
+                maxTicksLimit: 12,
+            },
+            y: {
+                ticks: { color: '#71717a', font: { size: 10 } },
+                grid: { color: 'rgba(63,63,70,0.3)' },
+                beginAtZero: true,
+            }
+        }
+    }
+});
+</script>
+</body>
+</html>

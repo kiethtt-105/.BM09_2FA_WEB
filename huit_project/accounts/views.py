@@ -3945,3 +3945,4 @@ def admin_manage_2fa(request):
         'recent_logs':         recent_logs,
         'can_disable':         active_methods_count > 1,
     })
+
