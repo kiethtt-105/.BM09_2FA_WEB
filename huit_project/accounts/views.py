@@ -30,7 +30,7 @@ from django.utils.dateparse import parse_date
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.core.paginator import Paginator
 from django.contrib.sessions.models import Session
 from django import forms
