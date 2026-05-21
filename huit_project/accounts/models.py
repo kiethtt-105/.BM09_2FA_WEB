@@ -693,3 +693,117 @@ class BackupCode(models.Model):
  
     def __str__(self):
         return f'BackupCode({self.user.username} | used={self.is_used})'
+    
+
+# ════════════════════════════════════════════════════════════════════════════
+# SystemSettings — Lưu cài đặt hệ thống dạng key-value (singleton)
+# ════════════════════════════════════════════════════════════════════════════
+ 
+class SystemSettings(models.Model):
+    """
+    Bảng singleton lưu cấu hình hệ thống.
+    Chỉ có 1 bản ghi (id=1). Dùng SystemSettings.get() để lấy/tạo.
+    """
+    registration_enabled  = models.BooleanField(default=True,  verbose_name='Cho phép đăng ký mới')
+    require_2fa_all       = models.BooleanField(default=False, verbose_name='Bắt buộc 2FA cho tất cả user')
+ 
+    otp_expiry_minutes    = models.PositiveIntegerField(default=5,  verbose_name='Thời hạn OTP (phút)')
+    otp_max_retry         = models.PositiveIntegerField(default=5,  verbose_name='Số lần retry OTP tối đa')
+ 
+    session_timeout_hours = models.PositiveIntegerField(default=24, verbose_name='Timeout phiên (giờ)')
+ 
+    ip_whitelist          = models.TextField(blank=True, default='', verbose_name='IP Whitelist')
+    ip_blacklist          = models.TextField(blank=True, default='', verbose_name='IP Blacklist')
+ 
+    updated_at            = models.DateTimeField(auto_now=True)
+    updated_by            = models.ForeignKey(
+        User, null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='system_settings_updates',
+    )
+ 
+    class Meta:
+        verbose_name        = 'Cài đặt hệ thống'
+        verbose_name_plural = 'Cài đặt hệ thống'
+ 
+    @classmethod
+    def get(cls) -> 'SystemSettings':
+        """Luôn trả về bản ghi singleton (id=1), tạo mới nếu chưa có."""
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
+ 
+    def __str__(self):
+        return f'SystemSettings (cập nhật: {self.updated_at:%d/%m/%Y %H:%M})'
+ 
+ 
+# ════════════════════════════════════════════════════════════════════════════
+# Announcement — Thông báo hệ thống gửi đến tất cả user
+# ════════════════════════════════════════════════════════════════════════════
+ 
+class Announcement(models.Model):
+    LEVEL_CHOICES = [
+        ('info',    'Thông tin'),
+        ('warning', 'Cảnh báo'),
+        ('danger',  'Khẩn cấp'),
+    ]
+ 
+    title      = models.CharField(max_length=200, verbose_name='Tiêu đề')
+    body       = models.TextField(verbose_name='Nội dung')
+    level      = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='info')
+    created_by = models.ForeignKey(
+        User, null=True, on_delete=models.SET_NULL,
+        related_name='announcements',
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    is_active  = models.BooleanField(default=True)
+ 
+    class Meta:
+        verbose_name        = 'Thông báo'
+        verbose_name_plural = 'Thông báo'
+        ordering            = ['-created_at']
+ 
+    def __str__(self):
+        return f'[{self.level.upper()}] {self.title}'
+ 
+ 
+# ════════════════════════════════════════════════════════════════════════════
+# AdminAuditLog — Ghi lại hành động của admin (riêng biệt với ActivityLog)
+# ════════════════════════════════════════════════════════════════════════════
+ 
+class AdminAuditLog(models.Model):
+    """
+    Ghi lại các hành động của admin trong dashboard.
+    Khác ActivityLog (dành cho user login/otp), AdminAuditLog ghi
+    các thao tác quản trị: toggle user, force logout, thay đổi settings...
+    """
+    user       = models.ForeignKey(
+        User, null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='admin_audit_logs',
+    )
+    action     = models.CharField(max_length=100, db_index=True)
+    detail     = models.TextField(blank=True, default='')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    timestamp  = models.DateTimeField(default=timezone.now, db_index=True)
+ 
+    class Meta:
+        verbose_name        = 'Admin Audit Log'
+        verbose_name_plural = 'Admin Audit Logs'
+        ordering            = ['-timestamp']
+ 
+    @classmethod
+    def log(cls, user, action: str, detail: str = '', ip: str = None, ua: str = ''):
+        """Helper để tạo bản ghi nhanh."""
+        return cls.objects.create(
+            user=user,
+            action=action,
+            detail=detail,
+            ip_address=ip,
+            user_agent=ua,
+        )
+ 
+    def __str__(self):
+        username = self.user.username if self.user else 'Unknown'
+        return f'{username} — {self.action} @ {self.timestamp:%d/%m/%Y %H:%M}'
+ 

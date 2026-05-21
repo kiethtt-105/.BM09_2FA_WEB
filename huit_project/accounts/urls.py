@@ -82,5 +82,63 @@ urlpatterns = [
     path('admin-dashboard/dtb_admin/', views.dtb_admin_view, name='dtb_admin'),
     path('admin-dashboard/export-dtb/', views.export_dtb, name='export_dtb'),
     path('admin-manage-2fa/', views.admin_manage_2fa, name='admin_manage_2fa'),
+
+
+
+
+    path(
+        'admin-dashboard/overview/',
+        views.admin_overview,
+        name='admin_overview',
+    ),
+ 
+    # ── Admin Dashboard — Quản lý phiên đăng nhập ──────────────────────────
+    path(
+        'admin-dashboard/session-manager/',
+        views.admin_session_manager,
+        name='admin_session_manager',
+    ),
+ 
+    # ── Admin Dashboard — Cảnh báo bảo mật ─────────────────────────────────
+    path(
+        'admin-dashboard/security-alerts/',
+        views.admin_security_alerts,
+        name='admin_security_alerts',
+    ),
+ 
+    # ── Admin Dashboard — Audit Log ─────────────────────────────────────────
+    path(
+        'admin-dashboard/audit-log/',
+        views.admin_audit_log,
+        name='admin_audit_log',
+    ),
+ 
+    # ── Admin Dashboard — Cài đặt hệ thống ─────────────────────────────────
+    path(
+        'admin-dashboard/system-settings/',
+        views.admin_system_settings,
+        name='admin_system_settings',
+    ),
+ 
+    # ── Admin Dashboard — Thông báo ─────────────────────────────────────────
+    path(
+        'admin-dashboard/announcements/',
+        views.admin_announcements,
+        name='admin_announcements',
+    ),
+ 
+    # ── API: Xóa thông báo ──────────────────────────────────────────────────
+    path(
+        'api/admin/delete-announcement/<int:ann_id>/',
+        views.admin_delete_announcement,
+        name='admin_delete_announcement',
+    ),
+ 
+    # ── API: Force logout 1 session ─────────────────────────────────────────
+    path(
+        'api/admin/force-logout-session/<str:session_key>/',
+        views.admin_force_logout_session,
+        name='admin_force_logout_session',
+    ),
 ]
 

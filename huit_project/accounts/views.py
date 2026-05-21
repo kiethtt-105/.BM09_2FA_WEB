@@ -46,7 +46,8 @@ from .models import (
     EmailOTP, UserProfile, PendingRegistration,
     ActivityLog, UserPasskey,
     OTPAttempt, HOTPAttempt,
-    BackupCode,
+    BackupCode,SystemSettings, 
+    Announcement, AdminAuditLog
 )
 from .utils import (
     get_totp_token, verify_totp,
@@ -3946,3 +3947,549 @@ def admin_manage_2fa(request):
         'can_disable':         active_methods_count > 1,
     })
 
+
+def _require_admin_2fa(request):
+    """
+    Trả None nếu admin đã xác thực 2FA.
+    Trả redirect nếu chưa, để caller có thể return ngay.
+    """
+    if not request.session.get('2fa_complete'):
+        return redirect('admin_dashboard')
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1. ADMIN OVERVIEW  (admin_overview.html)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+@user_passes_test(is_superuser)
+def admin_overview(request):
+    """
+    Trang tổng quan dashboard admin.
+    Hiển thị stat cards, biểu đồ đăng nhập 24h, top IP, recent logins.
+    """
+    guard = _require_admin_2fa(request)
+    if guard:
+        return guard
+
+    now = timezone.now()
+
+    # ── Stat cards ────────────────────────────────────────────────────────────
+    total_users  = User.objects.count()
+    active_users = User.objects.filter(is_active=True).count()
+
+    users_today = ActivityLog.objects.filter(
+        action='login',
+        timestamp__date=now.date(),
+    ).values('user').distinct().count()
+
+    users_week = ActivityLog.objects.filter(
+        action='login',
+        timestamp__gte=now - timedelta(days=7),
+    ).values('user').distinct().count()
+
+    users_2fa = UserProfile.objects.filter(
+        Q(has_app_otp=True) | Q(has_email_otp=True) | Q(has_hotp=True)
+    ).count()
+    # Tính thêm user có passkey
+    from .models import UserPasskey
+    users_with_passkey = UserPasskey.objects.values('user').distinct().count()
+    users_2fa = UserProfile.objects.filter(
+        Q(has_app_otp=True) | Q(has_email_otp=True) | Q(has_hotp=True)
+    ).values('user').distinct().count()
+    # Hợp nhất với passkey users (không double-count)
+    all_2fa_user_ids = set(
+        UserProfile.objects.filter(
+            Q(has_app_otp=True) | Q(has_email_otp=True) | Q(has_hotp=True)
+        ).values_list('user_id', flat=True)
+    ) | set(
+        UserPasskey.objects.values_list('user_id', flat=True)
+    )
+    users_2fa = len(all_2fa_user_ids)
+
+    # ── Biểu đồ đăng nhập 24h theo giờ (UTC+7) ──────────────────────────────
+    from django.db.models.functions import TruncHour
+    since_24h = now - timedelta(hours=24)
+
+    success_by_hour = (
+        ActivityLog.objects
+        .filter(action='login', timestamp__gte=since_24h)
+        .annotate(hour=TruncHour('timestamp'))
+        .values('hour')
+        .annotate(count=Count('id'))
+        .order_by('hour')
+    )
+    fail_by_hour = (
+        ActivityLog.objects
+        .filter(action='login_failed', timestamp__gte=since_24h)
+        .annotate(hour=TruncHour('timestamp'))
+        .values('hour')
+        .annotate(count=Count('id'))
+        .order_by('hour')
+    )
+
+    # Tạo dict hour → count
+    success_map = {entry['hour']: entry['count'] for entry in success_by_hour}
+    fail_map    = {entry['hour']: entry['count'] for entry in fail_by_hour}
+
+    # 24 giờ liên tục
+    labels, success_data, fail_data = [], [], []
+    for i in range(24):
+        h = since_24h.replace(minute=0, second=0, microsecond=0) + timedelta(hours=i)
+        # Chuyển sang UTC+7 để hiển thị
+        h_vn = h + timedelta(hours=7)
+        labels.append(f'{h_vn.hour:02d}:00')
+        success_data.append(success_map.get(h, 0))
+        fail_data.append(fail_map.get(h, 0))
+
+    chart_data_json = json.dumps({
+        'labels':  labels,
+        'success': success_data,
+        'fail':    fail_data,
+    })
+
+    # ── Top 8 IP đăng nhập ───────────────────────────────────────────────────
+    top_ips = (
+        ActivityLog.objects
+        .filter(action='login', timestamp__gte=since_24h)
+        .exclude(ip_address__isnull=True)
+        .values('ip_address')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:8]
+    )
+
+    # ── Recent logins (10 bản ghi) ───────────────────────────────────────────
+    recent_logins = (
+        ActivityLog.objects
+        .filter(action='login')
+        .select_related('user')
+        .order_by('-timestamp')[:10]
+    )
+
+    return render(request, 'admin_dashboard/admin_overview.html', {
+        'total_users':     total_users,
+        'active_users':    active_users,
+        'users_today':     users_today,
+        'users_week':      users_week,
+        'users_2fa':       users_2fa,
+        'chart_data_json': chart_data_json,
+        'top_ips':         top_ips,
+        'recent_logins':   recent_logins,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. ADMIN SESSION MANAGER  (admin_session_manager.html)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+@user_passes_test(is_superuser)
+def admin_session_manager(request):
+    """
+    Quản lý phiên đăng nhập của tất cả user.
+    Hiển thị session groupby user, cho phép force logout từng session.
+    """
+    guard = _require_admin_2fa(request)
+    if guard:
+        return guard
+
+    search = request.GET.get('search', '').strip()
+
+    # Lấy tất cả session còn active
+    now          = timezone.now()
+    live_sessions = Session.objects.filter(expire_date__gt=now)
+
+    # Map session_key → user_id từ django_session
+    session_user_map = {}
+    for s in live_sessions:
+        try:
+            data    = s.get_decoded()
+            user_id = data.get('_auth_user_id')
+            if user_id:
+                session_user_map[s.session_key] = int(user_id)
+        except Exception:
+            continue
+
+    # Lấy TrustedDevice để lấy thêm ip, user_agent, last_seen
+    td_qs = TrustedDevice.objects.select_related('user').filter(
+        is_active=True,
+        session_key__in=session_user_map.keys(),
+    )
+    if search:
+        td_qs = td_qs.filter(user__username__icontains=search)
+
+    # Group theo user
+    users_sessions = {}
+    current_session_key = request.session.session_key
+
+    for td in td_qs:
+        uname = td.user.username
+        if uname not in users_sessions:
+            users_sessions[uname] = []
+
+        # Lấy expire_date từ Session table
+        try:
+            session_obj  = live_sessions.get(session_key=td.session_key)
+            expire_date  = session_obj.expire_date
+        except Session.DoesNotExist:
+            expire_date  = None
+
+        users_sessions[uname].append({
+            'session_key': td.session_key,
+            'ip_address':  td.ip_address or '—',
+            'user_agent':  td.user_agent or '—',
+            'last_seen':   td.last_seen,
+            'expire_date': expire_date,
+            'is_current':  td.session_key == current_session_key,
+            'is_trusted':  td.is_trusted,
+        })
+
+    total_sessions = sum(len(v) for v in users_sessions.values())
+    total_users    = len(users_sessions)
+
+    return render(request, 'admin_dashboard/admin_session_manager.html', {
+        'users_sessions': users_sessions,
+        'total_sessions': total_sessions,
+        'total_users':    total_users,
+        'search':         search,
+    })
+
+
+@login_required
+@user_passes_test(is_superuser)
+@require_POST
+def admin_force_logout_session(request, session_key):
+    """
+    API: Force logout 1 session cụ thể.
+    POST /api/admin/force-logout-session/<session_key>/
+    """
+    guard = _require_admin_2fa(request)
+    if guard:
+        return JsonResponse({'error': 'Chưa xác thực 2FA'}, status=403)
+
+    # Không cho xóa session của chính mình
+    if session_key == request.session.session_key:
+        return JsonResponse({'error': 'Không thể logout phiên hiện tại'}, status=400)
+
+    deleted, _ = Session.objects.filter(session_key=session_key).delete()
+    TrustedDevice.objects.filter(session_key=session_key).update(is_active=False)
+
+    if deleted:
+        AdminAuditLog.log(
+            user=request.user,
+            action='force_logout_session',
+            detail=f'Session key: {session_key[:12]}…',
+            ip=get_client_ip(request),
+            ua=request.META.get('HTTP_USER_AGENT', ''),
+        )
+        return JsonResponse({'status': 'ok'})
+
+    return JsonResponse({'error': 'Không tìm thấy phiên'}, status=404)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. ADMIN SECURITY ALERTS  (admin_security_alerts.html)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+@user_passes_test(is_superuser)
+def admin_security_alerts(request):
+    """
+    Trang cảnh báo bảo mật — phát hiện tự động:
+      • OTP fail liên tiếp ≥5 lần trong 30 phút
+      • Đăng nhập ngoài giờ hành chính (trước 7h hoặc sau 20h, UTC+7)
+      • IP mới/lạ chưa từng xuất hiện trong 30 ngày
+    """
+    guard = _require_admin_2fa(request)
+    if guard:
+        return guard
+
+    now   = timezone.now()
+    vn_offset = timedelta(hours=7)   # UTC+7
+
+    # ── 1. OTP Fail liên tiếp ≥5 lần / 30 phút ──────────────────────────────
+    since_30m = now - timedelta(minutes=30)
+    otp_fail_logs = (
+        ActivityLog.objects
+        .filter(action='otp_fail', timestamp__gte=since_30m)
+        .exclude(user__isnull=True)
+        .values('user__username', 'ip_address')
+        .annotate(fail_count=Count('id'))
+        .filter(fail_count__gte=5)
+        .order_by('-fail_count')
+    )
+
+    # ── 2. Đăng nhập ngoài giờ hành chính 24h gần nhất ──────────────────────
+    since_24h = now - timedelta(hours=24)
+    off_hours_logins = []
+    for log in (
+        ActivityLog.objects
+        .filter(action='login', timestamp__gte=since_24h)
+        .select_related('user')
+        .order_by('-timestamp')
+    ):
+        local_hour = (log.timestamp + vn_offset).hour
+        if local_hour < 7 or local_hour >= 20:
+            off_hours_logins.append(log)
+
+    # ── 3. IP mới/lạ chưa từng dùng trong 30 ngày ───────────────────────────
+    since_7d  = now - timedelta(days=7)
+    since_30d = now - timedelta(days=30)
+
+    # IP đã biết trong 30 ngày qua (trừ 7 ngày gần nhất)
+    known_ips = set(
+        ActivityLog.objects
+        .filter(action='login', timestamp__gte=since_30d, timestamp__lt=since_7d)
+        .exclude(ip_address__isnull=True)
+        .values_list('ip_address', flat=True)
+    )
+
+    # Login trong 7 ngày gần nhất với IP chưa từng thấy trước đó
+    new_ip_logins = (
+        ActivityLog.objects
+        .filter(action='login', timestamp__gte=since_7d)
+        .exclude(ip_address__isnull=True)
+        .values('user__username', 'ip_address', 'timestamp')
+        .order_by('-timestamp')
+    )
+    new_ip_logins = [
+        entry for entry in new_ip_logins
+        if entry['ip_address'] not in known_ips
+    ][:50]
+
+    alert_counts = {
+        'otp_fail':  otp_fail_logs.count(),
+        'off_hours': len(off_hours_logins),
+        'new_ip':    len(new_ip_logins),
+    }
+    total_alerts = sum(alert_counts.values())
+
+    return render(request, 'admin_dashboard/admin_security_alerts.html', {
+        'otp_fail_logs':    otp_fail_logs,
+        'off_hours_logins': off_hours_logins,
+        'new_ip_logins':    new_ip_logins,
+        'alert_counts':     alert_counts,
+        'total_alerts':     total_alerts,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. ADMIN AUDIT LOG  (admin_audit_log.html)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+@user_passes_test(is_superuser)
+def admin_audit_log(request):
+    """
+    Audit log tổng hợp từ ActivityLog (dùng lại model sẵn có).
+    Lọc theo action, khoảng ngày, và tìm kiếm tự do.
+    """
+    guard = _require_admin_2fa(request)
+    if guard:
+        return guard
+
+    logs_qs = ActivityLog.objects.select_related('user').order_by('-timestamp')
+
+    # ── Bộ lọc ────────────────────────────────────────────────────────────────
+    search        = request.GET.get('search', '').strip()
+    action_filter = request.GET.get('action', '').strip()
+    date_from     = request.GET.get('date_from', '').strip()
+    date_to       = request.GET.get('date_to', '').strip()
+
+    if search:
+        logs_qs = logs_qs.filter(
+            Q(user__username__icontains=search) |
+            Q(username_attempt__icontains=search) |
+            Q(ip_address__icontains=search) |
+            Q(action__icontains=search)
+        )
+    if action_filter:
+        logs_qs = logs_qs.filter(action=action_filter)
+    if date_from:
+        from django.utils.dateparse import parse_date
+        d = parse_date(date_from)
+        if d:
+            logs_qs = logs_qs.filter(timestamp__date__gte=d)
+    if date_to:
+        from django.utils.dateparse import parse_date
+        d = parse_date(date_to)
+        if d:
+            logs_qs = logs_qs.filter(timestamp__date__lte=d)
+
+    total = logs_qs.count()
+
+    # Danh sách action để filter dropdown
+    admin_actions = (
+        ActivityLog.objects
+        .values_list('action', flat=True)
+        .distinct()
+        .order_by('action')
+    )
+
+    paginator = Paginator(logs_qs, 25)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'admin_dashboard/admin_audit_log.html', {
+        'page_obj':      page_obj,
+        'total':         total,
+        'admin_actions': admin_actions,
+        'search':        search,
+        'action_filter': action_filter,
+        'date_from':     date_from,
+        'date_to':       date_to,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. ADMIN SYSTEM SETTINGS  (admin_system_settings.html)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+@user_passes_test(is_superuser)
+def admin_system_settings(request):
+    """
+    Trang cài đặt hệ thống — đọc/ghi SystemSettings singleton.
+    POST: lưu cài đặt mới, ghi AdminAuditLog.
+    """
+    guard = _require_admin_2fa(request)
+    if guard:
+        return guard
+
+    settings_obj = SystemSettings.get()
+
+    if request.method == 'POST':
+        try:
+            settings_obj.registration_enabled  = 'registration_enabled'  in request.POST
+            settings_obj.require_2fa_all        = 'require_2fa_all'       in request.POST
+
+            otp_expiry = request.POST.get('otp_expiry_minutes', '5')
+            otp_retry  = request.POST.get('otp_max_retry', '5')
+            sess_timeout = request.POST.get('session_timeout_hours', '24')
+
+            # Validate số nguyên dương
+            settings_obj.otp_expiry_minutes    = max(1, min(60, int(otp_expiry)))
+            settings_obj.otp_max_retry         = max(1, min(20, int(otp_retry)))
+            settings_obj.session_timeout_hours = max(1, min(720, int(sess_timeout)))
+
+            settings_obj.ip_whitelist = request.POST.get('ip_whitelist', '').strip()
+            settings_obj.ip_blacklist = request.POST.get('ip_blacklist', '').strip()
+            settings_obj.updated_by   = request.user
+            settings_obj.save()
+
+            AdminAuditLog.log(
+                user=request.user,
+                action='update_system_settings',
+                detail=(
+                    f'registration_enabled={settings_obj.registration_enabled}, '
+                    f'require_2fa_all={settings_obj.require_2fa_all}, '
+                    f'otp_expiry={settings_obj.otp_expiry_minutes}m, '
+                    f'session_timeout={settings_obj.session_timeout_hours}h'
+                ),
+                ip=get_client_ip(request),
+                ua=request.META.get('HTTP_USER_AGENT', ''),
+            )
+            messages.success(request, 'Đã lưu cài đặt hệ thống thành công.')
+
+        except (ValueError, TypeError) as e:
+            messages.error(request, f'Dữ liệu không hợp lệ: {str(e)}')
+
+        return redirect('admin_system_settings')
+
+    return render(request, 'admin_dashboard/admin_system_settings.html', {
+        'settings': settings_obj,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. ADMIN ANNOUNCEMENTS  (admin_announcements.html)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+@user_passes_test(is_superuser)
+def admin_announcements(request):
+    """
+    Trang quản lý thông báo hệ thống.
+    GET  : liệt kê thông báo đang active.
+    POST : tạo thông báo mới.
+    """
+    guard = _require_admin_2fa(request)
+    if guard:
+        return guard
+
+    if request.method == 'POST':
+        title = request.POST.get('title', '').strip()
+        body  = request.POST.get('body',  '').strip()
+        level = request.POST.get('level', 'info')
+
+        if not title or not body:
+            messages.error(request, 'Tiêu đề và nội dung không được để trống.')
+            return redirect('admin_announcements')
+
+        if level not in ('info', 'warning', 'danger'):
+            level = 'info'
+
+        ann = Announcement.objects.create(
+            title=title,
+            body=body,
+            level=level,
+            created_by=request.user,
+        )
+
+        AdminAuditLog.log(
+            user=request.user,
+            action='create_announcement',
+            detail=f'id={ann.id}, level={level}, title={title[:60]}',
+            ip=get_client_ip(request),
+            ua=request.META.get('HTTP_USER_AGENT', ''),
+        )
+        messages.success(request, f'Đã gửi thông báo "{title}" thành công.')
+        return redirect('admin_announcements')
+
+    announcements = Announcement.objects.filter(is_active=True).select_related('created_by')
+    return render(request, 'admin_dashboard/admin_announcements.html', {
+        'announcements': announcements,
+    })
+
+
+@login_required
+@user_passes_test(is_superuser)
+@require_POST
+def admin_delete_announcement(request, ann_id):
+    """
+    API: Xóa (soft-delete) thông báo.
+    POST /api/admin/delete-announcement/<ann_id>/
+    """
+    guard = _require_admin_2fa(request)
+    if guard:
+        return JsonResponse({'error': 'Chưa xác thực 2FA'}, status=403)
+
+    updated = Announcement.objects.filter(id=ann_id).update(is_active=False)
+    if updated:
+        AdminAuditLog.log(
+            user=request.user,
+            action='delete_announcement',
+            detail=f'ann_id={ann_id}',
+            ip=get_client_ip(request),
+            ua=request.META.get('HTTP_USER_AGENT', ''),
+        )
+        return JsonResponse({'status': 'ok'})
+
+    return JsonResponse({'error': 'Không tìm thấy thông báo'}, status=404)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONTEXT PROCESSOR (tùy chọn) — Inject announcements vào mọi template
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thêm vào settings.py → TEMPLATES[0]['OPTIONS']['context_processors']:
+#   'yourapp.views.announcements_context'
+
+def announcements_context(request):
+    """
+    Trả danh sách announcement đang active để hiện trên dashboard user.
+    Dùng làm context processor hoặc gọi trực tiếp trong view.
+    """
+    if not request.user.is_authenticated:
+        return {}
+    active_announcements = Announcement.objects.filter(is_active=True).order_by('-created_at')[:5]
+    return {'system_announcements': active_announcements}
