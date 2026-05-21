@@ -1,8 +1,8 @@
 """
-seed_demo.py — Tạo dữ liệu giả đa dạng cho demo HUIT 2FA System
+seed_demo.py — Tạo dữ liệu gdemo HUIT 2FA System
 ====================================================================
 Chạy: python manage.py shell < seed_demo.py
-  hoặc: python manage.py runscript seed_demo  (nếu dùng django-extensions)
+  hoặc: python manage.py runscript seed_demo  
   hoặc copy vào manage.py shell và exec()
 
 Cấu hình:
@@ -10,6 +10,8 @@ Cấu hình:
   NUM_USERS     — số user thường cần tạo (mặc định 25)
 """
 
+
+# python manage.py shell -c "exec(open('seed_demo.py', encoding='utf-8').read())"
 import os, sys, django, random, hashlib, uuid, datetime, string
 
 # ── Auto-setup Django nếu chạy standalone ──────────────────────────────────
@@ -29,12 +31,12 @@ from accounts.models import (
 )
 
 # ════════════════════════════════════════════════════════════════════════════
-# CẤU HÌNH — chỉnh ở đây
+# CẤU HÌNH — 
 # ════════════════════════════════════════════════════════════════════════════
 EMAIL_PREFIX = "tuankiet5274"   # → email dạng tuankiet5274+{username}@gmail.com
 NUM_USERS    = 25               # số user thường (không kể admin)
 ADMIN_USERNAME = "admin"
-DEMO_PASSWORD  = "Demo@1234"    # mật khẩu chung cho tất cả user demo
+DEMO_PASSWORD  = "Ab@123456"    # mật khẩu chung cho tất cả user demo
 
 # ════════════════════════════════════════════════════════════════════════════
 # DỮ LIỆU HỌ TÊN VIỆT NAM (>100 phần tử mỗi loại)
