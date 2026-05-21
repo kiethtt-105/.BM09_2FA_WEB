@@ -433,8 +433,15 @@ def login_view(request):
                 methods = _get_admin_enabled_methods(user)
                 login(request, user)
 
-                if len(methods) == 0:
-                    # Chưa bật method nào → bắt buộc setup ít nhất 1
+                # [FIX-A5] Chỉ vào verify_2fa_multi khi đã đủ ≥2 method
+                if _admin_2fa_ready(user):
+                    request.session['2fa_methods_required'] = methods
+                    request.session['2fa_required_count']   = len(methods)
+                    request.session['2fa_verified']         = []
+                    request.session['2fa_complete']         = False
+                    return redirect('verify_2fa_multi')
+                else:
+                    # Chưa đủ → bắt buộc setup thêm
                     request.session['force_2fa_setup'] = True
                     messages.warning(
                         request,
@@ -442,21 +449,6 @@ def login_view(request):
                         'trước khi vào Dashboard.'
                     )
                     return redirect('admin_setup_2fa')
-
-                elif len(methods) == 1:
-                    # Đúng 1 method → đã đủ yêu cầu, vào thẳng dashboard
-                    # (không bắt xác thực lại — đã xác thực qua password)
-                    _complete_admin_2fa(request)
-                    messages.success(request, f'Chào mừng trở lại, {user.username}!')
-                    return redirect('admin_dashboard')
-
-                else:
-                    # ≥2 method → bắt xác thực TẤT CẢ qua verify_2fa_multi
-                    request.session['2fa_methods_required'] = methods
-                    request.session['2fa_required_count']   = len(methods)
-                    request.session['2fa_verified']         = []
-                    request.session['2fa_complete']         = False
-                    return redirect('verify_2fa_multi')
 
             # ── Luồng 1b: User thường có 2FA → verify_2fa ───────────────────
             if profile.has_app_otp or profile.has_email_otp or profile.has_hotp or has_fido2:
@@ -2324,9 +2316,9 @@ def login_history(request):
 def admin_dashboard(request):
     """
     [FIX-A4] Guard đầy đủ:
-      - 0 method  → force setup
-      - 1 method  → 2fa_complete đủ để vào (không cần verify_2fa_multi)
-      - ≥2 method → phải xác thực TẤT CẢ qua verify_2fa_multi
+      - Nếu chưa setup 2FA (methods rỗng) → redirect setup, không tạo session rỗng
+      - Nếu chưa xác thực 2FA              → restore session rồi redirect verify
+      - Nếu đã xác thực                    → vào dashboard
     """
     if request.session.get('2fa_complete'):
         return redirect('/admin-dashboard/users/')
@@ -2334,17 +2326,12 @@ def admin_dashboard(request):
     # Chưa có 2fa_complete → kiểm tra admin đã setup chưa
     methods = _get_admin_enabled_methods(request.user)
 
-    if len(methods) == 0:
-        # Chưa bật method nào → bắt setup
+    if not _admin_2fa_ready(request.user):
+        # Chưa đủ method → bắt setup
         request.session['force_2fa_setup'] = True
         return redirect('admin_setup_2fa')
 
-    if len(methods) == 1:
-        # Chỉ 1 method → không cần multi-factor verify, đánh dấu complete luôn
-        _complete_admin_2fa(request)
-        return redirect('/admin-dashboard/users/')
-
-    # ≥2 method → bắt xác thực tất cả qua verify_2fa_multi
+    # Đã setup đủ → khôi phục / tạo session 2FA rồi redirect verify
     if not request.session.get('2fa_methods_required'):
         request.session['2fa_methods_required'] = methods
         request.session['2fa_required_count']   = len(methods)
@@ -3360,9 +3347,7 @@ def fido2_admin_auth_complete(request):
 def _admin_2fa_ready(user) -> bool:
     """
     Trả True nếu admin đã bật ít nhất 1 phương thức 2FA.
-    - 0 method  → force setup (bắt buộc bật ít nhất 1)
-    - 1 method  → login thẳng vào admin_dashboard (không cần verify_2fa_multi)
-    - ≥2 method → phải xác thực TẤT CẢ qua verify_2fa_multi
+    Khi bật >1 phương thức, verify_2fa_multi sẽ yêu cầu xác thực TẤT CẢ.
     """
     profile   = getattr(user, 'profile', None)
     has_fido2 = user.passkeys.exists()
@@ -3719,8 +3704,9 @@ def admin_setup_2fa(request):
     # BƯỚC 3 — Done
     # ════════════════════════════════════════════════════════════════════════
     elif step == 'done':
-        # Clear force_setup flag và temp session data
+        # Clear force_setup flag
         request.session.pop('force_2fa_setup', None)
+        # Clear temp session data
         for key in ['admin_2fa_selected_methods', 'admin_2fa_setup_done',
                     'temp_admin_totp_secret', 'temp_admin_totp_secret_at',
                     'temp_admin_hotp_secret', 'temp_admin_hotp_token']:
@@ -3732,11 +3718,13 @@ def admin_setup_2fa(request):
             action='2fa_enable', ip_address=ip, user_agent=ua,
         )
 
-        # Setup xong = đã xác minh danh tính trong phiên này → đánh dấu complete
-        # và vào thẳng dashboard (không bắt verify_2fa_multi lại)
-        _complete_admin_2fa(request)
-        messages.success(request, '\u2705 Thi\u1ebft l\u1eadp 2FA ho\u00e0n t\u1ea5t! Ch\u00e0o m\u1eebng v\u00e0o Dashboard.')
-        return redirect('admin_dashboard')
+        return render(request, 'admin_dashboard/admin_setup_2fa.html', {
+            'step':              'done',
+            'setup_methods':     selected_methods or _get_admin_enabled_methods(request.user),
+            'setup_done_count':  len(selected_methods or _get_admin_enabled_methods(request.user)),
+            'already_enabled':   already_enabled,
+            'force_setup':       False,
+        })
 
     return redirect('/admin-setup-2fa/?step=select')
 

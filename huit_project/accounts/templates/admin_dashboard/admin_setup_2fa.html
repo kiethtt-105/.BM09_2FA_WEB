@@ -194,13 +194,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   <div class="card">
 
     {% if force_setup %}
-    <div class="warning-banner">
-      <i class="fa fa-triangle-exclamation"></i>
-      <div>
-        <strong>Bắt buộc thiết lập 2FA</strong>
-        <p>Tài khoản admin phải bật ít nhất 1 phương thức xác thực 2FA trước khi truy cập Dashboard. Không thể bỏ qua bước này.</p>
-      </div>
-    </div>
+    
     {% endif %}
 
     {# ═══════════════════ STEP: SELECT ═══════════════════ #}
@@ -211,11 +205,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="card-sub">Chọn ít nhất 1 phương thức · Push Auth không được phép cho tài khoản admin</div>
     </div>
 
-    <div class="card-body">
-      <div class="tip-box">
-        <i class="fa fa-lightbulb"></i>
-        <span>Khuyến nghị: <strong>FIDO2 + TOTP</strong> hoặc <strong>FIDO2 + HOTP</strong> để bảo mật tối đa. Phương thức đã bật sẽ được tự động giữ lại.</span>
-      </div>
+  
 
       <form method="POST" action="?step=select">
         {% csrf_token %}
