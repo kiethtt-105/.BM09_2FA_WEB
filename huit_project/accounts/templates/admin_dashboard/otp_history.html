@@ -85,40 +85,40 @@
         </div>
             <nav class="flex-1 p-4 space-y-1">
         <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
-        <a href="{{% url 'admin_overview' %}}" class="nav-link">
+        <a href="{% url 'admin_overview' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Tổng quan
         </a>
         <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
-        <a href="{{% url 'admin_users' %}}" class="nav-link">
+        <a href="{% url 'admin_users' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-users"></i></span> Người dùng
         </a>
-        <a href="{{% url 'admin_session_manager' %}}" class="nav-link">
+        <a href="{% url 'admin_session_manager' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-display"></i></span> Phiên đăng nhập
         </a>
-        <a href="{{% url 'admin_otp_history' %}}" class="nav-link active">
+        <a href="{% url 'admin_otp_history' %}" class="nav-link active">
             <span class="nav-icon"><i class="fas fa-key"></i></span> Lịch sử OTP
         </a>
-        <a href="{{% url 'admin_login_history' %}}" class="nav-link">
+        <a href="{% url 'admin_login_history' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> Hoạt động Đăng nhập
         </a>
         <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
-        <a href="{{% url 'admin_security_alerts' %}}" class="nav-link">
+        <a href="{% url 'admin_security_alerts' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-triangle-exclamation"></i></span> Cảnh báo bảo mật
         </a>
-        <a href="{{% url 'admin_audit_log' %}}" class="nav-link">
+        <a href="{% url 'admin_audit_log' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-scroll"></i></span> Audit Log
         </a>
-        <a href="{{% url 'dtb_admin' %}}" class="nav-link">
+        <a href="{% url 'dtb_admin' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-database"></i></span> DTB Admin
         </a>
-        <a href="{{% url 'admin_manage_2fa' %}}" class="nav-link">
+        <a href="{% url 'admin_manage_2fa' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-shield-halved"></i></span> Admin 2FA
         </a>
         <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
-        <a href="{{% url 'admin_announcements' %}}" class="nav-link">
+        <a href="{% url 'admin_announcements' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-bullhorn"></i></span> Thông báo
         </a>
-        <a href="{{% url 'admin_system_settings' %}}" class="nav-link">
+        <a href="{% url 'admin_system_settings' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-gear"></i></span> Cài đặt
         </a>
     </nav>
@@ -227,7 +227,7 @@
                         <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Trạng thái</label>
                         <select name="status" class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
                             <option value="">Tất cả</option>
-                            <option value="used"    {% if request.GET.status == 'used'    %}selected{% endif %}>✅ Đã dùng</option>
+                            <option value="used"    {% if request.GET.status == 'used'  %}selected{% endif %}>✅ Đã dùng</option>
                             <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>⏳ Còn hiệu lực</option>
                             <option value="expired" {% if request.GET.status == 'expired' %}selected{% endif %}>❌ Hết hạn</option>
                         </select>
