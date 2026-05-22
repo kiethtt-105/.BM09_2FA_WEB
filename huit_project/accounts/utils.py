@@ -1,4 +1,3 @@
-
 import io
 import base64
 import time
@@ -337,13 +336,12 @@ def generate_and_send_email_otp(
         )
     display_name = display_name or 'Bạn'
 
-    if subject and body:
-        final_subject = subject
-        final_body    = body
+    tmpl_subject, tmpl_body = _EMAIL_TEMPLATES.get(action, _EMAIL_TEMPLATE_DEFAULT)
+    final_subject = subject or tmpl_subject
+    if body:
+        final_body = body
     else:
-        tmpl_subject, tmpl_body = _EMAIL_TEMPLATES.get(action, _EMAIL_TEMPLATE_DEFAULT)
-        final_subject = subject or tmpl_subject
-        final_body    = body    or tmpl_body.format(otp_code=otp_code, name=display_name)
+        final_body = tmpl_body.format(otp_code=otp_code, name=display_name)
 
     send_mail(
         subject        = final_subject,
