@@ -806,4 +806,3 @@ class AdminAuditLog(models.Model):
     def __str__(self):
         username = self.user.username if self.user else 'Unknown'
         return f'{username} — {self.action} @ {self.timestamp:%d/%m/%Y %H:%M}'
- 
