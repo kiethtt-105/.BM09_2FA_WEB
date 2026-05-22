@@ -75,16 +75,8 @@ except ValueError:
 is_superuser = lambda u: u.is_superuser
 
 
-ADMIN_COMBO_CHOICES = {
-    1: {'fido2', 'hotp'},
-    2: {'fido2', 'totp'},
-    3: {'fido2', 'hotp', 'totp'},
-}
-ADMIN_COMBO_LABELS = {
-    1: 'FIDO2 (Passkey) + HOTP',
-    2: 'FIDO2 (Passkey) + TOTP (Authenticator)',
-    3: 'FIDO2 (Passkey) + HOTP + TOTP',
-}
+ADMIN_COMBO_CHOICES = {}
+ADMIN_COMBO_LABELS = {}
 
 
 def _get_admin_active_methods(user):
@@ -100,13 +92,11 @@ def _get_admin_active_methods(user):
 
 def _admin_2fa_combo_ok(user):
     """
-    Kiểm tra admin đã bật đủ ít nhất 1 combo bắt buộc chưa.
-    Trả (True, combo_id) nếu đủ, (False, None) nếu chưa.
+    Chỉ cần admin đã bật ít nhất 1 phương thức 2FA là đủ.
     """
     active = _get_admin_active_methods(user)
-    for combo_id, required in ADMIN_COMBO_CHOICES.items():
-        if required.issubset(active):
-            return True, combo_id
+    if active:
+        return True, 1
     return False, None
 
 
@@ -434,7 +424,7 @@ def login_view(request):
                 methods = list(_get_admin_active_methods(user))
                 login(request, user)
 
-                # [FIX-A5] Chỉ vào verify_2fa_multi khi đã đủ ≥2 method
+                # Chỉ vào verify_2fa_multi khi đã đủ ≥1 method
                 _combo_ok, _ = _admin_2fa_combo_ok(user)
                 if _combo_ok:
                     request.session['2fa_methods_required'] = methods
@@ -442,15 +432,15 @@ def login_view(request):
                     request.session['2fa_verified']         = []
                     request.session['2fa_complete']         = False
                     return redirect('verify_2fa_multi')
-                else:
-                    # Chưa đủ → bắt buộc setup thêm
+                elif not profile.admin_2fa_setup_done:
+                    # Chỉ bắt setup khi CHƯA từng setup (lần đầu tiên)
                     request.session['force_2fa_setup'] = True
-                    messages.warning(
-                        request,
-                        'Tài khoản admin phải bật ít nhất 1 phương thức xác thực 2FA '
-                        'trước khi vào Dashboard.'
-                    )
+                    messages.warning(request, 'Vui lòng thiết lập 2FA trước khi vào Dashboard.')
                     return redirect('admin_setup_2fa')
+                else:
+                    # Đã setup rồi, cho vào thẳng (không bắt lại)
+                    login(request, user)
+                    return redirect('admin_dashboard')
 
             # ── Luồng 1b: User thường có 2FA → verify_2fa ───────────────────
             if profile.has_app_otp or profile.has_email_otp or profile.has_hotp or has_fido2:
@@ -3559,9 +3549,12 @@ def admin_setup_2fa(request):
                         return redirect('/admin-setup-2fa/?step=done')
                     return redirect('/admin-setup-2fa/?step=setup_method')
                 else:
-                    request.session.pop('temp_admin_hotp_secret', None)
-                    request.session.pop('temp_admin_hotp_token', None)
-                    messages.error(request, '❌ Mã HOTP không đúng. Vui lòng quét lại QR mới.')
+                    # ✅ KHÔNG xóa temp_secret — giữ lại để QR vẫn hiển thị
+                    # Chỉ cấp lại setup_token mới để bảo mật
+                    new_token = secrets.token_urlsafe(32)
+                    request.session['temp_admin_hotp_token'] = new_token
+                    request.session.modified = True
+                    messages.error(request, '❌ Mã HOTP không đúng. Vui lòng quét lại QR và thử lại.')
                     return redirect('/admin-setup-2fa/?step=setup_method')
 
             # ── Email verify ──────────────────────────────────────────────
@@ -3713,6 +3706,9 @@ def admin_setup_2fa(request):
                     'temp_admin_hotp_secret', 'temp_admin_hotp_token']:
             request.session.pop(key, None)
         request.session.modified = True
+        profile.admin_2fa_setup_done = True
+        profile.save(update_fields=['admin_2fa_setup_done'])
+
 
         ActivityLog.objects.create(
             user=request.user, username_attempt=request.user.username,

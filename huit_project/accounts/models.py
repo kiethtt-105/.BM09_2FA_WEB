@@ -26,7 +26,7 @@ class UserProfile(models.Model):
 
     allow_push_auth — chỉ có tác dụng khi user có ít nhất 1 phương thức 2FA.
     """
-
+    admin_2fa_setup_done = models.BooleanField(default=False)
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='profile'
     )

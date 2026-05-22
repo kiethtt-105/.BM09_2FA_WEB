@@ -246,16 +246,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
       {# ── HOTP ─────────────────────────────────────────────────────────── #}
       {% elif current_method == 'hotp' %}
-      <div class="hotp-gen">
-        <div>
-          <div style="font-size:11px;color:var(--muted2);margin-bottom:4px;font-family:var(--mono);">MÃ HOTP HIỆN TẠI</div>
-          <div class="hotp-code" id="hotp-display">------</div>
-        </div>
-        <button onclick="generateHotp()" class="btn btn-ghost" id="hotp-gen-btn" type="button">
-          <i class="fa fa-rotate-right"></i> Tạo mã
-        </button>
-      </div>
-      <div class="info-row"><i class="fa fa-key"></i> Nhấn "Tạo mã" → mã HOTP hiển thị. Nhập vào ô bên dưới để xác thực.</div>
+      <div class="info-row"><i class="fa fa-key"></i> Mở app xác thực, nhấn Generate để lấy mã HOTP, rồi nhập vào ô bên dưới.</div>
       <form method="POST">
         {% csrf_token %}
         <input type="hidden" name="method" value="hotp">
