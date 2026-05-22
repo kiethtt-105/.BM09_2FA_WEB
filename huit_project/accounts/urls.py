@@ -140,5 +140,11 @@ urlpatterns = [
         views.admin_force_logout_session,
         name='admin_force_logout_session',
     ),
+
+    path(
+        'admin-dashboard/users/<int:user_id>/disable-2fa/',
+        views.admin_disable_user_2fa_method,
+        name='admin_disable_user_2fa_method',
+    ),
 ]
 

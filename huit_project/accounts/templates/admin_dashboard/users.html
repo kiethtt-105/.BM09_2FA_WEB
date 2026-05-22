@@ -31,6 +31,33 @@
         /* Sidebar fixed, main scrolls */
         aside { position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; }
         .main-content { margin-left: 256px; min-height: 100vh; overflow-y: auto; }
+        .pill-2fa {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+        border: 1px solid transparent;
+        cursor: default;
+    }
+    .pill-on {
+        background: rgba(239,68,68,.12);
+        color: #fca5a5;
+        border-color: rgba(239,68,68,.3);
+        cursor: pointer;
+        transition: background .15s;
+    }
+    .pill-on:hover {
+        background: rgba(239,68,68,.28);
+    }
+    .pill-off {
+        background: rgba(63,63,70,.25);
+        color: #52525b;
+        border-color: rgba(63,63,70,.2);
+    }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
@@ -272,14 +299,60 @@
                                     <span class="text-zinc-600 text-sm">—</span>
                                 {% endif %}
                             </td>
-                            <td class="py-4 px-4 text-center">
-                                {% if u.profile.is_2fa_enabled %}
-                                    <span class="px-3 py-1 bg-emerald-900/40 text-emerald-400 border border-emerald-700/30 rounded-full text-xs font-medium">✅ Bật</span>
-                                {% elif u.profile.force_disable_2fa %}
-                                    <span class="px-3 py-1 bg-zinc-800 text-zinc-500 border border-zinc-700/30 rounded-full text-xs">Admin tắt</span>
-                                {% else %}
-                                    <span class="px-3 py-1 bg-red-900/30 text-red-400 border border-red-800/30 rounded-full text-xs">❌ Chưa bật</span>
-                                {% endif %}
+                            <td class="py-4 px-4">
+                                <div class="flex flex-wrap gap-1 justify-center">
+
+                                    {% if u.profile.has_app_otp %}
+                                    <button type="button"
+                                        onclick="disable2fa('{% url 'admin_disable_user_2fa_method' u.id %}', 'totp', '{{ u.username }}')"
+                                        class="pill-2fa pill-on" title="Đang bật — Nhấn để tắt TOTP">
+                                        <i class="fas fa-mobile-alt"></i> TOTP
+                                    </button>
+                                    {% else %}
+                                    <span class="pill-2fa pill-off" title="Chưa bật TOTP">
+                                        <i class="fas fa-mobile-alt"></i> TOTP
+                                    </span>
+                                    {% endif %}
+
+                                    {% if u.profile.has_email_otp %}
+                                    <button type="button"
+                                        onclick="disable2fa('{% url 'admin_disable_user_2fa_method' u.id %}', 'email', '{{ u.username }}')"
+                                        class="pill-2fa pill-on" title="Đang bật — Nhấn để tắt Email OTP">
+                                        <i class="fas fa-envelope"></i> Email
+                                    </button>
+                                    {% else %}
+                                    <span class="pill-2fa pill-off" title="Chưa bật Email OTP">
+                                        <i class="fas fa-envelope"></i> Email
+                                    </span>
+                                    {% endif %}
+
+                                    {% if u.profile.has_hotp %}
+                                    <button type="button"
+                                        onclick="disable2fa('{% url 'admin_disable_user_2fa_method' u.id %}', 'hotp', '{{ u.username }}')"
+                                        class="pill-2fa pill-on" title="Đang bật — Nhấn để tắt HOTP">
+                                        <i class="fas fa-key"></i> HOTP
+                                    </button>
+                                    {% else %}
+                                    <span class="pill-2fa pill-off" title="Chưa bật HOTP">
+                                        <i class="fas fa-key"></i> HOTP
+                                    </span>
+                                    {% endif %}
+
+                                    {% with fk=u.passkeys.count %}
+                                    {% if fk > 0 %}
+                                    <button type="button"
+                                        onclick="disable2fa('{% url 'admin_disable_user_2fa_method' u.id %}', 'fido2', '{{ u.username }}')"
+                                        class="pill-2fa pill-on" title="Đang có {{ fk }} passkey — Nhấn để xóa">
+                                        <i class="fas fa-fingerprint"></i> FIDO2
+                                    </button>
+                                    {% else %}
+                                    <span class="pill-2fa pill-off" title="Không có passkey">
+                                        <i class="fas fa-fingerprint"></i> FIDO2
+                                    </span>
+                                    {% endif %}
+                                    {% endwith %}
+
+                                </div>
                             </td>
                             <td class="py-4 px-4 text-center">
                                 {% if u.is_active %}
@@ -375,6 +448,16 @@ function postAction(url, confirmMsg) {
         method: 'POST',
         headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'csrfmiddlewaretoken=' + encodeURIComponent(csrfToken)
+    }).then(res => { if (res.ok || res.redirected) location.reload(); });
+}
+function disable2fa(url, method, username) {
+    const labels = { totp: 'TOTP', hotp: 'HOTP', email: 'Email OTP', fido2: 'Passkey/FIDO2' };
+    if (!confirm('Tắt ' + (labels[method] || method) + ' của [' + username + ']?')) return;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrfmiddlewaretoken=' + encodeURIComponent(csrfToken) + '&method=' + encodeURIComponent(method)
     }).then(res => { if (res.ok || res.redirected) location.reload(); });
 }
 

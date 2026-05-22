@@ -2346,7 +2346,7 @@ def admin_dashboard(request):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def user_management(request):
-    users = User.objects.select_related('profile').prefetch_related('groups').order_by('-date_joined')
+    users = User.objects.select_related('profile').prefetch_related('groups', 'passkeys').order_by('-date_joined')
 
     search        = request.GET.get('search', '').strip()
     status_filter = request.GET.get('status', '')
@@ -4493,3 +4493,74 @@ def announcements_context(request):
         return {}
     active_announcements = Announcement.objects.filter(is_active=True).order_by('-created_at')[:5]
     return {'system_announcements': active_announcements}
+
+#  Admin tắt 2FA của user khác
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+@require_POST
+def admin_disable_user_2fa_method(request, user_id):
+    """
+    Admin tắt từng phương thức 2FA của một user cụ thể.
+    Admin chỉ được TẮT, không được BẬT.
+    POST params:
+        method: 'totp' | 'hotp' | 'email' | 'fido2' | 'all'
+    """
+    target_user = get_object_or_404(User, pk=user_id)
+    profile, _ = UserProfile.objects.get_or_create(user=target_user)
+    method = request.POST.get('method', '')
+    ip = get_client_ip(request)
+    ua = request.META.get('HTTP_USER_AGENT', 'Unknown')
+
+    if method == 'totp':
+        profile.has_app_otp = False
+        profile.otp_secret = None
+        profile.save(update_fields=['has_app_otp', 'otp_secret'])
+        msg = 'TOTP (App OTP)'
+    elif method == 'hotp':
+        profile.has_hotp = False
+        profile.hotp_secret = None
+        profile.hotp_counter = 0
+        profile.save(update_fields=['has_hotp', 'hotp_secret', 'hotp_counter'])
+        msg = 'HOTP'
+    elif method == 'email':
+        profile.has_email_otp = False
+        profile.save(update_fields=['has_email_otp'])
+        msg = 'Email OTP'
+    elif method == 'fido2':
+        target_user.passkeys.all().delete()
+        msg = 'Passkey/FIDO2'
+    elif method == 'all':
+        profile.has_app_otp = False
+        profile.has_email_otp = False
+        profile.has_hotp = False
+        profile.otp_secret = None
+        profile.hotp_secret = None
+        profile.hotp_counter = 0
+        profile.save(update_fields=[
+            'has_app_otp', 'has_email_otp', 'has_hotp',
+            'otp_secret', 'hotp_secret', 'hotp_counter',
+        ])
+        target_user.passkeys.all().delete()
+        msg = 'Tất cả phương thức'
+    else:
+        messages.error(request, 'Phương thức không hợp lệ.')
+        return redirect('admin_users')
+
+    # Ghi log
+    AdminAuditLog.objects.create(
+        admin=request.user,
+        action=f'admin_disable_2fa_{method}',
+        target_user=target_user,
+        ip_address=ip,
+        user_agent=ua,
+        note=f'Admin tắt {msg} của user {target_user.username}',
+    )
+    ActivityLog.objects.create(
+        user=target_user,
+        username_attempt=target_user.username,
+        action='2fa_disable',
+        ip_address=ip,
+        user_agent=ua,
+    )
+    messages.success(request, f'✅ Đã tắt {msg} của user {target_user.username}.')
+    return redirect('admin_users')
