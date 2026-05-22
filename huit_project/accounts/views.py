@@ -431,11 +431,12 @@ def login_view(request):
 
             # ── Luồng Admin ─────────────────────────────────────────────────
             if user.is_superuser:
-                methods = _get_admin_enabled_methods(user)
+                methods = list(_get_admin_active_methods(user))
                 login(request, user)
 
                 # [FIX-A5] Chỉ vào verify_2fa_multi khi đã đủ ≥2 method
-                if _admin_2fa_ready(user):
+                _combo_ok, _ = _admin_2fa_combo_ok(user)
+                if _combo_ok:
                     request.session['2fa_methods_required'] = methods
                     request.session['2fa_required_count']   = len(methods)
                     request.session['2fa_verified']         = []
@@ -710,9 +711,8 @@ def dashboard(request):
 
                 elif target == 'disable_hotp':
                     profile.has_hotp = False
-                    # Chỉ xóa secret nếu App OTP cũng không dùng nữa
-                    if not profile.has_app_otp:
-                        profile.otp_secret = None
+                    profile.hotp_secret = None
+                    profile.hotp_counter = 0
 
                 profile.save()
                 ActivityLog.objects.create(
@@ -1194,7 +1194,7 @@ def setup_2fa(request):
 
             elif request.POST.get('action') == 'disable_hotp':
                 code       = request.POST.get('otp_code', '').strip()
-                raw_secret = getattr(profile, 'hotp_secret', None)
+                raw_secret = profile.decrypt_hotp_secret()
                 # Với HOTP: dùng counter hiện tại để verify
                 if raw_secret:
                     ok, _ = verify_hotp(raw_secret, profile.hotp_counter, code, look_ahead=5)
@@ -4548,12 +4548,11 @@ def admin_disable_user_2fa_method(request, user_id):
 
     # Ghi log
     AdminAuditLog.objects.create(
-        admin=request.user,
+        user=request.user,
         action=f'admin_disable_2fa_{method}',
-        target_user=target_user,
+        detail=f'Admin tắt {msg} của user {target_user.username}',
         ip_address=ip,
         user_agent=ua,
-        note=f'Admin tắt {msg} của user {target_user.username}',
     )
     ActivityLog.objects.create(
         user=target_user,
