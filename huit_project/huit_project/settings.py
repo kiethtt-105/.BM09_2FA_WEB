@@ -230,6 +230,5 @@ CACHES = {
     }
 }
 
-# Dùng cache cho session thay vì DB
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'default'
+# Lưu session trong Database — xóa được từ bất kỳ process nào
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'

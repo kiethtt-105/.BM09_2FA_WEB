@@ -2279,7 +2279,11 @@ def trust_device(request, device_id):
 def logout_device(request, device_id):
     device = get_object_or_404(TrustedDevice, id=device_id, user=request.user)
     if device.session_key:
+        # Xóa trong DB (cho cached_db engine)
         Session.objects.filter(session_key=device.session_key).delete()
+        # Xóa trong cache (đảm bảo hiệu lực ngay lập tức)
+        from django.core.cache import cache
+        cache.delete(f'django.contrib.sessions.cache{device.session_key}')
     device.is_active = False
     device.save()
     messages.success(request, f'Đã đăng xuất thiết bị {device.name}')
@@ -2299,6 +2303,10 @@ def logout_all_devices(request):
 
     if session_keys:
         Session.objects.filter(session_key__in=session_keys).delete()
+        # Xóa cache cho tất cả session
+        from django.core.cache import cache
+        cache_keys = [f'django.contrib.sessions.cache{sk}' for sk in session_keys]
+        cache.delete_many(cache_keys)
     if device_ids:
         TrustedDevice.objects.filter(id__in=device_ids).update(is_active=False)
 
