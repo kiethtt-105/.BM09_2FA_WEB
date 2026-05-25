@@ -448,8 +448,7 @@ function startPolling() {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
       });
       const data = await res.json();
-      if (data.has_request) {
-        // Có request mới → reload trang để hiển thị đầy đủ
+      if (data.pending) {
         window.location.reload();
       }
     } catch (e) {

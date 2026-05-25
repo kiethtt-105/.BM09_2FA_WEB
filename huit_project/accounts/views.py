@@ -448,15 +448,22 @@ def login_view(request):
                 request.session['pre_2fa_trust_dev'] = (request.POST.get('trust_device') == '1')
 
                 from django.contrib.sessions.models import Session as _DjSession
+                from datetime import timedelta
+                _ONLINE_THRESHOLD = timedelta(minutes=10)
                 _trusted_qs = TrustedDevice.objects.filter(
-                    user=user, is_active=True, is_trusted=True,
+                    user=user, is_active=True,
                 ).exclude(session_key=request.session.session_key)
                 _t_keys = list(_trusted_qs.values_list('session_key', flat=True))
-                _live   = set(_DjSession.objects.filter(
+                _live_sessions = set(_DjSession.objects.filter(
                     session_key__in=_t_keys,
                     expire_date__gt=timezone.now(),
                 ).values_list('session_key', flat=True))
-                trusted_online_devices = _trusted_qs.filter(session_key__in=_live)
+                _recently_seen = set(_trusted_qs.filter(
+                    last_seen__gte=timezone.now() - _ONLINE_THRESHOLD,
+                ).values_list('session_key', flat=True))
+                trusted_online_devices = _trusted_qs.filter(
+                    session_key__in=(_live_sessions | _recently_seen)
+)
 
                 methods_enabled = []
                 if profile.has_app_otp:                                       methods_enabled.append('Authenticator')
@@ -1322,15 +1329,22 @@ def verify_2fa(request):
     user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
     from django.contrib.sessions.models import Session as _DjSession
+    from datetime import timedelta
+    _ONLINE_THRESHOLD = timedelta(minutes=10)
     _trusted_qs = TrustedDevice.objects.filter(
-        user=user, is_active=True, is_trusted=True,
+        user=user, is_active=True,
     ).exclude(session_key=request.session.session_key)
-    _t_keys  = list(_trusted_qs.values_list('session_key', flat=True))
-    _live    = set(_DjSession.objects.filter(
+    _t_keys = list(_trusted_qs.values_list('session_key', flat=True))
+    _live_sessions = set(_DjSession.objects.filter(
         session_key__in=_t_keys,
         expire_date__gt=timezone.now(),
     ).values_list('session_key', flat=True))
-    other_devices = _trusted_qs.filter(session_key__in=_live)
+    _recently_seen = set(_trusted_qs.filter(
+        last_seen__gte=timezone.now() - _ONLINE_THRESHOLD,
+    ).values_list('session_key', flat=True))
+    other_devices = _trusted_qs.filter(
+        session_key__in=(_live_sessions | _recently_seen)
+)
 
     has_fido2 = user.passkeys.exists()
 
@@ -1390,27 +1404,33 @@ def verify_2fa(request):
         if action == 'send_push_request':
             # [FIX-PUSH-TARGET] Chỉ gửi tới trusted device đang online thực sự.
             # Lấy lại fresh tại thời điểm bấm (tránh race condition với other_devices ở trên).
-            _t_keys_fresh = list(TrustedDevice.objects.filter(
-                user=user, is_active=True, is_trusted=True,
-            ).exclude(session_key=request.session.session_key
-            ).values_list('session_key', flat=True))
+            # Lấy tất cả thiết bị đang online (không cần is_trusted)
+            from datetime import timedelta
+            _ONLINE_THRESHOLD = timedelta(minutes=10)
+            _fresh_qs = TrustedDevice.objects.filter(
+                user=user, is_active=True,
+            ).exclude(session_key=request.session.session_key)
+            _t_keys_fresh = list(_fresh_qs.values_list('session_key', flat=True))
 
-            _live_now = set(DjSession.objects.filter(
+            _live_sessions_now = set(DjSession.objects.filter(
                 session_key__in=_t_keys_fresh,
                 expire_date__gt=timezone.now(),
             ).values_list('session_key', flat=True))
+            _recently_seen_now = set(_fresh_qs.filter(
+                last_seen__gte=timezone.now() - _ONLINE_THRESHOLD,
+            ).values_list('session_key', flat=True))
+            _live_now = _live_sessions_now | _recently_seen_now
 
             if not _live_now:
-                # Không còn thiết bị tin cậy nào online → báo rõ, không tạo request
                 messages.warning(
                     request,
-                    'Không có thiết bị tin cậy nào đang online. Vui lòng chọn phương thức khác.'
+                    'Không có thiết bị nào đang online. Vui lòng chọn phương thức khác.'
                 )
                 return redirect(f'{request.path}?method={enabled_keys[0]}')
 
-            # Chọn thiết bị tin cậy online có last_seen mới nhất
+            # Chọn thiết bị online có last_seen mới nhất
             target_device = TrustedDevice.objects.filter(
-                user=user, is_active=True, is_trusted=True,
+                user=user, is_active=True,
                 session_key__in=_live_now,
             ).order_by('-last_seen').first()
 
@@ -1597,20 +1617,9 @@ def get_pending_auth_request(request):
    
     RemoteAuthRequest.cleanup_expired()
 
-    # Kiểm tra thiết bị hiện tại có is_trusted không
-    current_device = TrustedDevice.objects.filter(
-        user=request.user,
-        session_key=request.session.session_key,
-        is_active=True,
-        is_trusted=True,           # [FIX] chỉ trusted device mới nhận push
-    ).first()
 
-    if not current_device:
-        # Thiết bị này không được tin cậy → không nhận push auth
-        return JsonResponse({'pending': False})
-
-    # [FIX-PUSH-TARGET] Chỉ lấy request có target_device_session = session hiện tại
-    # → đúng thiết bị được chỉ định mới nhận popup, không broadcast
+    # Lấy request dành riêng cho thiết bị này qua target_device_session
+    # Không cần check is_trusted vì target_device_session đã xác định đúng thiết bị
     req = RemoteAuthRequest.objects.filter(
         user=request.user,
         status='pending',
@@ -2102,15 +2111,25 @@ def auth_approval(request):
     RemoteAuthRequest.cleanup_expired()
 
     # Lấy request đang chờ mới nhất của user này
+    # Lấy request đang chờ dành riêng cho thiết bị hiện tại
+    current_session_key = request.session.session_key
     pending_request = (
         RemoteAuthRequest.get_active()
-        .filter(user=request.user, status='pending')
+        .filter(
+            user=request.user,
+            status='pending',
+            target_device_session=current_session_key,
+        )
         .order_by('-created_at')
         .first()
     )
     pending_count = (
         RemoteAuthRequest.get_active()
-        .filter(user=request.user, status='pending')
+        .filter(
+            user=request.user,
+            status='pending',
+            target_device_session=current_session_key,
+        )
         .count()
     )
 
@@ -2144,7 +2163,12 @@ def auth_approval_respond(request, req_id, action):
 
     updated = (
         RemoteAuthRequest.get_active()
-        .filter(id=req_id, user=request.user, status='pending')
+        .filter(
+            id=req_id,
+            user=request.user,
+            status='pending',
+            target_device_session=request.session.session_key,
+        )
         .update(status=action)
     )
 
