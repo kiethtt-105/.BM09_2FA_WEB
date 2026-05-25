@@ -218,10 +218,19 @@ async function forceLogoutSession(sessionKey) {
 
 async function forceLogoutAll(username) {
     if (!confirm(`Force logout TẤT CẢ phiên của ${username}?`)) return;
-    // Tìm tất cả button trong block user và click từng cái
-    const buttons = document.querySelectorAll(`[onclick*="forceLogoutSession"]`);
-    // Filter by user — đơn giản: reload sau khi POST từng session
-    alert('Tính năng này cần backend endpoint riêng. Hãy force logout từng phiên hoặc dùng admin_force_logout trong views.py.');
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/manage/force-logout/${username}/`;
+
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = CSRF;
+
+    form.appendChild(csrfInput);
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 </body>
