@@ -9,6 +9,7 @@ from django.shortcuts import redirect
 from django.conf import settings 
 import hashlib
 from django.contrib.auth.hashers import make_password
+from django.contrib.auth.decorators import login_required
 
 # ══════════════════════════════════════════════════════
 #  HOME
@@ -27,102 +28,85 @@ def portal_home(request):
     })
 
 # ══════════════════════════════════════════════════════
-
 def sso_callback(request):
     """
     Hàm xử lý logic SSO: nhận token, giải mã dữ liệu, đồng bộ thông tin
     người dùng và thực hiện đăng nhập vào hệ thống App B.
     """
-    # Bước 1: Trích xuất Token từ tham số GET trong URL
     token = request.GET.get('token')
     
     if not token:
-        # Nếu không có token, báo lỗi và quay về trang đăng nhập
         messages.error(request, "Hệ thống không nhận được mã xác thực từ App A.")
         return redirect('portal_login')
 
     try:
-        # Bước 2: Giải mã Token JWT bằng Secret Key chung
-        # Lưu ý: Tuyệt đối không để dính các ký tự lạ như cite vào đây
         payload = jwt.decode(token, '1669a995c7053fbf22cb9bd6babd28db27fab99e8f58f04d38a683aa125054d9', algorithms=['HS256'])
         
-        # Bước 3: Lấy các thông tin cá nhân được App A gửi sang
         huit_username = payload.get('username')
         huit_email    = payload.get('email', '')
         first_name    = payload.get('first_name', '')
         last_name     = payload.get('last_name', '')
         phone         = payload.get('phone', '')
 
-        # Bước 4: Kiểm tra ràng buộc duy nhất (1 HUIT ID - 1 User App B)
-        # Tìm xem tài khoản HUIT này đã được ai liên kết trước đó chưa
         existing_profile = UserProfile.objects.filter(huit_username=huit_username).first()
         
         if existing_profile:
-            # Nếu đã có người liên kết, kiểm tra xem có phải chính chủ không
             if request.user.is_authenticated and existing_profile.user != request.user:
                 messages.error(request, f"Tài khoản HUIT '{huit_username}' đã được liên kết với một người dùng khác!")
                 return redirect('portal_home')
-            
-            # Nếu chưa đăng nhập, sử dụng User đã có bản ghi liên kết này
             target_user = existing_profile.user
         else:
-            # Nếu chưa có ai liên kết, tìm User theo username hoặc tạo mới
-            # User tạo từ SSO sẽ có tiền tố huit_ để định danh
-            target_user, created = User.objects.get_or_create(
-                username=f"huit_{huit_username}",
-                defaults={'email': huit_email}
-            )
-            
-            if created:
-                # Vô hiệu hóa mật khẩu trực tiếp vì User này dùng SSO
-                target_user.set_unusable_password()
-                target_user.save()
+            # Đọc linking_user_id từ JWT payload (do HUIT đính vào khi sinh token)
+            linking_user_id = payload.get('linking_user_id')
 
-        # Bước 5: Đồng bộ thông tin Họ tên, Email, SĐT vào Database App B
-        # Điều này giúp hiển thị đầy đủ thông tin trên Dashboard
+            if linking_user_id:
+                # Luồng liên kết: gắn HUIT vào tài khoản AppB đã có
+                try:
+                    target_user = User.objects.get(id=linking_user_id)
+                except User.DoesNotExist:
+                    messages.error(request, 'Không tìm thấy tài khoản AppB. Vui lòng thử lại.')
+                    return redirect('portal_login')
+            else:
+                # Luồng đăng nhập SSO lần đầu: tạo tài khoản mới từ HUIT
+                target_user, created = User.objects.get_or_create(
+                    username=f"huit_{huit_username}",
+                    defaults={'email': huit_email}
+                )
+                if created:
+                    target_user.set_unusable_password()
+                    target_user.save()
+
         target_user.first_name = first_name
-        target_user.last_name = last_name
-        target_user.email = huit_email
+        target_user.last_name  = last_name
+        target_user.email      = huit_email
         target_user.save()
 
-        # Cập nhật thông tin vào UserProfile mở rộng
         profile, _ = UserProfile.objects.get_or_create(user=target_user)
         profile.huit_username = huit_username
-        profile.is_linked = True
-        
-        # Lưu số điện thoại nếu App A có cung cấp
+        profile.is_linked     = True
         if phone:
             profile.phone = phone
         profile.save()
 
-        # Bước 6: Xử lý Session và thực hiện đăng nhập
         if request.user.is_authenticated:
-            # Đăng xuất user cũ (ví dụ admin) trước khi nạp user mới
             logout(request)
             
-        # Đăng nhập chính thức người dùng vào App B
         login(request, target_user)
-        
-        # Thông báo thành công kèm theo họ tên lấy từ App A
         messages.success(request, f"Chào mừng {first_name} {last_name}, đăng nhập thành công!")
-        
-        # Chuyển hướng về trang chủ
         return redirect('portal_home')
 
     except jwt.ExpiredSignatureError:
-        # Xử lý khi mã token đã hết hạn
         messages.error(request, "Mã xác thực SSO đã hết hạn. Vui lòng thử lại.")
         return redirect('portal_login')
     except Exception as e:
-        # Xử lý các lỗi ngoại lệ phát sinh khác
         messages.error(request, f"Lỗi hệ thống xác thực: {str(e)}")
         return redirect('portal_login')
 
 # ══════════════════════════════════════════════════════
+@login_required
 def link_huit_account(request):
-    """Nút liên kết sang App A lấy Token"""
-    # Dùng settings thay vì hardcode
-    sso_url = f"{settings.HUIT_SSO_URL}/sso/send/"
+    """Truyền linking_user_id qua URL để HUIT đính kèm vào callback"""
+    sso_url = f"{settings.HUIT_SSO_URL}/sso/send/?linking_user_id={request.user.id}"
     return redirect(sso_url)
 
 def logout_view(request):

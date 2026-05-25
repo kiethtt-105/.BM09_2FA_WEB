@@ -2952,9 +2952,12 @@ def sso_send(request):
     profile      = getattr(user, 'profile', None)
     phone_number = profile.phone_number if profile else ''
 
+# Nếu AppB truyền linking_user_id → đính vào payload để callback nhận lại
+    linking_user_id = request.GET.get('linking_user_id')
+
     payload = {
         'token_type': 'access',
-        'jti':        str(uuid.uuid4()),              # [BUG-8] unique token ID
+        'jti':        str(uuid.uuid4()),
         'user_id':    user.id,
         'username':   user.username,
         'email':      user.email,
@@ -2964,6 +2967,9 @@ def sso_send(request):
         'iat':        int(time.time()),
         'exp':        int(time.time()) + settings.SSO_TOKEN_EXPIRY,
     }
+
+    if linking_user_id:
+        payload['linking_user_id'] = int(linking_user_id)
 
     token = jwt.encode(payload, settings.SSO_SECRET_KEY, algorithm='HS256')
     return redirect(f'{settings.WEB_SSO_CALLBACK_URL}?token={token}')

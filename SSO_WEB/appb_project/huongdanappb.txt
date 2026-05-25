@@ -1,0 +1,4 @@
+#thoát khỏi môi trường ảo dùng lệnh
+deactivate
+#kích hoạt môi trường ảo
+venv\Scripts\activate
