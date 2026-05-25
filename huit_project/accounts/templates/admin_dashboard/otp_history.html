@@ -257,6 +257,7 @@
                             <th class="text-left py-4 px-4">Email</th>
                             <th class="text-left py-4 px-4">Hành động</th>
                             <th class="text-left py-4 px-4">OTP Hash</th>
+                            <th class="text-left py-4 px-4">Mã OTP (demo)</th>
                             <th class="text-center py-4 px-4">IP</th>
                             <th class="text-center py-4 px-4">Trạng thái</th>
                             <th class="text-center py-4 px-4">Thời gian tạo</th>
@@ -286,6 +287,15 @@
                                 {% if otp.otp_hash %}
                                 <span class="hash-mono text-zinc-500" title="{{ otp.otp_hash }}">
                                     {{ otp.otp_hash|slice:":16" }}…
+                                </span>
+                                {% else %}
+                                <span class="text-zinc-600 text-xs">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3.5 px-4">
+                                {% if otp.otp_plain_demo %}
+                                <span class="font-mono font-bold text-emerald-400 text-base tracking-widest">
+                                    {{ otp.otp_plain_demo }}
                                 </span>
                                 {% else %}
                                 <span class="text-zinc-600 text-xs">—</span>
@@ -382,6 +392,7 @@
                             <th class="text-center py-4 px-4">Counter hiện tại</th>
                             <th class="text-left py-4 px-4">HOTP Secret (masked)</th>
                             <th class="text-left py-4 px-4">Encrypted (DB)</th>
+                            <th class="text-center py-4 px-4">HOTP Hiện tại (demo)</th>
                             <th class="text-center py-4 px-4">Trạng thái</th>
                         </tr>
                     </thead>
@@ -403,6 +414,17 @@
                                 <span class="hash-mono text-zinc-600 text-[11px]" title="{{ h.encrypted_secret }}">
                                     {% if h.encrypted_secret %}{{ h.encrypted_secret|slice:":24" }}…{% else %}—{% endif %}
                                 </span>
+                            </td>
+                            <td class="py-3.5 px-4 text-center">
+                                {% if h.raw_secret %}
+                                <span class="font-mono font-bold text-amber-400 text-base tracking-widest hotp-live"
+                                      data-secret="{{ h.raw_secret }}"
+                                      data-counter="{{ h.hotp_counter }}">
+                                    ···
+                                </span>
+                                {% else %}
+                                <span class="text-zinc-600 text-xs">—</span>
+                                {% endif %}
                             </td>
                             <td class="py-3.5 px-4 text-center">
                                 <span class="px-2.5 py-1 bg-amber-900/30 text-amber-400 border border-amber-700/30 rounded-full text-xs">
@@ -445,7 +467,7 @@
                             <th class="text-left py-4 px-4">Username</th>
                             <th class="text-left py-4 px-4">Secret (masked)</th>
                             <th class="text-left py-4 px-4">Encrypted (DB)</th>
-                            <th class="text-center py-4 px-4">TOTP Hiện tại</th>
+                            <th class="text-center py-4 px-4">TOTP Hiện tại (demo)</th>
                             <th class="text-center py-4 px-4">Còn lại</th>
                         </tr>
                     </thead>
@@ -601,6 +623,41 @@ async function updateTOTPRows() {
 // Initial + interval
 updateTOTPRows();
 setInterval(updateTOTPRows, 1000);
+// ── Tính HOTP demo (counter-based) ─────────────────────────────
+(function(){
+  async function computeHOTP(secret, counter) {
+    // Decode base32 secret
+    const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = '';
+    for (let c of secret.toUpperCase().replace(/=+$/, '')) {
+      const idx = base32chars.indexOf(c);
+      if (idx < 0) continue;
+      bits += idx.toString(2).padStart(5, '0');
+    }
+    const bytes = new Uint8Array(Math.floor(bits.length / 8));
+    for (let i = 0; i < bytes.length; i++)
+      bytes[i] = parseInt(bits.slice(i*8, i*8+8), 2);
+
+    // Counter as 8-byte big-endian
+    const counterBuf = new ArrayBuffer(8);
+    const view = new DataView(counterBuf);
+    view.setUint32(4, counter & 0xffffffff);
+
+    const key = await crypto.subtle.importKey('raw', bytes, {name:'HMAC',hash:'SHA-1'}, false, ['sign']);
+    const sig  = await crypto.subtle.sign('HMAC', key, counterBuf);
+    const arr  = new Uint8Array(sig);
+    const offset = arr[19] & 0xf;
+    const code = ((arr[offset]&0x7f)<<24|(arr[offset+1]&0xff)<<16|(arr[offset+2]&0xff)<<8|(arr[offset+3]&0xff)) % 1000000;
+    return code.toString().padStart(6, '0');
+  }
+
+  document.querySelectorAll('.hotp-live').forEach(async el => {
+    const secret  = el.dataset.secret;
+    const counter = parseInt(el.dataset.counter || '0');
+    if (!secret) return;
+    el.textContent = await computeHOTP(secret, counter);
+  });
+})();
 </script>
 </body>
 </html>

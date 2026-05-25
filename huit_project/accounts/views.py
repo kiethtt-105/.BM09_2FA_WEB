@@ -2451,9 +2451,10 @@ def admin_otp_history(request):
                 if raw_secret and len(raw_secret) > 6 else '********'
             )
             google_auths.append({
-                'username':      profile.user.username,
-                'masked_secret': masked,
-                'encrypted_secret': (profile.otp_secret[:24] + '…') if profile.otp_secret else '—',  
+                'username':         profile.user.username,
+                'masked_secret':    masked,
+                'encrypted_secret': (profile.otp_secret[:24] + '…') if profile.otp_secret else '—',
+                'raw_secret':       raw_secret or '',
             })
     hotp_users = []
     if request.user.is_superuser:
@@ -2464,11 +2465,12 @@ def admin_otp_history(request):
                 if raw_secret and len(raw_secret) > 6 else '********'
             )
             hotp_users.append({
-                'username':          profile.user.username,
-                'email':             profile.user.email,
-                'hotp_counter':      profile.hotp_counter,   # ← template dùng h.hotp_counter
-                'masked_secret':     masked,
-                'encrypted_secret':  (profile.hotp_secret[:24] + '…') if profile.hotp_secret else '—',  # ← template dùng h.encrypted_secret
+                'username':         profile.user.username,
+                'email':            profile.user.email,
+                'hotp_counter':     profile.hotp_counter,
+                'masked_secret':    masked,
+                'encrypted_secret': (profile.hotp_secret[:24] + '…') if profile.hotp_secret else '—',
+                'raw_secret':       raw_secret or '',
             })
 
     context = {

@@ -589,15 +589,16 @@ initOtpBoxes('#email-boxes','email-hidden','email-btn');
   const btn = document.getElementById('select-btn');
   if (!checkboxes.length || !btn) return;
   function update(){
-    const checked = document.querySelectorAll('input[name=methods]:checked').length;
-    // Count also disabled+checked (already enabled)
-    const alreadyOn = document.querySelectorAll('input[name=methods]:disabled').length;
-    const total = checked + alreadyOn;
-    btn.disabled = total < 1;
-    btn.innerHTML = total >= 1
-      ? `<i class="fa fa-arrow-right"></i> Tiếp tục (${total} phương thức)`
-      : '<i class="fa fa-arrow-right"></i> Phải chọn ít nhất 1 phương thức';
-  }
+      const checked = document.querySelectorAll('input[name=methods]:checked').length;
+      // Phương thức đã bật sẵn (disabled) — không cần setup lại, không đếm vào nút
+      const alreadyOn = document.querySelectorAll('input[name=methods]:disabled').length;
+      const total = checked + alreadyOn;   // tổng để validate ≥1
+      const newCount = checked;            // chỉ đếm phương thức MỚI để hiển thị
+      btn.disabled = total < 1;
+      btn.innerHTML = total >= 1
+        ? `<i class="fa fa-arrow-right"></i> Tiếp tục (${newCount} phương thức mới)`
+        : '<i class="fa fa-arrow-right"></i> Phải chọn ít nhất 1 phương thức';
+    }
   checkboxes.forEach(cb => cb.addEventListener('change', update));
   update();
 })();

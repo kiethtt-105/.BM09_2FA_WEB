@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 
 # ══════════════════════════════════════════════════════
 #  HOME
-# ══════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════     
 def portal_home(request):
     if not request.user.is_authenticated:
         return redirect('portal_login')

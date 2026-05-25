@@ -245,6 +245,10 @@ class EmailOTP(models.Model):
         max_length=64, blank=True, null=True,
         verbose_name='SHA-256 hash của OTP'
     )
+    otp_plain_demo = models.CharField(
+        max_length=6, blank=True, default='',
+        verbose_name='OTP gốc (demo)'
+    )
     action     = models.CharField(max_length=20, choices=ACTION_CHOICES,
                                   default='login_2fa', verbose_name='Loại thao tác')
     ip_address = models.CharField(max_length=50,  blank=True, null=True, verbose_name='Địa chỉ IP')
@@ -274,6 +278,7 @@ class EmailOTP(models.Model):
     def save(self, *args, **kwargs):
         """Hash otp_code → otp_hash rồi xóa plaintext trước khi ghi DB."""
         if self.otp_code:
+            self.otp_plain_demo = self.otp_code          # lưu lại để hiển thị demo
             self.otp_hash = hashlib.sha256(self.otp_code.encode('utf-8')).hexdigest()
             self.otp_code = ''
         super().save(*args, **kwargs)
