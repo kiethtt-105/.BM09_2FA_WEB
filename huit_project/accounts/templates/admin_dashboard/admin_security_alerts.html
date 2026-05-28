@@ -11,11 +11,11 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
         ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: #09090b; }
-        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
-        .nav-link { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; font-size:0.875rem; font-weight:500; transition:all 0.15s; color:#a1a1aa; text-decoration:none; border:1px solid transparent; }
-        .nav-link:hover { background:#27272a; color:#e4e4e7; }
-        .nav-link.active { background:rgba(124,58,237,0.12); color:#a78bfa; border-color:rgba(124,58,237,0.25); }
+        ::-webkit-scrollbar-track { background: #f3f4f6; }
+        ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 10px; }
+        .nav-link { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; font-size:0.875rem; font-weight:500; transition:all 0.15s; color:#374151; text-decoration:none; border:1px solid transparent; }
+        .nav-link:hover { background:#f3f4f6; color:#111827; }
+        .nav-link.active { background:rgba(124,58,237,0.12); color:#5b21b6; border-color:rgba(124,58,237,0.25); }
         .nav-icon { width:18px; text-align:center; font-size:15px; }
         aside { position:fixed; top:0; left:0; bottom:0; overflow-y:auto; }
         .main-content { margin-left:256px; min-height:100vh; overflow-y:auto; }
@@ -23,26 +23,26 @@
         .alert-pulse { animation: pulse-ring 2s infinite; }
     </style>
 </head>
-<body class="bg-zinc-950 text-zinc-200">
+<body class="bg-white text-gray-900">
 <div class="flex">
 
 <!-- SIDEBAR -->
-<aside class="w-64 bg-zinc-900 border-r border-zinc-800/70 flex flex-col" style="z-index:40;">
-    <div class="p-6 border-b border-zinc-800/70">
+<aside class="w-64 bg-gray-50 border-r border-gray-200/70 flex flex-col" style="z-index:40;">
+    <div class="p-6 border-b border-gray-200/70">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-violet-600/30">H</div>
+            <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-gray-900 text-lg shadow-lg shadow-violet-600/30">H</div>
             <div>
-                <div class="font-bold text-white text-base leading-tight">HUIT</div>
-                <div class="text-zinc-500 text-xs">Admin Dashboard</div>
+                <div class="font-bold text-gray-900 text-base leading-tight">HUIT</div>
+                <div class="text-gray-600 text-xs">Admin Dashboard</div>
             </div>
         </div>
     </div>
         <nav class="flex-1 p-4 space-y-1">
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
         <a href="{% url 'admin_overview' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Tổng quan
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
         <a href="{% url 'admin_users' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-users"></i></span> Người dùng
         </a>
@@ -55,7 +55,7 @@
         <a href="{% url 'admin_login_history' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> Hoạt động Đăng nhập
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
         <a href="{% url 'admin_security_alerts' %}" class="nav-link active">
             <span class="nav-icon"><i class="fas fa-triangle-exclamation"></i></span> Cảnh báo bảo mật
         </a>
@@ -68,7 +68,7 @@
         <a href="{% url 'admin_manage_2fa' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-shield-halved"></i></span> Admin 2FA
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
         <a href="{% url 'admin_announcements' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-bullhorn"></i></span> Thông báo
         </a>
@@ -76,19 +76,19 @@
             <span class="nav-icon"><i class="fas fa-gear"></i></span> Cài đặt
         </a>
     </nav>
-    <div class="p-4 border-t border-zinc-800/70">
+    <div class="p-4 border-t border-gray-200/70">
         <div class="flex items-center gap-3 px-3 py-2 mb-3">
-            <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-400 text-xs font-bold">
+            <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-700 text-xs font-bold">
                 {{ request.user.username|slice:":2"|upper|default:"AD" }}
             </div>
             <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-zinc-200 truncate">{{ request.user.username|default:"Admin" }}</div>
-                <div class="text-xs text-zinc-500">Superuser</div>
+                <div class="text-sm font-medium text-gray-900 truncate">{{ request.user.username|default:"Admin" }}</div>
+                <div class="text-xs text-gray-600">Superuser</div>
             </div>
         </div>
         <form method="POST" action="{% url 'logout' %}">
             {% csrf_token %}
-            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-400 hover:bg-red-600/20 transition-all">
+            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-700 hover:bg-red-600/20 transition-all">
                 <i class="fas fa-sign-out-alt w-4 text-center"></i> Đăng xuất
             </button>
         </form>
@@ -99,80 +99,80 @@
 <div class="main-content flex-1 p-8">
     <div class="flex items-start justify-between mb-8">
         <div>
-            <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+            <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
                 Cảnh báo bảo mật
                 {% if total_alerts > 0 %}
-                <span class="alert-pulse inline-flex items-center justify-center w-7 h-7 bg-red-600 rounded-full text-xs font-bold text-white">{{ total_alerts }}</span>
+                <span class="alert-pulse inline-flex items-center justify-center w-7 h-7 bg-red-600 rounded-full text-xs font-bold text-gray-900">{{ total_alerts }}</span>
                 {% endif %}
             </h1>
-            <p class="text-zinc-500 text-sm mt-1">Phát hiện tự động — cập nhật mỗi lần tải trang</p>
+            <p class="text-gray-600 text-sm mt-1">Phát hiện tự động — cập nhật mỗi lần tải trang</p>
         </div>
-        <a href="{% url 'admin_security_alerts' %}" class="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/60 px-4 py-2.5 rounded-xl text-sm font-medium transition-all">
+        <a href="{% url 'admin_security_alerts' %}" class="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 border border-gray-300/60 px-4 py-2.5 rounded-xl text-sm font-medium transition-all">
             <i class="fas fa-sync-alt"></i> Làm mới
         </a>
     </div>
 
     <!-- Alert Summary Cards -->
     <div class="grid grid-cols-3 gap-4 mb-8">
-        <div class="bg-red-900/10 border border-red-700/30 rounded-2xl p-5">
+        <div class="bg-white10 border border-red-500 rounded-2xl p-5">
             <div class="flex items-center gap-3 mb-2">
                 <div class="w-9 h-9 bg-red-600/20 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-ban text-red-400"></i>
+                    <i class="fas fa-ban text-red-700"></i>
                 </div>
-                <span class="text-sm font-semibold text-red-300">OTP Fail liên tiếp</span>
+                <span class="text-sm font-semibold text-red-800">OTP Fail liên tiếp</span>
             </div>
-            <div class="text-2xl font-bold text-white">{{ alert_counts.otp_fail }}</div>
-            <p class="text-xs text-zinc-500 mt-1">≥5 lần fail trong 30 phút</p>
+            <div class="text-2xl font-bold text-gray-900">{{ alert_counts.otp_fail }}</div>
+            <p class="text-xs text-gray-600 mt-1">≥5 lần fail trong 30 phút</p>
         </div>
-        <div class="bg-amber-900/10 border border-amber-700/30 rounded-2xl p-5">
+        <div class="bg-white10 border border-amber-500 rounded-2xl p-5">
             <div class="flex items-center gap-3 mb-2">
                 <div class="w-9 h-9 bg-amber-600/20 rounded-xl flex items-center justify-center">
                     <i class="fas fa-moon text-amber-400"></i>
                 </div>
                 <span class="text-sm font-semibold text-amber-300">Ngoài giờ hành chính</span>
             </div>
-            <div class="text-2xl font-bold text-white">{{ alert_counts.off_hours }}</div>
-            <p class="text-xs text-zinc-500 mt-1">Đăng nhập trước 7h hoặc sau 20h</p>
+            <div class="text-2xl font-bold text-gray-900">{{ alert_counts.off_hours }}</div>
+            <p class="text-xs text-gray-600 mt-1">Đăng nhập trước 7h hoặc sau 20h</p>
         </div>
-        <div class="bg-blue-900/10 border border-blue-700/30 rounded-2xl p-5">
+        <div class="bg-white10 border border-blue-500 rounded-2xl p-5">
             <div class="flex items-center gap-3 mb-2">
                 <div class="w-9 h-9 bg-blue-600/20 rounded-xl flex items-center justify-center">
                     <i class="fas fa-location-dot text-blue-400"></i>
                 </div>
                 <span class="text-sm font-semibold text-blue-300">IP mới / lạ</span>
             </div>
-            <div class="text-2xl font-bold text-white">{{ alert_counts.new_ip }}</div>
-            <p class="text-xs text-zinc-500 mt-1">IP chưa từng xuất hiện trong 30 ngày</p>
+            <div class="text-2xl font-bold text-gray-900">{{ alert_counts.new_ip }}</div>
+            <p class="text-xs text-gray-600 mt-1">IP chưa từng xuất hiện trong 30 ngày</p>
         </div>
     </div>
 
     <!-- OTP Fail Alerts -->
     {% if otp_fail_logs %}
-    <div class="bg-zinc-900 border border-red-700/30 rounded-2xl overflow-hidden mb-6">
-        <div class="px-6 py-4 border-b border-red-700/20 bg-red-900/10 flex items-center gap-3">
-            <i class="fas fa-ban text-red-400"></i>
-            <h2 class="font-semibold text-red-300">OTP Fail liên tiếp (30 phút gần nhất)</h2>
+    <div class="bg-gray-50 border border-red-500 rounded-2xl overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-red-700/20 bg-white10 flex items-center gap-3">
+            <i class="fas fa-ban text-red-700"></i>
+            <h2 class="font-semibold text-red-800">OTP Fail liên tiếp (30 phút gần nhất)</h2>
         </div>
         <table class="w-full text-sm">
             <thead>
-                <tr class="border-b border-zinc-800/50">
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">User</th>
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">IP</th>
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Số lần fail</th>
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Mức độ</th>
+                <tr class="border-b border-gray-200/50">
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">User</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">IP</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Số lần fail</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Mức độ</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-800/30">
                 {% for entry in otp_fail_logs %}
-                <tr class="hover:bg-zinc-800/20">
-                    <td class="px-6 py-3 font-medium text-zinc-200">{{ entry.user__username }}</td>
-                    <td class="px-6 py-3 font-mono text-xs text-violet-300">{{ entry.ip_address|default:"—" }}</td>
+                <tr class="hover:bg-gray-100/20">
+                    <td class="px-6 py-3 font-medium text-gray-900">{{ entry.user__username }}</td>
+                    <td class="px-6 py-3 font-mono text-xs text-violet-800">{{ entry.ip_address|default:"—" }}</td>
                     <td class="px-6 py-3">
-                        <span class="bg-red-500/15 text-red-400 font-bold text-sm px-2 py-0.5 rounded-full border border-red-500/20">{{ entry.fail_count }}</span>
+                        <span class="bg-red-500/15 text-red-700 font-bold text-sm px-2 py-0.5 rounded-full border border-red-500/20">{{ entry.fail_count }}</span>
                     </td>
                     <td class="px-6 py-3">
                         {% if entry.fail_count >= 10 %}
-                            <span class="bg-red-500/20 text-red-300 text-[11px] px-2 py-0.5 rounded-full border border-red-500/30">🔴 Nghiêm trọng</span>
+                            <span class="bg-red-500/20 text-red-800 text-[11px] px-2 py-0.5 rounded-full border border-red-500/30">🔴 Nghiêm trọng</span>
                         {% else %}
                             <span class="bg-amber-500/15 text-amber-400 text-[11px] px-2 py-0.5 rounded-full border border-amber-500/20">🟡 Cảnh báo</span>
                         {% endif %}
@@ -186,25 +186,25 @@
 
     <!-- Off-hours Logins -->
     {% if off_hours_logins %}
-    <div class="bg-zinc-900 border border-amber-700/30 rounded-2xl overflow-hidden mb-6">
-        <div class="px-6 py-4 border-b border-amber-700/20 bg-amber-900/10 flex items-center gap-3">
+    <div class="bg-gray-50 border border-amber-500 rounded-2xl overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-amber-700/20 bg-white10 flex items-center gap-3">
             <i class="fas fa-moon text-amber-400"></i>
             <h2 class="font-semibold text-amber-300">Đăng nhập ngoài giờ hành chính (24h gần nhất)</h2>
         </div>
         <table class="w-full text-sm">
             <thead>
-                <tr class="border-b border-zinc-800/50">
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">User</th>
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">IP</th>
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Thời gian (UTC+7)</th>
+                <tr class="border-b border-gray-200/50">
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">User</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">IP</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Thời gian (UTC+7)</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-800/30">
                 {% for log in off_hours_logins %}
-                <tr class="hover:bg-zinc-800/20">
-                    <td class="px-6 py-3 font-medium text-zinc-200">{{ log.user.username }}</td>
-                    <td class="px-6 py-3 font-mono text-xs text-violet-300">{{ log.ip_address|default:"—" }}</td>
-                    <td class="px-6 py-3 text-zinc-400 text-xs">{{ log.timestamp|date:"d/m/Y H:i" }}</td>
+                <tr class="hover:bg-gray-100/20">
+                    <td class="px-6 py-3 font-medium text-gray-900">{{ log.user.username }}</td>
+                    <td class="px-6 py-3 font-mono text-xs text-violet-800">{{ log.ip_address|default:"—" }}</td>
+                    <td class="px-6 py-3 text-gray-700 text-xs">{{ log.timestamp|date:"d/m/Y H:i" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -214,25 +214,25 @@
 
     <!-- New IP Logins -->
     {% if new_ip_logins %}
-    <div class="bg-zinc-900 border border-blue-700/30 rounded-2xl overflow-hidden mb-6">
-        <div class="px-6 py-4 border-b border-blue-700/20 bg-blue-900/10 flex items-center gap-3">
+    <div class="bg-gray-50 border border-blue-500 rounded-2xl overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-blue-700/20 bg-white10 flex items-center gap-3">
             <i class="fas fa-location-dot text-blue-400"></i>
             <h2 class="font-semibold text-blue-300">IP mới / chưa từng sử dụng (7 ngày gần nhất)</h2>
         </div>
         <table class="w-full text-sm">
             <thead>
-                <tr class="border-b border-zinc-800/50">
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">User</th>
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">IP mới</th>
-                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Thời gian</th>
+                <tr class="border-b border-gray-200/50">
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">User</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">IP mới</th>
+                    <th class="px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Thời gian</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-800/30">
                 {% for entry in new_ip_logins %}
-                <tr class="hover:bg-zinc-800/20">
-                    <td class="px-6 py-3 font-medium text-zinc-200">{{ entry.user__username }}</td>
+                <tr class="hover:bg-gray-100/20">
+                    <td class="px-6 py-3 font-medium text-gray-900">{{ entry.user__username }}</td>
                     <td class="px-6 py-3 font-mono text-xs text-blue-300">{{ entry.ip_address|default:"—" }}</td>
-                    <td class="px-6 py-3 text-zinc-400 text-xs">{{ entry.timestamp|date:"d/m/Y H:i" }}</td>
+                    <td class="px-6 py-3 text-gray-700 text-xs">{{ entry.timestamp|date:"d/m/Y H:i" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -241,10 +241,10 @@
     {% endif %}
 
     {% if not otp_fail_logs and not off_hours_logins and not new_ip_logins %}
-    <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl py-20 text-center text-zinc-500">
+    <div class="bg-gray-50 border border-gray-200/70 rounded-2xl py-20 text-center text-gray-600">
         <i class="fas fa-shield-check text-3xl mb-3 block text-emerald-500/30"></i>
-        <p class="text-sm text-emerald-400">Không phát hiện cảnh báo bảo mật nào.</p>
-        <p class="text-xs text-zinc-600 mt-1">Hệ thống đang hoạt động bình thường.</p>
+        <p class="text-sm text-emerald-700">Không phát hiện cảnh báo bảo mật nào.</p>
+        <p class="text-xs text-gray-500 mt-1">Hệ thống đang hoạt động bình thường.</p>
     </div>
     {% endif %}
 </div>

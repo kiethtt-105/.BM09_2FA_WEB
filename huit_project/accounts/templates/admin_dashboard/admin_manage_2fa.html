@@ -10,20 +10,20 @@
 <style>
   body { font-family: 'DM Sans', sans-serif; }
   ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: #09090b; }
-  ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+  ::-webkit-scrollbar-track { background: #f3f4f6; }
+  ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 10px; }
 
   .nav-link {
     display: flex; align-items: center; gap: 12px;
     padding: 12px 16px; border-radius: 12px;
     font-size: 0.875rem; font-weight: 500;
-    transition: all 0.15s; color: #a1a1aa;
+    transition: all 0.15s; color: #374151;
     text-decoration: none; border: 1px solid transparent;
   }
-  .nav-link:hover { background: #27272a; color: #e4e4e7; }
+  .nav-link:hover { background: #f3f4f6; color: #111827; }
   .nav-link.active {
     background: rgba(37,99,235,0.12);
-    color: #93c5fd;
+    color: #1e3a8a;
     border-color: rgba(37,99,235,0.25);
   }
   .nav-icon { width: 18px; text-align: center; font-size: 15px; }
@@ -33,7 +33,7 @@
 
   /* Method cards */
   .method-card {
-    background: #18181b;
+    background: #ffffff;
     border: 1px solid rgba(63,63,70,0.7);
     border-radius: 16px;
     overflow: hidden;
@@ -46,13 +46,13 @@
   /* OTP input */
   .otp-input {
     flex: 1; padding: 9px 13px; border-radius: 10px;
-    background: #27272a; border: 1px solid #3f3f46;
-    color: #e4e4e7; font-family: 'DM Mono', monospace; font-size: 14px;
+    background: #e5e7eb; border: 1px solid #d1d5db;
+    color: #111827; font-family: 'DM Mono', monospace; font-size: 14px;
     letter-spacing: 2px; outline: none; transition: border-color 0.15s;
     width: 100%;
   }
-  .otp-input:focus { border-color: #3b82f6; }
-  .otp-input::placeholder { letter-spacing: 0; color: #52525b; font-size: 12px; }
+  .otp-input:focus { border-color: #1e40af; }
+  .otp-input::placeholder { letter-spacing: 0; color: #111827; font-size: 12px; }
 
   /* Action pills */
   .action-pill {
@@ -60,28 +60,28 @@
     padding: 2px 8px; border-radius: 6px; font-size: 11px;
     font-family: 'DM Mono', monospace; font-weight: 600;
   }
-  .pill-enable  { background: rgba(16,185,129,.1); color: #6ee7b7; border: 1px solid rgba(16,185,129,.2); }
-  .pill-disable { background: rgba(239,68,68,.1); color: #fca5a5; border: 1px solid rgba(239,68,68,.2); }
-  .pill-login   { background: rgba(37,99,235,.1); color: #93c5fd; border: 1px solid rgba(37,99,235,.2); }
-  .pill-fail    { background: rgba(245,158,11,.1); color: #fcd34d; border: 1px solid rgba(245,158,11,.2); }
-  .pill-default { background: #27272a; color: #71717a; border: 1px solid #3f3f46; }
+  .pill-enable  { background: rgba(16,185,129,.1); color: #065f46; border: 1px solid rgba(16,185,129,.2); }
+  .pill-disable { background: rgba(239,68,68,.1); color: #991b1b; border: 1px solid rgba(239,68,68,.2); }
+  .pill-login   { background: rgba(37,99,235,.1); color: #1e3a8a; border: 1px solid rgba(37,99,235,.2); }
+  .pill-fail    { background: rgba(245,158,11,.1); color: #92400e; border: 1px solid rgba(245,158,11,.2); }
+  .pill-default { background: #e5e7eb; color: #374151; border: 1px solid #d1d5db; }
 
   /* Section title */
   .section-title {
-    font-size: 11px; font-weight: 600; color: #52525b;
+    font-size: 11px; font-weight: 600; color: #111827;
     font-family: 'DM Mono', monospace; letter-spacing: .8px; text-transform: uppercase;
     margin-bottom: 12px; display: flex; align-items: center; gap: 10px;
   }
-  .section-title::after { content: ''; flex: 1; height: 1px; background: #27272a; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
 
   /* Passkey item */
   .passkey-item {
     display: flex; align-items: center; gap: 10px;
     padding: 8px 10px; border-radius: 10px;
-    background: #27272a; border: 1px solid #3f3f46;
-    font-size: 12px; color: #a1a1aa;
+    background: #e5e7eb; border: 1px solid #d1d5db;
+    font-size: 12px; color: #374151;
   }
-  .passkey-item i { color: #93c5fd; font-size: 13px; flex-shrink: 0; }
+  .passkey-item i { color: #1e3a8a; font-size: 13px; flex-shrink: 0; }
   .passkey-item span { flex: 1; font-family: 'DM Mono', monospace; }
 
   /* Btn */
@@ -92,11 +92,11 @@
     transition: all .15s; font-family: 'DM Sans', sans-serif;
   }
   .btn-sm { padding: 5px 12px; font-size: 12px; }
-  .btn-outline { background: transparent; border-color: #3f3f46; color: #93c5fd; }
+  .btn-outline { background: transparent; border-color: #111827; color: #1e3a8a; }
   .btn-outline:hover { background: rgba(37,99,235,.08); border-color: rgba(59,130,246,.5); }
   .btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; }
-  .btn-primary:hover { background: #3b82f6; }
-  .btn-danger { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.3); color: #fca5a5; }
+  .btn-primary:hover { background: #1e40af; }
+  .btn-danger { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.3); color: #991b1b; }
   .btn-danger:hover { background: rgba(239,68,68,.2); border-color: rgba(239,68,68,.5); }
   .btn i { font-size: 12px; }
 
@@ -105,8 +105,8 @@
     display: flex; flex-direction: column; align-items: center;
     padding: 28px 18px; text-align: center; gap: 10px;
   }
-  .setup-cta i { font-size: 26px; color: #3f3f46; }
-  .setup-cta p { font-size: 12px; color: #52525b; }
+  .setup-cta i { font-size: 26px; color: #111827; }
+  .setup-cta p { font-size: 12px; color: #111827; }
 
   /* Confirm box */
   .confirm-box {
@@ -115,7 +115,7 @@
     border-radius: 12px; padding: 14px;
   }
   .confirm-box-title {
-    font-size: 12px; font-weight: 600; color: #fcd34d;
+    font-size: 12px; font-weight: 600; color: #92400e;
     font-family: 'DM Mono', monospace; margin-bottom: 10px;
     display: flex; align-items: center; gap: 6px;
   }
@@ -124,43 +124,43 @@
   .log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .log-table th {
     padding: 10px 14px; text-align: left; font-weight: 600;
-    color: #52525b; font-family: 'DM Mono', monospace; font-size: 11px;
-    border-bottom: 1px solid #27272a; background: #1c1c1f;
+    color: #111827; font-family: 'DM Mono', monospace; font-size: 11px;
+    border-bottom: 1px solid #e5e7eb; background: #e5e7eb;
     text-transform: uppercase; letter-spacing: .5px;
   }
   .log-table td {
-    padding: 10px 14px; border-bottom: 1px solid rgba(39,39,42,.8);
-    color: #71717a; vertical-align: middle;
+    padding: 10px 14px; border-bottom: 1px solid #e5e7eb;
+    color: #374151; vertical-align: middle;
   }
   .log-table tr:last-child td { border-bottom: none; }
-  .log-table tr:hover td { background: rgba(39,39,42,.4); }
+  .log-table tr:hover td { background: #f3f4f6; }
 
   /* Anim */
   @keyframes up { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
   .page-anim { animation: up .35s cubic-bezier(.16,1,.3,1) both; }
 </style>
 </head>
-<body class="bg-zinc-950 text-zinc-200">
+<body class="bg-white text-gray-900">
 
 <div class="flex">
 
   <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
-<aside class="w-64 bg-zinc-900 border-r border-zinc-800/70 flex flex-col" style="z-index:40;">
-    <div class="p-6 border-b border-zinc-800/70">
+<aside class="w-64 bg-gray-50 border-r border-gray-200/70 flex flex-col" style="z-index:40;">
+    <div class="p-6 border-b border-gray-200/70">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-violet-600/30">H</div>
+            <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-gray-900 text-lg shadow-lg shadow-violet-600/30">H</div>
             <div>
-                <div class="font-bold text-white text-base leading-tight">HUIT</div>
-                <div class="text-zinc-500 text-xs">Admin Dashboard</div>
+                <div class="font-bold text-gray-900 text-base leading-tight">HUIT</div>
+                <div class="text-gray-600 text-xs">Admin Dashboard</div>
             </div>
         </div>
     </div>
     <nav class="flex-1 p-4 space-y-1">
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
         <a href="{% url 'admin_overview' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Tổng quan
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
         <a href="{% url 'admin_users' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-users"></i></span> Người dùng
         </a>
@@ -173,7 +173,7 @@
         <a href="{% url 'admin_login_history' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> Hoạt động Đăng nhập
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
         <a href="{% url 'admin_security_alerts' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-triangle-exclamation"></i></span> Cảnh báo bảo mật
         </a>
@@ -186,7 +186,7 @@
         <a href="{% url 'admin_manage_2fa' %}" class="nav-link active">
             <span class="nav-icon"><i class="fas fa-shield-halved"></i></span> Admin 2FA
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
         <a href="{% url 'admin_announcements' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-bullhorn"></i></span> Thông báo
         </a>
@@ -194,19 +194,19 @@
             <span class="nav-icon"><i class="fas fa-gear"></i></span> Cài đặt
         </a>
     </nav>
-    <div class="p-4 border-t border-zinc-800/70">
+    <div class="p-4 border-t border-gray-200/70">
         <div class="flex items-center gap-3 px-3 py-2 mb-3">
-            <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-400 text-xs font-bold">
+            <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-700 text-xs font-bold">
                 {{ request.user.username|slice:":2"|upper|default:"AD" }}
             </div>
             <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-zinc-200 truncate">{{ request.user.username|default:"Admin" }}</div>
-                <div class="text-xs text-zinc-500">Superuser</div>
+                <div class="text-sm font-medium text-gray-900 truncate">{{ request.user.username|default:"Admin" }}</div>
+                <div class="text-xs text-gray-600">Superuser</div>
             </div>
         </div>
         <form method="POST" action="{% url 'logout' %}">
             {% csrf_token %}
-            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-400 hover:bg-red-600/20 transition-all">
+            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-700 hover:bg-red-600/20 transition-all">
                 <i class="fas fa-sign-out-alt w-4 text-center"></i> Đăng xuất
             </button>
         </form>
@@ -223,8 +223,8 @@
           <i class="fas fa-shield-alt"></i>
         </div>
         <div>
-          <h1 class="text-2xl font-bold text-white">Quản lý bảo mật 2FA</h1>
-          <p class="text-zinc-500 text-xs mt-0.5" style="font-family:'DM Mono',monospace">ADMIN · {{ request.user.username }}</p>
+          <h1 class="text-2xl font-bold text-gray-900">Quản lý bảo mật 2FA</h1>
+          <p class="text-gray-600 text-xs mt-0.5" style="font-family:'DM Mono',monospace">ADMIN · {{ request.user.username }}</p>
         </div>
       </div>
       <div class="flex gap-2">
@@ -242,10 +242,10 @@
     <div class="mb-6 space-y-2">
       {% for message in messages %}
       <div class="px-5 py-3.5 rounded-xl flex items-center gap-3 text-sm
-        {% if 'success' in message.tags %}bg-emerald-900/20 border border-emerald-700/50 text-emerald-300
-        {% elif 'error' in message.tags %}bg-red-900/30 border border-red-700/50 text-red-300
-        {% elif 'warning' in message.tags %}bg-amber-900/20 border border-amber-700/40 text-amber-300
-        {% else %}bg-blue-900/20 border border-blue-700/40 text-blue-300{% endif %}">
+        {% if 'success' in message.tags %}bg-white20 border border-emerald-700/50 text-emerald-300
+        {% elif 'error' in message.tags %}bg-white30 border border-red-700/50 text-red-800
+        {% elif 'warning' in message.tags %}bg-white20 border border-amber-700/40 text-amber-300
+        {% else %}bg-white20 border border-blue-700/40 text-blue-300{% endif %}">
         <i class="fas {% if 'success' in message.tags %}fa-check-circle{% elif 'error' in message.tags %}fa-exclamation-circle{% elif 'warning' in message.tags %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %}"></i>
         {{ message }}
       </div>
@@ -254,25 +254,25 @@
     {% endif %}
 
     <!-- Status bar -->
-    <div class="flex items-center gap-4 px-5 py-4 rounded-2xl mb-6 bg-zinc-900 border border-zinc-800/70 flex-wrap">
+    <div class="flex items-center gap-4 px-5 py-4 rounded-2xl mb-6 bg-gray-50 border border-gray-200/70 flex-wrap">
       {% if active_methods_count >= 2 %}
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-900/20 border border-emerald-700/30 text-emerald-400" style="font-family:'DM Mono',monospace">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white20 border border-emerald-500 text-emerald-700" style="font-family:'DM Mono',monospace">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(16,185,129,.2)]"></span>
         Multi-Factor
       </div>
-      <div class="text-sm text-zinc-500">Đang bảo vệ bằng <strong class="text-zinc-200">{{ active_methods_count }} phương thức</strong> — tất cả đều được yêu cầu khi đăng nhập.</div>
+      <div class="text-sm text-gray-600">Đang bảo vệ bằng <strong class="text-gray-900">{{ active_methods_count }} phương thức</strong> — tất cả đều được yêu cầu khi đăng nhập.</div>
       {% elif active_methods_count == 1 %}
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-amber-900/20 border border-amber-700/30 text-amber-400" style="font-family:'DM Mono',monospace">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white20 border border-amber-500 text-amber-400" style="font-family:'DM Mono',monospace">
         <span class="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(245,158,11,.2)]"></span>
         Single Factor
       </div>
-      <div class="text-sm text-zinc-500">Đang dùng <strong class="text-zinc-200">1 phương thức</strong> 2FA. Thêm phương thức để tăng bảo mật.</div>
+      <div class="text-sm text-gray-600">Đang dùng <strong class="text-gray-900">1 phương thức</strong> 2FA. Thêm phương thức để tăng bảo mật.</div>
       {% else %}
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-amber-900/20 border border-amber-700/30 text-amber-400" style="font-family:'DM Mono',monospace">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white20 border border-amber-500 text-amber-400" style="font-family:'DM Mono',monospace">
         <span class="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(245,158,11,.2)]"></span>
         Chưa bảo mật
       </div>
-      <div class="text-sm text-zinc-500"><strong class="text-zinc-200">Chưa có phương thức 2FA nào.</strong> Hãy thiết lập ngay!</div>
+      <div class="text-sm text-gray-600"><strong class="text-gray-900">Chưa có phương thức 2FA nào.</strong> Hãy thiết lập ngay!</div>
       {% endif %}
       <a href="{% url 'admin_setup_2fa' %}?step=select" class="btn btn-outline btn-sm ml-auto">
         <i class="fas fa-plus"></i> Thêm
@@ -287,19 +287,19 @@
       <div class="method-card {% if method.enabled %}enabled{% endif %} {% if confirm_disable == method.key %}confirming{% endif %}">
 
         <!-- Card header -->
-        <div class="flex items-center gap-4 px-5 py-4 border-b border-zinc-800/70">
+        <div class="flex items-center gap-4 px-5 py-4 border-b border-gray-200/70">
           <div class="w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0
-            {% if method.enabled %}bg-blue-600/10 border border-blue-600/20 text-blue-400{% else %}bg-zinc-800 border border-zinc-700/60 text-zinc-500{% endif %}">
+            {% if method.enabled %}bg-white border border-blue-600 text-blue-700{% else %}bg-gray-100 border border-gray-300/60 text-gray-600{% endif %}">
             <i class="fas {{ method.icon }}"></i>
           </div>
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-semibold text-zinc-100">{{ method.label }}</div>
-            <div class="text-xs text-zinc-500 truncate" title="{{ method.description }}">{{ method.description }}</div>
+            <div class="text-sm font-semibold text-gray-900">{{ method.label }}</div>
+            <div class="text-xs text-gray-600 truncate" title="{{ method.description }}">{{ method.description }}</div>
           </div>
           <div class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold flex-shrink-0"
             style="font-family:'DM Mono',monospace;
-              {% if method.enabled %}background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);color:#6ee7b7
-              {% else %}background:#27272a;border:1px solid #3f3f46;color:#52525b{% endif %}">
+              {% if method.enabled %}background:#ffffff;border:1px solid #065f46;color:#065f46
+              {% else %}background:#ffffff;border:1px solid #6b7280;color:#374151{% endif %}">
             {% if method.enabled %}
               <i class="fas fa-check" style="font-size:8px"></i> Bật
             {% else %}
@@ -344,10 +344,10 @@
                   <div class="passkey-item">
                     <i class="fas fa-key"></i>
                     <span>Passkey #{{ forloop.counter }}</span>
-                    <span class="text-zinc-600 text-xs">{{ pk.created_at|date:"d/m/Y" }}</span>
+                    <span class="text-gray-500 text-xs">{{ pk.created_at|date:"d/m/Y" }}</span>
                   </div>
                   {% empty %}
-                  <div class="text-xs text-zinc-600 px-1">Chưa có passkey nào.</div>
+                  <div class="text-xs text-gray-500 px-1">Chưa có passkey nào.</div>
                   {% endfor %}
                 </div>
                 {% if can_disable %}
@@ -360,7 +360,7 @@
                   </button>
                 </form>
                 {% else %}
-                <div class="text-xs text-zinc-600 text-center py-1">
+                <div class="text-xs text-gray-500 text-center py-1">
                   <i class="fas fa-lock" style="font-size:10px"></i> Cần ≥2 phương thức để tắt
                 </div>
                 {% endif %}
@@ -375,7 +375,7 @@
                   </button>
                 </form>
                 {% else %}
-                <div class="text-xs text-zinc-600 text-center py-1">
+                <div class="text-xs text-gray-500 text-center py-1">
                   <i class="fas fa-lock" style="font-size:10px"></i> Cần ≥2 phương thức để tắt
                 </div>
                 {% endif %}
@@ -400,7 +400,7 @@
 
     <!-- Activity log -->
     <div class="section-title" style="margin-top:8px">Hoạt động gần đây</div>
-    <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl overflow-hidden">
+    <div class="bg-gray-50 border border-gray-200/70 rounded-2xl overflow-hidden">
       <table class="log-table">
         <thead>
           <tr>
@@ -438,7 +438,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="4" class="py-12 text-center text-zinc-600 text-xs">
+            <td colspan="4" class="py-12 text-center text-gray-500 text-xs">
               <i class="fas fa-history mr-2"></i>Chưa có hoạt động nào.
             </td>
           </tr>

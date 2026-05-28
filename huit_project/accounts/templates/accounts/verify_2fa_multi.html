@@ -8,10 +8,10 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
 :root{
-  --bg:#04080f; --bg1:#080f1c; --bg2:#0d1626; --bg3:#111e33;
+  --bg:#ffffff; --bg1:#f8f9fa; --bg2:#f1f3f5; --bg3:#e9ecef;
   --border:rgba(37,99,235,.14); --border2:rgba(37,99,235,.30);
-  --blue:#2563eb; --blue2:#3b82f6; --blue3:#60a5fa;
-  --text:#e2e8f0; --muted:#475569; --muted2:#64748b;
+  --blue:#2563eb; --blue2:#1e40af; --blue3:#60a5fa;
+  --text:#111827; --muted:#374151; --muted2:#374151;
   --success:#10b981; --danger:#ef4444; --warn:#f59e0b;
   --font:'DM Sans',sans-serif; --mono:'DM Mono',monospace;
 }
@@ -28,23 +28,23 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* Top bar */
 .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
-.logo{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);}
+.logo{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#374151;}
 .logo-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);}
 .logo span{color:var(--blue2);}
 .badge-admin{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;
   font-size:11px;font-family:var(--mono);font-weight:700;letter-spacing:.5px;
-  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;}
+  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#991b1b;}
 
 /* Progress steps */
 .steps-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
 .step-pill{flex:1;min-width:80px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);
-  display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--muted2);transition:all .2s;}
-.step-pill.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.07);color:#6ee7b7;}
+  display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:#374151;transition:all .2s;}
+.step-pill.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.07);color:#065f46;}
 .step-pill.active{border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.1);color:var(--blue3);}
 .step-pill.pending{opacity:.45;}
 .step-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:10px;font-weight:700;font-family:var(--mono);background:var(--bg3);color:var(--muted);flex-shrink:0;}
-.step-pill.done .step-num{background:rgba(16,185,129,.2);color:#6ee7b7;}
+.step-pill.done .step-num{background:rgba(16,185,129,.2);color:#065f46;}
 .step-pill.active .step-num{background:rgba(37,99,235,.2);color:var(--blue3);}
 
 /* Main card */
@@ -54,24 +54,24 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 /* Security banner */
 .sec-banner{display:flex;align-items:center;gap:12px;padding:14px 22px;
   background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.12);}
-.sec-banner i{color:#fca5a5;font-size:16px;flex-shrink:0;}
-.sec-banner p{font-size:12px;color:var(--muted2);line-height:1.5;}
-.sec-banner strong{color:#fca5a5;}
+.sec-banner i{color:#991b1b;font-size:16px;flex-shrink:0;}
+.sec-banner p{font-size:12px;color:#374151;line-height:1.5;}
+.sec-banner strong{color:#991b1b;}
 
 /* Header */
 .card-header{padding:22px 26px 18px;border-bottom:1px solid var(--border);}
 .card-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:5px;}
 .card-title i{color:var(--blue2);}
-.card-sub{font-size:12px;color:var(--muted2);}
+.card-sub{font-size:12px;color:#374151;}
 
 /* Method selector */
 .method-tabs{display:flex;gap:6px;padding:16px 22px 0;flex-wrap:wrap;}
 .method-tab{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:8px;
   font-size:12px;font-weight:600;font-family:var(--mono);cursor:pointer;text-decoration:none;
-  border:1px solid var(--border);background:var(--bg2);color:var(--muted2);transition:all .15s;}
+  border:1px solid var(--border);background:var(--bg2);color:#374151;transition:all .15s;}
 .method-tab:hover{border-color:var(--border2);color:var(--text);}
 .method-tab.active{border-color:rgba(37,99,235,.4);background:rgba(37,99,235,.1);color:var(--blue3);}
-.method-tab.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.07);color:#6ee7b7;cursor:default;pointer-events:none;}
+.method-tab.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.07);color:#065f46;cursor:default;pointer-events:none;}
 
 /* Body */
 .card-body{padding:22px 26px;}
@@ -91,18 +91,18 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.14);color:var(--blue3);}
 .info-row i{flex-shrink:0;}
 .warn-row{display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:9px;font-size:12px;margin-bottom:14px;
-  background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.12);color:#fcd34d;}
+  background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.12);color:#92400e;}
 
 /* TOTP countdown */
 .totp-bar{height:3px;background:var(--border);border-radius:2px;margin-bottom:16px;overflow:hidden;}
 .totp-fill{height:100%;border-radius:2px;background:var(--blue2);transition:width 1s linear;}
-.totp-timer{text-align:right;font-family:var(--mono);font-size:11px;color:var(--muted2);margin-bottom:8px;}
+.totp-timer{text-align:right;font-family:var(--mono);font-size:11px;color:#374151;margin-bottom:8px;}
 .totp-timer.warn{color:var(--warn);}
 
 /* HOTP */
 .hotp-gen{display:flex;align-items:center;justify-content:space-between;
   padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;margin-bottom:16px;}
-.hotp-gen span{font-size:12px;color:var(--muted2);font-family:var(--mono);}
+.hotp-gen span{font-size:12px;color:#374151;font-family:var(--mono);}
 .hotp-code{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--blue3);letter-spacing:3px;}
 
 /* FIDO2 */
@@ -118,14 +118,14 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .btn:disabled{opacity:.35;cursor:not-allowed;}
 .btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.3);}
 .btn-primary:hover:not(:disabled){box-shadow:0 4px 20px rgba(37,99,235,.45);}
-.btn-ghost{background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,.16);color:var(--muted2);}
+.btn-ghost{background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,.16);color:#374151;}
 .btn-ghost:hover:not(:disabled){border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.08);color:var(--blue3);}
 .btn-full{width:100%;}
 
 /* Alerts */
 .alert{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:9px;font-size:13px;margin-bottom:14px;}
-.alert-success{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);color:#6ee7b7;}
-.alert-error{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.15);color:#fca5a5;}
+.alert-success{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);color:#065f46;}
+.alert-error{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.15);color:#991b1b;}
 .alert-info{background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.15);color:var(--blue3);}
 .alert i{margin-top:1px;flex-shrink:0;}
 
@@ -273,7 +273,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
         <button onclick="sendEmailOtp()" class="btn btn-ghost" id="email-send-btn" type="button">
           <i class="fa fa-paper-plane"></i> Gửi mã OTP
         </button>
-        <span id="email-cooldown" style="font-size:12px;color:var(--muted2);display:none;">
+        <span id="email-cooldown" style="font-size:12px;color:#374151;display:none;">
           Chờ <span id="cooldown-secs">30</span>s...
         </span>
       </div>
@@ -300,7 +300,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div class="fido2-block">
         <div class="fido2-icon"><i class="fa fa-fingerprint"></i></div>
         <div style="font-size:15px;font-weight:600;margin-bottom:8px;">Xác thực bằng Passkey</div>
-        <div style="font-size:12px;color:var(--muted2);margin-bottom:20px;line-height:1.6;">
+        <div style="font-size:12px;color:#374151;margin-bottom:20px;line-height:1.6;">
           Dùng vân tay, Face ID hoặc security key để xác thực
         </div>
         <button onclick="authenticatePasskey()" class="btn btn-primary" id="fido2-btn" type="button">
@@ -421,11 +421,11 @@ async function generateHotp(){
       display.style.color = 'var(--blue3)';
     } else {
       display.textContent = 'Lỗi';
-      display.style.color = '#fca5a5';
+      display.style.color = '#991b1b';
     }
   } catch(e) {
     display.textContent = 'Lỗi';
-    display.style.color = '#fca5a5';
+    display.style.color = '#991b1b';
   }
   setTimeout(() => {
     btn.disabled  = false;

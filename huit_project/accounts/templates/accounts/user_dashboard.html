@@ -8,10 +8,10 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
 :root{
-  --bg:#04080f;--bg1:#080f1c;--bg2:#0d1626;--bg3:#111e33;
-  --border:rgba(37,99,235,0.14);--border2:rgba(37,99,235,0.30);
-  --blue:#2563eb;--blue2:#3b82f6;--blue3:#93c5fd;
-  --text:#e2e8f0;--muted:#475569;--muted2:#64748b;
+  --bg:#ffffff;--bg1:#f8f9fa;--bg2:#f1f3f5;--bg3:#e9ecef;
+  --border:rgba(37,99,235,0.35);--border2:rgba(37,99,235,0.65);
+  --blue:#2563eb;--blue2:#1e40af;--blue3:#1e3a8a;
+  --text:#111827;--muted:#374151;--muted2:#374151;
   --danger:#ef4444;--success:#10b981;
   --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
 }
@@ -60,7 +60,7 @@ body::before{
 .nav-item{
   display:flex;align-items:center;gap:9px;width:100%;
   padding:9px 11px;border-radius:9px;
-  font-size:13px;font-weight:500;color:var(--muted2);
+  font-size:13px;font-weight:500;color:#374151;
   background:none;border:1px solid transparent;cursor:pointer;
   text-decoration:none;transition:all .15s;
   font-family:var(--font);margin-bottom:3px;text-align:left;
@@ -72,8 +72,8 @@ body::before{
 }
 .nav-item i{width:15px;text-align:center;font-size:13px;flex-shrink:0;}
 .nav-sep{margin:10px 0;border:none;height:1px;background:var(--border);}
-.nav-danger{color:#fca5a5!important;}
-.nav-danger:hover{background:rgba(239,68,68,.08)!important;color:#fca5a5!important;}
+.nav-danger{color:#991b1b!important;}
+.nav-danger:hover{background:rgba(239,68,68,.08)!important;color:#991b1b!important;}
 
 /* ── Main panel ── */
 .main{
@@ -116,8 +116,8 @@ input::placeholder{color:var(--muted);}
 .btn:hover{opacity:.85;transform:translateY(-1px);}
 .btn:active{transform:translateY(0);}
 .btn-primary{background:linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%);color:#fff;box-shadow:0 2px 12px rgba(37,99,235,.30);}
-.btn-primary:hover{box-shadow:0 4px 20px rgba(37,99,235,.45);opacity:1;background:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)!important;}
-.btn-ghost{background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,.16);color:var(--muted2);backdrop-filter:blur(4px);}
+.btn-primary:hover{box-shadow:0 4px 20px rgba(37,99,235,.45);opacity:1;background:linear-gradient(135deg,#1e40af 0%,#2563eb 100%)!important;}
+.btn-ghost{background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,.16);color:#374151;backdrop-filter:blur(4px);}
 .btn-ghost:hover{border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.08);color:var(--blue3);}
 .btn-outline{background:none;border:1px solid rgba(37,99,235,.28);color:var(--blue3);}
 .btn-sm{padding:7px 14px;font-size:12px;}
@@ -135,9 +135,9 @@ input::placeholder{color:var(--muted);}
   padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px;
   display:flex;align-items:center;gap:8px;
 }
-.flash-success{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:#6ee7b7;}
-.flash-error{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#fca5a5;}
-.flash-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);color:#fcd34d;}
+.flash-success{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:#065f46;}
+.flash-error{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#991b1b;}
+.flash-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);color:#92400e;}
 
 /* Section divider */
 .section-sep{height:1px;background:var(--border);margin:28px 0;}
@@ -168,7 +168,7 @@ input::placeholder{color:var(--muted);}
   display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;
   font-size:11px;font-weight:600;font-family:var(--mono);
 }
-.pill-on{background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.20);color:#6ee7b7;}
+.pill-on{background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.20);color:#065f46;}
 .pill-off{background:var(--bg3);border:1px solid var(--border);color:var(--muted);}
 .pill-dot{width:5px;height:5px;border-radius:50%;}
 .dot-on{background:#10b981;}
@@ -203,8 +203,8 @@ input[type=password]::placeholder{color:var(--muted);}
 
 /* Badge */
 .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--mono);}
-.badge-success{background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.20);color:#6ee7b7;}
-.badge-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.18);color:#fcd34d;}
+.badge-success{background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.20);color:#065f46;}
+.badge-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.18);color:#92400e;}
 .badge-muted{background:var(--bg3);border:1px solid var(--border);color:var(--muted);}
 
 /* Toast */
@@ -440,9 +440,9 @@ input[type=password]::placeholder{color:var(--muted);}
       </a>
     </div>
     {% if not profile.has_any_2fa %}
-    <div style="margin-top:10px;padding:10px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.16);border-radius:8px;font-size:12px;color:#fcd34d;display:flex;align-items:center;gap:8px;">
+    <div style="margin-top:10px;padding:10px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.16);border-radius:8px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px;">
       <i class="fa fa-triangle-exclamation"></i>
-      Chưa bật phương thức bảo mật 2FA nào. <a href="{% url 'security_2fa' %}" style="color:#fcd34d;text-decoration:underline;margin-left:4px;">Bật ngay</a>
+      Chưa bật phương thức bảo mật 2FA nào. <a href="{% url 'security_2fa' %}" style="color:#92400e;text-decoration:underline;margin-left:4px;">Bật ngay</a>
     </div>
     {% endif %}
 

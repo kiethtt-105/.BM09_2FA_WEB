@@ -24,7 +24,7 @@
   <!-- Header: Thông tin User hiện tại của App B -->
   <div class="bg-white rounded-3xl shadow-sm p-8 mb-6 border border-slate-100">
     <div class="flex items-center gap-4">
-      <div class="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-xl font-black shadow">
+      <div class="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-gray-900 text-xl font-black shadow">
         {{ user.username|first|upper }}
       </div>
       <div>
@@ -46,7 +46,7 @@
     {% if profile and profile.is_linked %}
     <!-- Hiển thị khi đã liên kết SSO thành công[cite: 1] -->
     <div class="flex items-center gap-3 p-4 bg-green-50 rounded-2xl border border-green-200">
-      <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white">
+      <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-gray-900">
         <i class="fas fa-check text-sm"></i>
       </div>
       <div>
@@ -62,7 +62,7 @@
         <p class="text-slate-400 text-xs">Liên kết để dùng SSO đăng nhập nhanh</p>
       </div>
       <a href="{% url 'link_huit' %}"
-        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-blue-200">
+        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-gray-900 text-xs font-bold rounded-xl transition shadow-lg shadow-blue-200">
         Liên kết ngay
       </a>
     </div>

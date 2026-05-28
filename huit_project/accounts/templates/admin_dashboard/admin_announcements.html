@@ -15,36 +15,36 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
         ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: #09090b; }
-        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
-        .nav-link { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; font-size:0.875rem; font-weight:500; transition:all 0.15s; color:#a1a1aa; text-decoration:none; border:1px solid transparent; }
-        .nav-link:hover { background:#27272a; color:#e4e4e7; }
-        .nav-link.active { background:rgba(124,58,237,0.12); color:#a78bfa; border-color:rgba(124,58,237,0.25); }
+        ::-webkit-scrollbar-track { background: #f3f4f6; }
+        ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 10px; }
+        .nav-link { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; font-size:0.875rem; font-weight:500; transition:all 0.15s; color:#374151; text-decoration:none; border:1px solid transparent; }
+        .nav-link:hover { background:#f3f4f6; color:#111827; }
+        .nav-link.active { background:rgba(124,58,237,0.12); color:#5b21b6; border-color:rgba(124,58,237,0.25); }
         .nav-icon { width:18px; text-align:center; font-size:15px; }
         aside { position:fixed; top:0; left:0; bottom:0; overflow-y:auto; }
         .main-content { margin-left:256px; min-height:100vh; overflow-y:auto; }
     </style>
 </head>
-<body class="bg-zinc-950 text-zinc-200">
+<body class="bg-white text-gray-900">
 <div class="flex">
 
 <!-- SIDEBAR -->
-<aside class="w-64 bg-zinc-900 border-r border-zinc-800/70 flex flex-col" style="z-index:40;">
-    <div class="p-6 border-b border-zinc-800/70">
+<aside class="w-64 bg-gray-50 border-r border-gray-200/70 flex flex-col" style="z-index:40;">
+    <div class="p-6 border-b border-gray-200/70">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-violet-600/30">H</div>
+            <div class="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center font-bold text-gray-900 text-lg shadow-lg shadow-violet-600/30">H</div>
             <div>
-                <div class="font-bold text-white text-base leading-tight">HUIT</div>
-                <div class="text-zinc-500 text-xs">Admin Dashboard</div>
+                <div class="font-bold text-gray-900 text-base leading-tight">HUIT</div>
+                <div class="text-gray-600 text-xs">Admin Dashboard</div>
             </div>
         </div>
     </div>
     <nav class="flex-1 p-4 space-y-1">
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">Tổng quan</p>
         <a href="{% url 'admin_overview' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Tổng quan
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Quản lý</p>
         <a href="{% url 'admin_users' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-users"></i></span> Người dùng
         </a>
@@ -57,7 +57,7 @@
         <a href="{% url 'admin_login_history' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> Hoạt động Đăng nhập
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Bảo mật</p>
         <a href="{% url 'admin_security_alerts' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-triangle-exclamation"></i></span> Cảnh báo bảo mật
         </a>
@@ -70,7 +70,7 @@
         <a href="{% url 'admin_manage_2fa' %}" class="nav-link">
             <span class="nav-icon"><i class="fas fa-shield-halved"></i></span> Admin 2FA
         </a>
-        <p class="text-zinc-600 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
+        <p class="text-gray-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-3">Hệ thống</p>
         <a href="{% url 'admin_announcements' %}" class="nav-link active">
             <span class="nav-icon"><i class="fas fa-bullhorn"></i></span> Thông báo
         </a>
@@ -78,19 +78,19 @@
             <span class="nav-icon"><i class="fas fa-gear"></i></span> Cài đặt
         </a>
     </nav>
-    <div class="p-4 border-t border-zinc-800/70">
+    <div class="p-4 border-t border-gray-200/70">
         <div class="flex items-center gap-3 px-3 py-2 mb-3">
-            <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-400 text-xs font-bold">
+            <div class="w-8 h-8 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center text-violet-700 text-xs font-bold">
                 {{ request.user.username|slice:":2"|upper|default:"AD" }}
             </div>
             <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-zinc-200 truncate">{{ request.user.username|default:"Admin" }}</div>
-                <div class="text-xs text-zinc-500">Superuser</div>
+                <div class="text-sm font-medium text-gray-900 truncate">{{ request.user.username|default:"Admin" }}</div>
+                <div class="text-xs text-gray-600">Superuser</div>
             </div>
         </div>
         <form method="POST" action="{% url 'logout' %}">
             {% csrf_token %}
-            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-400 hover:bg-red-600/20 transition-all">
+            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-red-600/10 border border-red-600/20 text-red-700 hover:bg-red-600/20 transition-all">
                 <i class="fas fa-sign-out-alt w-4 text-center"></i> Đăng xuất
             </button>
         </form>
@@ -100,15 +100,15 @@
 <!-- MAIN -->
 <div class="main-content flex-1 p-8">
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-white">Thông báo hệ thống</h1>
-        <p class="text-zinc-500 text-sm mt-1">Gửi thông báo hiện trên dashboard của tất cả user</p>
+        <h1 class="text-2xl font-bold text-gray-900">Thông báo hệ thống</h1>
+        <p class="text-gray-600 text-sm mt-1">Gửi thông báo hiện trên dashboard của tất cả user</p>
     </div>
 
     {% if messages %}
     {% for msg in messages %}
     <div class="mb-4 px-5 py-3.5 rounded-xl text-sm flex items-center gap-3
-        {% if msg.tags == 'success' %}bg-emerald-900/20 border border-emerald-700/40 text-emerald-300
-        {% else %}bg-red-900/20 border border-red-700/40 text-red-300{% endif %}">
+        {% if msg.tags == 'success' %}bg-white20 border border-emerald-700/40 text-emerald-300
+        {% else %}bg-white20 border border-red-700/40 text-red-800{% endif %}">
         <i class="fas {% if msg.tags == 'success' %}fa-check-circle{% else %}fa-exclamation-circle{% endif %}"></i>
         {{ msg }}
     </div>
@@ -118,29 +118,29 @@
     <div class="grid grid-cols-5 gap-6">
         <!-- Create Form -->
         <div class="col-span-2">
-            <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl p-6 sticky top-8">
-                <h2 class="text-base font-semibold text-white mb-5">Tạo thông báo mới</h2>
+            <div class="bg-gray-50 border border-gray-200/70 rounded-2xl p-6 sticky top-8">
+                <h2 class="text-base font-semibold text-gray-900 mb-5">Tạo thông báo mới</h2>
                 <form method="POST" class="space-y-4">
                     {% csrf_token %}
                     <div>
-                        <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Tiêu đề</label>
+                        <label class="block text-[11px] text-gray-600 uppercase tracking-wide mb-2">Tiêu đề</label>
                         <input type="text" name="title" required placeholder="Tiêu đề thông báo..."
-                               class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
+                               class="w-full bg-gray-100 border border-gray-300/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
                     </div>
                     <div>
-                        <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Nội dung</label>
+                        <label class="block text-[11px] text-gray-600 uppercase tracking-wide mb-2">Nội dung</label>
                         <textarea name="body" required rows="4" placeholder="Nội dung thông báo..."
-                                  class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500 resize-none"></textarea>
+                                  class="w-full bg-gray-100 border border-gray-300/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500 resize-none"></textarea>
                     </div>
                     <div>
-                        <label class="block text-[11px] text-zinc-500 uppercase tracking-wide mb-2">Loại</label>
-                        <select name="level" class="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
+                        <label class="block text-[11px] text-gray-600 uppercase tracking-wide mb-2">Loại</label>
+                        <select name="level" class="w-full bg-gray-100 border border-gray-300/60 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500">
                             <option value="info">ℹ️ Thông tin</option>
                             <option value="warning">⚠️ Cảnh báo</option>
                             <option value="danger">🔴 Khẩn cấp</option>
                         </select>
                     </div>
-                    <button type="submit" class="w-full bg-violet-600 hover:bg-violet-500 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2">
+                    <button type="submit" class="w-full bg-white hover:bg-gray-50 border border-violet-600 text-violet-700 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2">
                         <i class="fas fa-bullhorn"></i> Gửi thông báo
                     </button>
                 </form>
@@ -150,17 +150,17 @@
         <!-- Announcements List -->
         <div class="col-span-3 space-y-4">
             {% for ann in announcements %}
-            <div class="bg-zinc-900 border rounded-2xl p-5
+            <div class="bg-gray-50 border rounded-2xl p-5
                 {% if ann.level == 'danger' %}border-red-700/40
                 {% elif ann.level == 'warning' %}border-amber-700/40
-                {% else %}border-zinc-800/70{% endif %}"
+                {% else %}border-gray-200/70{% endif %}"
                 id="ann-{{ ann.id }}">
                 <div class="flex items-start justify-between gap-4">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             {% if ann.level == 'danger' %}
-                                <span class="text-red-400 text-xs">🔴</span>
-                                <span class="bg-red-500/15 text-red-400 text-[11px] px-2 py-0.5 rounded-full border border-red-500/20">Khẩn cấp</span>
+                                <span class="text-red-700 text-xs">🔴</span>
+                                <span class="bg-red-500/15 text-red-700 text-[11px] px-2 py-0.5 rounded-full border border-red-500/20">Khẩn cấp</span>
                             {% elif ann.level == 'warning' %}
                                 <span class="text-amber-400 text-xs">⚠️</span>
                                 <span class="bg-amber-500/15 text-amber-400 text-[11px] px-2 py-0.5 rounded-full border border-amber-500/20">Cảnh báo</span>
@@ -168,21 +168,21 @@
                                 <span class="text-blue-400 text-xs">ℹ️</span>
                                 <span class="bg-blue-500/15 text-blue-400 text-[11px] px-2 py-0.5 rounded-full border border-blue-500/20">Thông tin</span>
                             {% endif %}
-                            <span class="text-zinc-600 text-xs">•</span>
-                            <span class="text-zinc-500 text-xs">{{ ann.created_by }}</span>
+                            <span class="text-gray-500 text-xs">•</span>
+                            <span class="text-gray-600 text-xs">{{ ann.created_by }}</span>
                         </div>
-                        <h3 class="font-semibold text-white text-sm mb-1">{{ ann.title }}</h3>
-                        <p class="text-zinc-400 text-sm">{{ ann.body }}</p>
-                        <p class="text-zinc-600 text-xs mt-2">{{ ann.created_at|slice:":16" }}</p>
+                        <h3 class="font-semibold text-gray-900 text-sm mb-1">{{ ann.title }}</h3>
+                        <p class="text-gray-700 text-sm">{{ ann.body }}</p>
+                        <p class="text-gray-500 text-xs mt-2">{{ ann.created_at|slice:":16" }}</p>
                     </div>
                     <button onclick="deleteAnn({{ ann.id }})"
-                            class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-red-600/10 hover:bg-red-600/20 border border-red-600/20 text-red-400 rounded-lg transition-all text-xs">
+                            class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-red-600/10 hover:bg-red-600/20 border border-red-600/20 text-red-700 rounded-lg transition-all text-xs">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
             {% empty %}
-            <div class="bg-zinc-900 border border-zinc-800/70 rounded-2xl py-16 text-center text-zinc-500">
+            <div class="bg-gray-50 border border-gray-200/70 rounded-2xl py-16 text-center text-gray-600">
                 <i class="fas fa-bullhorn text-3xl mb-3 block opacity-20"></i>
                 <p class="text-sm">Chưa có thông báo nào.</p>
             </div>

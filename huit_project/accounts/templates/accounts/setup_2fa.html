@@ -58,7 +58,7 @@ body::before {
 .logo { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--muted2); }
 .logo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
 .logo span { color: var(--blue); }
-.back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--border); transition: color .15s, border-color .15s; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #111827; text-decoration: none; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--border); transition: color .15s, border-color .15s; }
 .back-link:hover { color: var(--text); border-color: var(--border2); }
 
 /* Method badge */
@@ -68,7 +68,7 @@ body::before {
 .badge-name { font-size: 15px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
 .badge-desc { font-size: 12px; color: var(--muted2); margin-top: 3px; }
 .badge-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-family: var(--mono); font-weight: 600; padding: 3px 8px; border-radius: 5px; }
-.badge-status.on { background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.2); color: #6ee7b7; }
+.badge-status.on { background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.2); color: #065f46; }
 .badge-status.off { background: rgba(139,120,255,.1); border: 1px solid rgba(139,120,255,.2); color: var(--blue); }
 
 /* Panel */
@@ -79,10 +79,10 @@ body::before {
 /* QR */
 .qr-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 20px; text-align: center; margin-bottom: 20px; }
 .qr-block img { width: 160px; height: 160px; border-radius: 8px; }
-.qr-label { font-size: 11px; color: var(--muted); margin: 10px 0 6px; font-family: var(--mono); }
+.qr-label { font-size: 11px; color: #111827; margin: 10px 0 6px; font-family: var(--mono); }
 .secret-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 6px 12px; font-family: var(--mono); font-size: 12px; color: var(--blue); cursor: pointer; transition: border-color .15s; }
 .secret-chip:hover { border-color: var(--border2); }
-.secret-chip i { font-size: 11px; color: var(--muted); }
+.secret-chip i { font-size: 11px; color: #111827; }
 
 /* OTP inputs */
 .otp-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
@@ -109,13 +109,13 @@ body::before {
 .btn-primary { background: var(--blue); color: #fff; }
 .btn-ghost { background: var(--bg2); border: 1px solid var(--border); color: var(--muted2); }
 .btn-ghost:hover:not(:disabled) { border-color: var(--border2); color: var(--text); }
-.btn-danger { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.18); color: #fca5a5; }
+.btn-danger { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.18); color: #991b1b; }
 .btn-danger:hover:not(:disabled) { background: rgba(239,68,68,.14); }
 
 /* Alert */
 .alert { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 9px; font-size: 13px; margin-bottom: 14px; }
-.alert-success { background: rgba(16,185,129,.07); border: 1px solid rgba(16,185,129,.15); color: #6ee7b7; }
-.alert-error { background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.15); color: #fca5a5; }
+.alert-success { background: rgba(16,185,129,.07); border: 1px solid rgba(16,185,129,.15); color: #065f46; }
+.alert-error { background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.15); color: #991b1b; }
 .alert-info { background: rgba(37,99,235,.07); border: 1px solid rgba(139,120,255,.15); color: var(--blue); }
 
 /* Divider */
@@ -123,7 +123,7 @@ body::before {
 
 /* Enabled state */
 .enabled-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(16,185,129,.05); border: 1px solid rgba(16,185,129,.12); border-radius: 9px; margin-bottom: 16px; }
-.enabled-row span { font-size: 13px; color: #6ee7b7; display: flex; align-items: center; gap: 6px; }
+.enabled-row span { font-size: 13px; color: #065f46; display: flex; align-items: center; gap: 6px; }
 
 /* Disable confirm box */
 .disable-confirm { background: var(--bg2); border: 1px solid rgba(239,68,68,.18); border-radius: 10px; padding: 16px; margin-top: 12px; }
@@ -149,18 +149,18 @@ body::before {
   .btn-primary:hover:not(:disabled) {
     box-shadow: 0 4px 20px rgba(37,99,235,0.45);
     opacity: 1 !important;
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%) !important;
   }
   /* Ghost button */
   .btn-ghost, .back-link, .back-btn {
-    background: rgba(13,22,38,0.7) !important;
+    background: #ffffff !important;
     border-color: rgba(37,99,235,0.16) !important;
     backdrop-filter: blur(4px);
   }
   .btn-ghost:hover, .back-link:hover, .back-btn:hover {
     border-color: rgba(37,99,235,0.35) !important;
     background: rgba(37,99,235,0.08) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
   }
   /* Input focus */
   input[type=text]:focus, input[type=email]:focus,
@@ -172,7 +172,7 @@ body::before {
   /* Active nav item */
   .nav-item.active {
     background: rgba(37,99,235,0.12) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
     border-color: rgba(37,99,235,0.22) !important;
   }
   .nav-item:hover { 
@@ -186,7 +186,7 @@ body::before {
   /* Method tabs in verify_2fa */
   .method.active {
     border-color: var(--blue) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
     background: rgba(37,99,235,0.10) !important;
   }
   /* Badge online pulse */
@@ -198,29 +198,29 @@ body::before {
   /* TOTP progress fill */
   .totp-ring-fg { stroke: var(--blue2) !important; }
   /* Stat cards */
-  .stat-val { color: var(--blue3) !important; }
+  .stat-val { color: var(--blue2) !important; }
   /* pk-icon */
   .pk-icon, .dev-icon, .method-icon {
     background: rgba(37,99,235,0.10) !important;
     border-color: rgba(37,99,235,0.22) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
   }
   /* Badge status on */
   .badge-status.on, .badge-on, .badge-online {
     background: rgba(16,185,129,0.09) !important;
     border-color: rgba(16,185,129,0.20) !important;
-    color: #6ee7b7 !important;
+    color: #065f46 !important;
   }
   .badge-status.off {
     background: rgba(37,99,235,0.10) !important;
     border-color: rgba(37,99,235,0.22) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
   }
   /* email badge */
   .email-badge {
     background: rgba(37,99,235,0.10) !important;
     border-color: rgba(37,99,235,0.22) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
   }
   /* method badge in setup_2fa */
   .method-badge {
@@ -239,7 +239,7 @@ body::before {
   .ip-badge {
     background: rgba(37,99,235,0.08) !important;
     border-color: rgba(37,99,235,0.16) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
   }
   /* expiry badge */
   .expiry { border-color: rgba(245,158,11,0.18) !important; }
@@ -247,11 +247,11 @@ body::before {
   .alert-info, .msg-info, .msg-warning {
     background: rgba(37,99,235,0.08) !important;
     border-color: rgba(37,99,235,0.20) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
   }
   /* secret chip */
   .secret-chip {
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
     border-color: rgba(37,99,235,0.20) !important;
   }
   .secret-chip:hover { border-color: rgba(37,99,235,0.40) !important; }
@@ -259,7 +259,7 @@ body::before {
   .btn-purple {
     background: rgba(37,99,235,0.12) !important;
     border-color: rgba(37,99,235,0.28) !important;
-    color: var(--blue3) !important;
+    color: var(--blue2) !important;
   }
   .btn-purple:hover:not(:disabled) {
     background: rgba(37,99,235,0.20) !important;
@@ -267,17 +267,17 @@ body::before {
   /* TOTP bar fill */
   #totp-fill, .totp-bar { background: var(--blue2) !important; }
   /* Panel hint bar */
-  .panel-hint { color: var(--blue3) !important; }
+  .panel-hint { color: var(--blue2) !important; }
   .panel-hint i { color: var(--blue2) !important; }
   /* list-title icon */
-  .list-title i { color: var(--blue3) !important; }
+  .list-title i { color: var(--blue2) !important; }
   /* page-title area */
   .icon-wrap {
     background: rgba(37,99,235,0.10) !important;
     border-color: rgba(37,99,235,0.24) !important;
   }
   /* thead */
-  thead tr { background: rgba(8,15,28,0.8) !important; }
+  thead tr { background: var(--bg2) !important; }
   /* smooth all transitions */
   *, *::before, *::after { transition-timing-function: cubic-bezier(0.4,0,0.2,1); }
 
@@ -332,7 +332,7 @@ body::before {
     {# ── ĐÃ BẬT: chỉ hiện trạng thái + form tắt ── #}
     <div class="panel-hint" style="background:rgba(16,185,129,0.06);border-bottom-color:rgba(16,185,129,0.15);">
       <i class="fa fa-shield-halved" style="color:var(--success)"></i>
-      <span style="color:#6ee7b7">TOTP đang bảo vệ tài khoản của bạn</span>
+      <span style="color:#065f46">TOTP đang bảo vệ tài khoản của bạn</span>
     </div>
     <div class="panel-body">
       <div class="enabled-row">
@@ -341,7 +341,7 @@ body::before {
       </div>
 
       <div class="divider"></div>
-      <p style="font-size:12px;color:var(--muted2);margin-bottom:14px;">
+      <p style="font-size:12px;color:#374151;margin-bottom:14px;">
         Nhập mã TOTP hiện tại từ ứng dụng để tắt phương thức này:
       </p>
       <form method="POST" action="?method=totp">
@@ -431,7 +431,7 @@ body::before {
     {# ── ĐÃ BẬT ── #}
     <div class="panel-hint" style="background:rgba(16,185,129,0.06);border-bottom-color:rgba(16,185,129,0.15);">
       <i class="fa fa-shield-halved" style="color:var(--success)"></i>
-      <span style="color:#6ee7b7">Email OTP đang bảo vệ tài khoản của bạn</span>
+      <span style="color:#065f46">Email OTP đang bảo vệ tài khoản của bạn</span>
     </div>
     <div class="panel-body">
       <div class="enabled-row">
@@ -439,7 +439,7 @@ body::before {
         <span class="badge-status on"><i class="fa fa-circle" style="font-size:6px"></i> Hoạt động</span>
       </div>
       <div class="divider"></div>
-      <p style="font-size:12px;color:var(--muted2);margin-bottom:14px;">
+      <p style="font-size:12px;color:#374151;margin-bottom:14px;">
         Mã xác nhận sẽ được gửi tới email của bạn để tắt phương thức này:
       </p>
       <form method="POST" action="{% url 'dashboard' %}">
@@ -529,7 +529,7 @@ body::before {
     {# ── ĐÃ BẬT ── #}
     <div class="panel-hint" style="background:rgba(16,185,129,0.06);border-bottom-color:rgba(16,185,129,0.15);">
       <i class="fa fa-shield-halved" style="color:var(--success)"></i>
-      <span style="color:#6ee7b7">HOTP đang bảo vệ tài khoản của bạn</span>
+      <span style="color:#065f46">HOTP đang bảo vệ tài khoản của bạn</span>
     </div>
     <div class="panel-body">
       <div class="enabled-row">
@@ -537,7 +537,7 @@ body::before {
         <span class="badge-status on"><i class="fa fa-circle" style="font-size:6px"></i> Hoạt động</span>
       </div>
       <div class="divider"></div>
-      <p style="font-size:12px;color:var(--muted2);margin-bottom:14px;">
+      <p style="font-size:12px;color:#374151;margin-bottom:14px;">
         Nhấn generate trong app → nhập mã HOTP để xác nhận tắt:
       </p>
       <form method="POST" action="?method=hotp">

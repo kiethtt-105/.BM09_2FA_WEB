@@ -2,3 +2,8 @@
 deactivate
 #kích hoạt môi trường ảo
 venv\Scripts\activate
+xóa user bang SQLite
+python manage.py shell
+from django.contrib.auth.models import User
+User.objects.get(username='admin').delete()
+exit()

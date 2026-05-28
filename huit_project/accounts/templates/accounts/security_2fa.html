@@ -8,10 +8,10 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
 :root{
-  --bg:#04080f;--bg1:#080f1c;--bg2:#0d1626;--bg3:#111e33;
-  --border:rgba(37,99,235,0.14);--border2:rgba(37,99,235,0.30);
-  --blue:#2563eb;--blue2:#3b82f6;--blue3:#93c5fd;
-  --text:#e2e8f0;--muted:#475569;--muted2:#64748b;
+  --bg:#ffffff;--bg1:#f8f9fa;--bg2:#f1f3f5;--bg3:#e9ecef;
+  --border:rgba(37,99,235,0.35);--border2:rgba(37,99,235,0.65);
+  --blue:#2563eb;--blue2:#1e40af;--blue3:#1e3a8a;
+  --text:#111827;--muted:#374151;--muted2:#374151;
   --danger:#ef4444;--success:#10b981;--warn:#f59e0b;
   --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
 }
@@ -61,7 +61,7 @@ body::before{
 .nav-item{
   display:flex;align-items:center;gap:9px;width:100%;
   padding:9px 11px;border-radius:9px;
-  font-size:13px;font-weight:500;color:var(--muted2);
+  font-size:13px;font-weight:500;color:#374151;
   background:none;border:1px solid transparent;cursor:pointer;
   text-decoration:none;transition:all .15s;
   font-family:var(--font);margin-bottom:3px;
@@ -73,8 +73,8 @@ body::before{
 }
 .nav-item i{width:15px;text-align:center;font-size:13px;flex-shrink:0;}
 .nav-sep{margin:10px 0;border:none;height:1px;background:var(--border);}
-.nav-danger{color:#fca5a5!important;}
-.nav-danger:hover{background:rgba(239,68,68,.08)!important;color:#fca5a5!important;}
+.nav-danger{color:#991b1b!important;}
+.nav-danger:hover{background:rgba(239,68,68,.08)!important;color:#991b1b!important;}
 
 /* ── Main panel ── */
 .main{
@@ -137,13 +137,13 @@ body::before{
   font-size:16px;color:var(--blue3);
 }
 .method-icon.danger-icon{
-  background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);color:#fca5a5;
+  background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);color:#991b1b;
 }
 .method-icon.warn-icon{
-  background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:#fcd34d;
+  background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:#92400e;
 }
 .method-icon.success-icon{
-  background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.2);color:#6ee7b7;
+  background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.2);color:#065f46;
 }
 .method-body{flex:1;min-width:0;}
 .method-name{font-size:14px;font-weight:600;margin-bottom:2px;}
@@ -155,9 +155,9 @@ body::before{
   display:inline-flex;align-items:center;gap:4px;padding:3px 9px;
   border-radius:5px;font-size:11px;font-weight:600;font-family:var(--mono);
 }
-.badge-on{background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.20);color:#6ee7b7;}
+.badge-on{background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.20);color:#065f46;}
 .badge-off{background:var(--bg3);border:1px solid var(--border);color:var(--muted);}
-.badge-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.18);color:#fcd34d;}
+.badge-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.18);color:#92400e;}
 
 /* Buttons */
 .btn{
@@ -170,18 +170,18 @@ body::before{
   background:linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%);color:#fff;
   box-shadow:0 2px 10px rgba(37,99,235,.28);
 }
-.btn-primary:hover{background:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%);box-shadow:0 3px 16px rgba(37,99,235,.42);}
+.btn-primary:hover{background:linear-gradient(135deg,#1e40af 0%,#2563eb 100%);box-shadow:0 3px 16px rgba(37,99,235,.42);}
 .btn-outline{
   background:none;border:1px solid rgba(37,99,235,.28);color:var(--blue3);
 }
 .btn-outline:hover{background:rgba(37,99,235,.10);border-color:rgba(37,99,235,.45);}
 .btn-ghost{
-  background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,.16);color:var(--muted2);
+  background:rgba(13,22,38,.7);border:1px solid rgba(37,99,235,.16);color:#374151;
   backdrop-filter:blur(4px);
 }
 .btn-ghost:hover{border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.08);color:var(--blue3);}
 .btn-danger-sm{
-  background:none;border:1px solid rgba(239,68,68,.28);color:#fca5a5;
+  background:none;border:1px solid rgba(239,68,68,.28);color:#991b1b;
   padding:7px 13px;font-size:12px;border-radius:8px;cursor:pointer;font-family:var(--font);
   font-weight:600;display:inline-flex;align-items:center;gap:6px;transition:all .15s;
 }
@@ -217,9 +217,9 @@ body::before{
   padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px;
   display:flex;align-items:center;gap:8px;
 }
-.flash-success{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:#6ee7b7;}
-.flash-error{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#fca5a5;}
-.flash-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);color:#fcd34d;}
+.flash-success{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:#065f46;}
+.flash-error{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#991b1b;}
+.flash-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);color:#92400e;}
 
 /* Info alert */
 .alert-info{
@@ -503,7 +503,7 @@ body::before{
       <!-- ── Vừa tạo xong: hiện mã ngay ── -->
       <div style="background:var(--bg2);border:1.5px solid rgba(16,185,129,.25);border-radius:14px;padding:22px 20px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-          <div style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6ee7b7;">
+          <div style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#065f46;">
             <i class="fa fa-check-circle"></i> Mã dự phòng mới — Lưu ngay!
           </div>
           <div style="display:flex;gap:8px;">
@@ -520,7 +520,7 @@ body::before{
           <div class="code-chip" data-code="{{ code }}">{{ code }}</div>
           {% endfor %}
         </div>
-        <div style="font-size:12px;color:#fcd34d;margin-top:12px;font-family:var(--mono);display:flex;align-items:center;gap:7px;">
+        <div style="font-size:12px;color:#92400e;margin-top:12px;font-family:var(--mono);display:flex;align-items:center;gap:7px;">
           <i class="fa fa-triangle-exclamation"></i>
           Trang này sẽ không hiển thị lại mã này. Sao chép hoặc tải về ngay bây giờ.
         </div>
@@ -534,7 +534,7 @@ body::before{
             <div class="method-name">{{ backup_count }}/8 mã còn khả dụng</div>
             <div class="method-desc">
               Tạo lần cuối: {{ backup_created|date:"d/m/Y H:i"|default:"—" }}
-              {% if backup_count <= 2 %}&nbsp;<span style="color:#fcd34d;font-weight:600;"><i class="fa fa-triangle-exclamation"></i> Còn ít mã — nên tạo lại</span>{% endif %}
+              {% if backup_count <= 2 %}&nbsp;<span style="color:#92400e;font-weight:600;"><i class="fa fa-triangle-exclamation"></i> Còn ít mã — nên tạo lại</span>{% endif %}
             </div>
           </div>
           <div class="method-actions">
