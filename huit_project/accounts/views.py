@@ -51,9 +51,9 @@ from .models import (
 )
 from .utils import (
     get_totp_token, verify_totp,
-    compute_hotp, verify_hotp,          # HOTP — tự implement RFC 4226
+    compute_hotp, verify_hotp,          
     generate_qr_base64, get_client_ip, generate_and_send_email_otp,
-    generate_totp_secret,               # [BUG-A] thay pyotp.random_base32()
+    generate_totp_secret,               
 )
 
 from fido2.server import Fido2Server
@@ -180,7 +180,7 @@ def home(request):
 def register(request):
     """
     Đăng ký tài khoản mới (bước 1/2).
-    [BUG-7] Lưu SHA-256 hash của OTP vào PendingRegistration, không lưu plaintext.
+    Lưu SHA-256 hash của OTP vào PendingRegistration, không lưu plaintext.
     """
     if request.method == 'POST':
         form = RegisterForm(request.POST)
@@ -200,7 +200,7 @@ def register(request):
                 messages.error(request, f'Lỗi gửi email: {str(e)}')
                 return render(request, 'accounts/register.html', {'form': form})
 
-            # [BUG-7] Lưu hash thay vì plaintext
+            #  Lưu hash thay vì plaintext
             otp_hash = hashlib.sha256(otp_code.encode('utf-8')).hexdigest()
             PendingRegistration.objects.create(
                 email    = email,
@@ -228,7 +228,7 @@ def register(request):
 def verify_register_otp(request):
     """
     Xác thực OTP đăng ký (bước 2/2).
-    [BUG-7] Dùng PendingRegistration.verify(email, otp_input) — so sánh hash.
+    Dùng PendingRegistration.verify(email, otp_input) — so sánh hash.
     """
     email = request.session.get('pending_register_email')
     if not email:
@@ -257,7 +257,7 @@ def verify_register_otp(request):
                         ip      = get_client_ip(request),
                         name    = f"{temp_data.get('first_name', '')} {temp_data.get('last_name', '')}".strip(),
                     )
-                    # [BUG-7] Lưu hash
+                    #  Lưu hash
                     new_hash = hashlib.sha256(new_otp.encode('utf-8')).hexdigest()
                     PendingRegistration.objects.create(
                         email    = email,
@@ -279,7 +279,7 @@ def verify_register_otp(request):
                 'email': email, 'username': username,
             })
 
-        # [BUG-7] Dùng classmethod verify — hash-based comparison
+        # Dùng classmethod verify — hash-based comparison
         verified_pending = PendingRegistration.verify(email, otp_entered)
         if not verified_pending:
             OTPAttempt.record_fail(ip=ip, action='register')  # [FIX-RATELIMIT]
@@ -288,7 +288,7 @@ def verify_register_otp(request):
                 'email': email, 'username': username,
             })
 
-        # [BUG-D] Cleanup EmailOTP (user=None) tương ứng — tránh rác trong DB
+        # Cleanup EmailOTP (user=None) tương ứng — tránh rác trong DB
         EmailOTP.objects.filter(
             email_sent=email, action='register', user__isnull=True, is_active=True
         ).update(is_active=False)
@@ -404,7 +404,7 @@ def login_view(request):
                 messages.error(request, 'Tài khoản của bạn đã bị khóa.')
                 return render(request, 'accounts/login.html', {'form': form})
 
-            # [BUG-2] Đồng bộ force_disable_2fa đầy đủ
+            # Đồng bộ force_disable_2fa đầy đủ
             if profile.force_disable_2fa:
                 profile.has_app_otp       = False
                 profile.has_email_otp     = False
@@ -550,8 +550,8 @@ def dashboard(request):
     """
     Dashboard người dùng.
 
-    [BUG-4] Nhánh disable_app và disable_hotp dùng verify_totp() thay vì get_totp_token().
-    [BUG-6] Thêm nhánh disable_hotp và confirm disable_hotp.
+    Nhánh disable_app và disable_hotp dùng verify_totp() thay vì get_totp_token().
+    Thêm nhánh disable_hotp và confirm disable_hotp.
     """
     if request.user.is_superuser:
         return redirect('admin_dashboard')
@@ -663,7 +663,7 @@ def dashboard(request):
         elif request.POST.get('action') == 'disable_app':
             confirm_disable = 'disable_app'
 
-        # ── [BUG-6] Tắt HOTP ────────────────────────────────────────────────
+        # ── Tắt HOTP ────────────────────────────────────────────────
         elif request.POST.get('action') == 'disable_hotp':
             confirm_disable = 'disable_hotp'
 
@@ -681,13 +681,13 @@ def dashboard(request):
 
             elif target == 'disable_app':
                 raw_secret = profile.decrypt_secret()
-                # [BUG-4] verify_totp có window ±1 — tránh từ chối sai cuối chu kỳ
+                #verify_totp có window ±1 — tránh từ chối sai cuối chu kỳ
                 if raw_secret and verify_totp(raw_secret, code):
                     valid = True
 
-            # [BUG-6] Nhánh HOTP — dùng verify_hotp đúng với counter hiện tại
+            # Nhánh HOTP — dùng verify_hotp đúng với counter hiện tại
             elif target == 'disable_hotp':
-                # [BUG-B] phải dùng decrypt_hotp_secret(), không phải decrypt_secret()
+                #phải dùng decrypt_hotp_secret(), không phải decrypt_secret()
                 raw_secret = profile.decrypt_hotp_secret()
                 if raw_secret:
                     ok, _ = verify_hotp(raw_secret, profile.hotp_counter, code, look_ahead=5)
@@ -736,24 +736,20 @@ def dashboard(request):
         if latest:
             backup_created = latest.created_at
 
-    # [FIX] Hoạt động gần đây — truyền đúng biến cho template
     recent_activity = ActivityLog.objects.filter(
         user=request.user,
         action__in=['login', 'login_failed', 'otp_success', 'otp_fail',
                     'logout', '2fa_enable', '2fa_disable'],
     ).order_by('-timestamp')[:5]
 
-    # [FIX] Đăng nhập gần nhất
     last_login_log = ActivityLog.objects.filter(
         user=request.user, action='login',
     ).order_by('-timestamp').first()
 
-    # [FIX] Số phiên hoạt động thực tế
     active_sessions_count = TrustedDevice.objects.filter(
         user=request.user, is_active=True,
     ).count()
 
-    # [FIX] Trạng thái passkey cho pills 2FA
     has_passkey = request.user.passkeys.exists()
 
     return render(request, 'accounts/user_dashboard.html', {
@@ -1312,8 +1308,8 @@ def setup_2fa(request):
 def verify_2fa(request):
     """
     Bước xác thực 2FA sau khi nhập đúng username/password.
-    [BUG-4] Dùng verify_totp() thay vì get_totp_token() cho App OTP.
-    [BUG-1] Sau khi xác thực → redirect admin_dashboard nếu là superuser.
+    Dùng verify_totp() thay vì get_totp_token() cho App OTP.
+    Sau khi xác thực → redirect admin_dashboard nếu là superuser.
     """
     uid = request.session.get('pre_2fa_user_id')
     if not uid:
@@ -1457,7 +1453,7 @@ def verify_2fa(request):
 
         # ── Gửi Email OTP ────────────────────────────────────────────────────
         if action == 'send_email_code' and profile.has_email_otp:
-            # [BUG-10 FIX] Rate limit gửi email — tránh spam OTP đến victim
+            # Rate limit gửi email — tránh spam OTP đến victim
             email_send_key = f'email_otp_send_cooldown:{user.id}'
             if cache.get(email_send_key):
                 messages.error(request, 'Vui lòng đợi 30 giây trước khi gửi lại mã OTP.')
@@ -1494,17 +1490,17 @@ def verify_2fa(request):
 
         if method in ('app', 'totp') and profile.has_app_otp:
             raw_secret = profile.decrypt_secret()
-            # [BUG-4] verify_totp có window ±1
+            #verify_totp có window ±1
             if raw_secret and verify_totp(raw_secret, code):
                 valid = True
 
         elif method == 'hotp' and profile.has_hotp:
-            # [BUG-B] phải dùng decrypt_hotp_secret(), không phải decrypt_secret()
+            # phải dùng decrypt_hotp_secret(), không phải decrypt_secret()
             raw_secret = profile.decrypt_hotp_secret()
             if raw_secret:
                 ok, new_counter = verify_hotp(raw_secret, profile.hotp_counter, code, look_ahead=20)
                 if ok:
-                    # [BUG-9 FIX] Lưu new_counter vào local var, defer save() về sau login()
+                    #Lưu new_counter vào local var, defer save() về sau login()
                     # tránh counter tăng khi login() chưa thành công
                     request.session['_hotp_new_counter'] = new_counter
                     valid = True
@@ -1545,7 +1541,7 @@ def verify_2fa(request):
             login(request, user)
             request.session.cycle_key()  # [M5-FIX] rotate session key sau login — chống session fixation
 
-            # [BUG-9 FIX] Flush HOTP counter sau login() thành công — tránh desync
+            # Flush HOTP counter sau login() thành công — tránh desync
             if method == 'hotp':
                 _new_counter = request.session.pop('_hotp_new_counter', None)
                 if _new_counter is not None:
@@ -1583,7 +1579,7 @@ def verify_2fa(request):
                 request.session.pop('sso_pending', None)
                 return redirect('sso_send')
 
-            # [BUG-1] Superuser → admin_dashboard sau 2FA
+            # Superuser → admin_dashboard sau 2FA
             return redirect('admin_dashboard' if user.is_superuser else 'dashboard')
 
         # Thất bại OTP
@@ -1679,17 +1675,13 @@ def check_auth_status(request):
     """
     API polling: thiết bị mới kiểm tra kết quả push auth.
 
-    [BUG-5] Bảo mật:
-      - Kiểm tra pre_2fa_user_id trong session → chỉ thiết bị đang ở bước 2FA.
-      - Xác minh req.user_id == uid → tránh session confusion.
-      - Lọc expires_at → tránh approve request hết hạn.
     """
     uid         = request.session.get('pre_2fa_user_id')
     session_key = request.session.session_key
     ip          = get_client_ip(request)
     user_agent  = request.META.get('HTTP_USER_AGENT', 'Unknown')
 
-    # [BUG-5] Phải đang ở bước 2FA mới có quyền poll
+    # Phải đang ở bước 2FA mới có quyền poll
     if not uid or not session_key:
         return JsonResponse({'status': 'error', 'detail': 'no_pending_auth'}, status=403)
 
@@ -1717,7 +1709,7 @@ def check_auth_status(request):
     if req.status == 'approved':
         try:
             user = User.objects.get(id=uid)
-            # [BUG-5] Xác minh request thuộc đúng user này
+            # Xác minh request thuộc đúng user này
             if req.user_id != user.id:
                 # Không match user — xóa luôn request lạ này
                 req.delete()
@@ -2035,7 +2027,7 @@ def fido2_auth_complete(request):
             client_data, auth_data_obj, signature,
         )
 
-        # [BUG-12 FIX] Clone detection — FIDO2 spec yêu cầu counter phải tăng dần.
+        # Clone detection — FIDO2 spec yêu cầu counter phải tăng dần.
         # Nếu counter mới <= counter đã lưu (và counter > 0) → authenticator có thể bị clone.
         if auth_data_obj.counter > 0 and auth_data_obj.counter <= passkey.sign_count:
             logger.warning(
@@ -2061,7 +2053,7 @@ def fido2_auth_complete(request):
             user=user, username_attempt=user.username, action='login',
             ip_address=ip, user_agent=user_agent,
         )
-        # [BUG-1] Superuser → admin_dashboard
+        #Superuser → admin_dashboard
         redirect_url = '/admin-dashboard/' if user.is_superuser else '/dashboard/'
         return JsonResponse({'status': 'success', 'redirect': redirect_url})
 
@@ -2948,7 +2940,7 @@ def generate_hotp_code(request):
 def sso_send(request):
     """
     Sinh JWT token SSO và redirect về callback URL.
-    [BUG-8] Thêm 'jti' (JWT ID) vào payload để tránh replay attack.
+    Thêm 'jti' (JWT ID) vào payload để tránh replay attack.
     """
     user         = request.user
     profile      = getattr(user, 'profile', None)

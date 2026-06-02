@@ -301,7 +301,7 @@ def generate_and_send_email_otp(
                 invalidated, user.username if hasattr(user, 'username') else user, action
             )
     else:
-        # [BUG-8 FIX] user=None → flow đăng ký, phân biệt qua email_sent
+        # user=None → flow đăng ký, phân biệt qua email_sent
         # Tránh nhiều EmailOTP active song song cùng email khi resend
         invalidated = EmailOTP.objects.filter(
             user__isnull = True,
@@ -312,7 +312,7 @@ def generate_and_send_email_otp(
         ).update(is_active=False)
         if invalidated:
             logger.debug(
-                '[BUG-8 FIX] Invalidated %d old OTP(s) for email=%s action=%s (user=None)',
+                'Invalidated %d old OTP(s) for email=%s action=%s (user=None)',
                 invalidated, email, action
             )
 

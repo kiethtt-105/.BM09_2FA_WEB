@@ -169,7 +169,7 @@ class PendingRegistration(models.Model):
     Lưu thông tin đăng ký tạm thời trước khi OTP xác thực thành công.
     temp_data['password'] = make_password() — không lưu plaintext.
 
-    [BUG-7] otp_code lưu SHA-256 hash (64 hex chars), không phải plaintext.
+    otp_code lưu SHA-256 hash (64 hex chars), không phải plaintext.
     """
 
     email      = models.EmailField(unique=True)
@@ -191,8 +191,8 @@ class PendingRegistration(models.Model):
     @classmethod
     def verify(cls, email: str, otp_input: str) -> 'PendingRegistration | None':
         """
-        [BUG-7] Hash input trước khi so sánh — không bao giờ so sánh plaintext.
-        [FIX-4] order_by('-created_at') → lấy bản ghi mới nhất khi có nhiều bản
+        Hash input trước khi so sánh — không bao giờ so sánh plaintext.
+        order_by('-created_at') → lấy bản ghi mới nhất khi có nhiều bản
                 ghi cùng email (resend nhanh / race condition).
         """
         input_hash = hashlib.sha256(otp_input.strip().encode('utf-8')).hexdigest()
