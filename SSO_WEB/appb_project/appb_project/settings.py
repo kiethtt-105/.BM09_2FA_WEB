@@ -9,7 +9,8 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 #ALLOWED_HOSTS = ['spellable-sciuroid-maybell.ngrok-free.dev', '127.0.0.1', 'localhost','anguished-such-omnivore.ngrok-free.dev/dashboard/']
 # URL của App A (huit_project) — mỗi máy đổi link ngrok này
-HUIT_SSO_URL = 'https://anguished-such-omnivore.ngrok-free.dev'
+#HUIT_SSO_URL = 'https://anguished-such-omnivore.ngrok-free.dev'
+HUIT_SSO_URL = 'https://spellable-sciuroid-maybell.ngrok-free.dev'
 
 INSTALLED_APPS = [
     'django.contrib.admin',
