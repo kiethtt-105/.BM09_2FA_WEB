@@ -96,7 +96,7 @@ def compute_hotp(secret: str, counter: int, digits: int = 6) -> str:
 
 
 def verify_hotp(secret: str, counter: int, otp_input: str,
-                look_ahead: int = 20) -> tuple[bool, int]:
+                look_ahead: int = 5) -> tuple[bool, int]:
     logger.warning(
         'HOTP_VERIFY: secret=%s... counter=%d input=%s',
         secret[:4], counter, otp_input
@@ -276,9 +276,7 @@ def generate_and_send_email_otp(
     """
     Sinh mã OTP 6 chữ số, lưu DB (chỉ hash), gửi qua Email.
 
-    [WARN-1] Trước khi tạo OTP mới, tự động invalidate các OTP cũ
-             cùng user + action còn active → tránh nhiều mã hợp lệ song song.
-
+ 
     Bảo mật:
         - CSPRNG: secrets.randbelow(10).
         - DB chỉ lưu SHA-256(otp_code) — không lưu plaintext.
