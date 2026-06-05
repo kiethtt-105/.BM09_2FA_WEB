@@ -145,7 +145,7 @@ def verify_totp(secret: str, otp_input: str,
                                  at_time=now + delta * step)
         if hmac.compare_digest(candidate, otp_input.zfill(digits)):
             return True
-    return False
+    return False 
 
 
 def get_totp_token(secret: str) -> str:
