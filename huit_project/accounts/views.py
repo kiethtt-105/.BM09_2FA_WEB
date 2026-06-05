@@ -363,13 +363,12 @@ def logout_view(request):
 def login_view(request):
     """
     Đăng nhập với ba luồng:
-      1a. Admin có đủ 2FA (≥2 method, đủ combo) → login → verify_2fa_multi
+      1a. Admin có đủ 2FA  → login → verify_2fa_multi
       1b. Admin có <2 method hoặc chưa đủ combo  → login → bắt setup thêm
       2.  User thường có 2FA                      → lưu pre_2fa_user_id → verify_2fa
       3.  User thường không có 2FA               → login thẳng
 
-    [FIX-A5] Luồng 1a chỉ kích hoạt khi admin đã đủ ≥2 method.
-             Nếu chưa đủ → Luồng 1b → force_2fa_setup.
+
     """
     _BLOCKED_NEXT = ('/verify-2fa', '/admin-setup-2fa', '/setup-2fa')
 
@@ -1928,7 +1927,7 @@ def fido2_auth_begin(request):
         if not passkeys.exists():
             return JsonResponse({'status': 'error', 'message': 'Không có passkey nào'}, status=400)
 
-        # [FIX-FIDO2-USER] Dùng AttestedCredentialData làm credentials thay vì dict thô
+        # Dùng AttestedCredentialData làm credentials thay vì dict thô
         # để tương thích với fido2 library mới nhất
         from fido2.cbor import decode as cbor_decode
         from fido2.webauthn import AttestedCredentialData, PublicKeyCredentialDescriptor, PublicKeyCredentialType
@@ -3193,11 +3192,9 @@ def admin_send_email_otp(request):
 @login_required
 def fido2_admin_auth_begin(request):
     """
-    [FIX-A1][FIX-A2] FIDO2 authentication BEGIN cho Admin Multi-Factor.
+     FIDO2 authentication BEGIN cho Admin Multi-Factor.
 
-    Khác với fido2_auth_begin (user thường):
-    - Admin đã login() → dùng request.user trực tiếp, không cần pre_2fa_user_id.
-    - Chỉ cho superuser đang trong bước verify_2fa_multi (có 2fa_methods_required).
+ 
 
     URL: /fido2/admin/auth/begin/
     """
@@ -3271,7 +3268,7 @@ def fido2_admin_auth_begin(request):
 @login_required
 def fido2_admin_auth_complete(request):
     """
-    [FIX-A1][FIX-A2][FIX-A3] FIDO2 authentication COMPLETE cho Admin Multi-Factor.
+     FIDO2 authentication COMPLETE cho Admin Multi-Factor.
 
     - Dùng request.user (admin đã login) thay vì pre_2fa_user_id.
     - Dùng session key 'fido2_admin_auth_state' riêng (tránh xung đột với user thường).
@@ -3406,7 +3403,7 @@ def admin_setup_2fa(request):
     Thiết lập 2FA bắt buộc cho admin.
 
     Flow:
-      step=select       — chọn ≥2 phương thức
+      step=select       — chọn ≥ phương thức
       step=setup_method — setup từng phương thức đã chọn theo thứ tự
       step=done         — hoàn thành
 
