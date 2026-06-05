@@ -1,0 +1,35 @@
+https://github.com/kiethtt-105/KLCN003_BW09
+
+
+cd \KLCN003_BW09\huit_project
+1. Tạo môi trường ảo
+python -m venv .venv
+----------------------------
+
+2. Khởi dodnojoh venv
+.venv\Scripts\Activate.ps1
+----------------------------
+
+3. Cài đặt các thư viện cần thiết từ requirements.txt
+pip install -r requirements.txt
+----------------------------
+
+4. CẤU HÌNH FILE .ENV
+- SỬ DỤNG FILE .env.txt
+- Cấu hình theo các thông số--> đổi tên thành .env  (Ko có phần mở rộng sau file)
+----------------------------
+
+5. Tạo Database Lần ĐẦU
+python manage.py makemigrations
+python manage.py migrate
+----------------------------
+
+6. Tạo tài khoản Quản trị viên (Admin)
+python manage.py createsuperuser
+----------------------------
+
+7. RUN KHỞI CHẠY DỰ ÁNKHỞI CHẠY DỰ ÁN
+python manage.py runserver
+----------------------------
+Starting development server at http://127.0.0.1:8000/
+Hoặc link ngrok hoặc miền khác đã câu hình trong .venv
